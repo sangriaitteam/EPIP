@@ -1,0 +1,24 @@
+# Environment files — never commit secrets
+.env
+.env.local
+.env.production
+.env.docker
+
+# Docker volumes
+epip_pgdata/
+epip_uploads/
+
+# Node modules
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
