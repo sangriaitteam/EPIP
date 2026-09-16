@@ -25,7 +25,7 @@ const notificationRoutes   = require('./routes/notificationRoutes')
 const adminRoutes          = require('./routes/adminRoutes')
 const leaveRoutes          = require('./routes/leaveRoutes')
 const projectRoutes        = require('./routes/projectRoutes')
-const dailyReportRoutes    = require('./routes/dailyReportRoutes')
+
 
 const app = express()
 
@@ -117,7 +117,6 @@ app.use('/api/notifications',   notificationRoutes)
 app.use('/api/admin',           adminRoutes)
 app.use('/api/leaves',          leaveRoutes)
 app.use('/api/projects',        projectRoutes)
-app.use('/api/daily-reports',   dailyReportRoutes)
 
 // ── 404 / Error handlers ──────────────────────────────────────────────────
 app.use(notFound)

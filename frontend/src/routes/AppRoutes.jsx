@@ -13,7 +13,6 @@ import EmployeeProfile from '../pages/employee/Profile'
 import EmployeeAttendance from '../pages/employee/Attendance'
 import EmployeeTasks from '../pages/employee/Tasks'
 import EmployeeGoals from '../pages/employee/Goals'
-import EmployeeDailyReport from '../pages/employee/DailyReport'
 import VerifyDocuments from '../pages/employee/VerifyDocuments'
 
 // HR (Admin) pages
@@ -67,9 +66,6 @@ const AppRoutes = () => (
         <Route path="/employee/attendance"      element={<EmployeeAttendance />} />
         <Route path="/employee/tasks"           element={<EmployeeTasks />} />
         <Route path="/employee/goals"           element={<EmployeeGoals />} />
-        <Route path="/employee/daily-report"    element={<EmployeeDailyReport />} />
-        {/* Legacy self-assessment redirect */}
-        <Route path="/employee/self-assessment" element={<EmployeeDailyReport />} />
       </Route>
     </Route>
 

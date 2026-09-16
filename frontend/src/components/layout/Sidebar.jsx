@@ -1,7 +1,7 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  LayoutDashboard, Users, Clock, CheckSquare, Target, BarChart3,
+  LayoutDashboard, Users, Clock, CheckSquare, Target,
   FileText, Settings, LogOut, ChevronRight, ChevronDown,
   Camera, Shield, Building2, Calendar, Star, FolderOpen
 } from 'lucide-react'
@@ -38,7 +38,6 @@ const navConfig = {
     { label: 'Attendance',      icon: Clock,           path: '/employee/attendance' },
     { label: 'My Tasks',        icon: CheckSquare,     path: '/employee/tasks' },
     { label: 'Goals / KPIs',    icon: Target,          path: '/employee/goals' },
-    { label: 'Daily Report',    icon: BarChart3,       path: '/employee/daily-report' },
   ],
 }
 
