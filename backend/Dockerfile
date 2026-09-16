@@ -11,4 +11,4 @@ RUN mkdir -p uploads/screenshots uploads/avatars uploads/documents uploads/evide
 
 EXPOSE 5000
 
-CMD ["node", "src/server.js"]
+CMD ["sh", "-c", "node migrations/run.js && node src/server.js"]
