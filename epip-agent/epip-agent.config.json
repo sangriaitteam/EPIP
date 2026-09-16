@@ -1,0 +1,6 @@
+{
+  "serverUrl": "http://localhost:5000",
+  "autoStart": true,
+  "intervalMinutes": 10,
+  "_comment": "Change serverUrl to your production server before distributing to employees. Example: https://epip.yourcompany.com"
+}

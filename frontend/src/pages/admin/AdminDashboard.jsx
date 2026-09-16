@@ -64,7 +64,7 @@ const AdminDashboard = () => {
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <StatCard title="Total Employees" value={stats?.total_employees ?? stats?.totalEmployees ?? '—'} icon={Users}     color="primary" delay={0.1} subtitle={`${stats?.active_employees ?? stats?.activeEmployees ?? 0} active`} />
       <StatCard title="Departments"     value={depts.length || '—'}                                   icon={Building2} color="blue"    delay={0.2} />
-      <StatCard title="Active Roles"    value={stats?.total_employees ? '4' : '—'}                    icon={Shield}    color="purple"  delay={0.3} subtitle="employee, hr, admin, superadmin" />
+      <StatCard title="Active Roles"    value={4}                                                      icon={Shield}    color="purple"  delay={0.3} subtitle="employee, hr, admin, superadmin" />
       <StatCard title="System Health"   value={stats ? '100%' : '—'}                                  icon={Settings}  color="green"   delay={0.4} />
     </div>
 

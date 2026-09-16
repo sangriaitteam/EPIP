@@ -1,51 +1,59 @@
 import { api } from './api'
-import { mockTasks } from '../utils/mockData'
 
 export const taskService = {
   getMy: async (params = {}) => {
     const q = new URLSearchParams(params).toString()
     const res = await api.get(`/tasks/my${q ? '?' + q : ''}`)
-    return res.success ? res.data : mockTasks
+    if (!res.success) throw new Error(res.message || 'Failed to fetch your tasks')
+    return res.data
   },
 
   getTeam: async (params = {}) => {
     const q = new URLSearchParams(params).toString()
     const res = await api.get(`/tasks/team${q ? '?' + q : ''}`)
-    return res.success ? res.data : mockTasks
+    if (!res.success) throw new Error(res.message || 'Failed to fetch team tasks')
+    return res.data
   },
 
   getById: async (id) => {
     const res = await api.get(`/tasks/${id}`)
-    return res.success ? res.data : mockTasks.find(t => t.id === id) || null
+    if (!res.success) throw new Error(res.message || 'Failed to fetch task')
+    return res.data
   },
 
   create: async (data) => {
     const res = await api.post('/tasks', data)
-    return res.success ? res.data : { ...data, id: Date.now() }
+    if (!res.success) throw new Error(res.message || 'Failed to create task')
+    return res.data
   },
 
   update: async (id, data) => {
     const res = await api.put(`/tasks/${id}`, data)
-    return res.success ? res.data : { id, ...data }
+    if (!res.success) throw new Error(res.message || 'Failed to update task')
+    return res.data
   },
 
   updateStatus: async (id, status) => {
     const res = await api.patch(`/tasks/${id}/status`, { status })
-    return res.success ? res.data : { id, status }
+    if (!res.success) throw new Error(res.message || 'Failed to update task status')
+    return res.data
   },
 
   delete: async (id) => {
     const res = await api.delete(`/tasks/${id}`)
-    return res.success ? res.data : { success: true }
+    if (!res.success) throw new Error(res.message || 'Failed to delete task')
+    return res.data
   },
 
   addComment: async (taskId, content) => {
     const res = await api.post(`/tasks/${taskId}/comments`, { content })
-    return res.success ? res.data : { content, createdAt: new Date().toISOString() }
+    if (!res.success) throw new Error(res.message || 'Failed to add comment')
+    return res.data
   },
 
   getComments: async (taskId) => {
     const res = await api.get(`/tasks/${taskId}/comments`)
-    return res.success ? res.data : []
+    if (!res.success) throw new Error(res.message || 'Failed to fetch comments')
+    return res.data
   },
 }

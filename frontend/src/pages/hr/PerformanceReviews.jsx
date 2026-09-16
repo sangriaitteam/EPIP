@@ -312,8 +312,20 @@ const HRPerformanceReviews = () => {
               )}
               <div className="flex justify-end gap-3">
                 <Button variant="ghost" onClick={() => setSelected(null)}>Close</Button>
-                <Button onClick={() => { toast.success('HR approval recorded! ✅'); setSelected(null) }}>
-                  <CheckCircle size={15} /> Approve
+                <Button
+                  disabled={selected.status === 'approved'}
+                  onClick={async () => {
+                    try {
+                      await performanceService.hrApprove(selected.id)
+                      setReviews(prev => prev.map(r => r.id === selected.id ? { ...r, status: 'approved' } : r))
+                      toast.success('HR approval recorded! ✅')
+                      setSelected(null)
+                    } catch (err) {
+                      toast.error(err.message || 'Failed to approve review')
+                    }
+                  }}
+                >
+                  <CheckCircle size={15} /> {selected.status === 'approved' ? 'Approved' : 'Approve'}
                 </Button>
               </div>
             </div>

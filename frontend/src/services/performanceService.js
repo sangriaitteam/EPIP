@@ -1,45 +1,52 @@
 import { api } from './api'
-import { mockPerformanceReviews } from '../utils/mockData'
 
 export const performanceService = {
   getAll: async (params = {}) => {
     const q = new URLSearchParams(params).toString()
     const res = await api.get(`/performance${q ? '?' + q : ''}`)
-    return res.success ? res.data : mockPerformanceReviews
+    if (!res.success) throw new Error(res.message || 'Failed to fetch performance reviews')
+    return res.data
   },
 
   getMy: async () => {
     const res = await api.get('/performance/my')
-    return res.success ? res.data : mockPerformanceReviews
+    if (!res.success) throw new Error(res.message || 'Failed to fetch your performance reviews')
+    return res.data
   },
 
   getByEmployee: async (id) => {
     const res = await api.get(`/performance/employee/${id}`)
-    return res.success ? res.data : mockPerformanceReviews.filter(r => r.employeeId === id)
+    if (!res.success) throw new Error(res.message || 'Failed to fetch employee performance reviews')
+    return res.data
   },
 
   getById: async (id) => {
     const res = await api.get(`/performance/${id}`)
-    return res.success ? res.data : mockPerformanceReviews.find(r => r.id === id) || null
+    if (!res.success) throw new Error(res.message || 'Failed to fetch performance review')
+    return res.data
   },
 
   create: async (data) => {
     const res = await api.post('/performance', data)
-    return res.success ? res.data : { ...data, id: Date.now() }
+    if (!res.success) throw new Error(res.message || 'Failed to create performance review')
+    return res.data
   },
 
   submitReview: async (id, data) => {
     const res = await api.put(`/performance/${id}/submit`, data)
-    return res.success ? res.data : { id, status: 'completed' }
+    if (!res.success) throw new Error(res.message || 'Failed to submit performance review')
+    return res.data
   },
 
   hrApprove: async (id, hrComments = '') => {
     const res = await api.patch(`/performance/${id}/hr-approve`, { hr_comments: hrComments })
-    return res.success ? res.data : { id, status: 'approved' }
+    if (!res.success) throw new Error(res.message || 'Failed to approve performance review')
+    return res.data
   },
 
   getDefaultParams: async () => {
     const res = await api.get('/performance/params/default')
-    return res.success ? res.data : []
+    if (!res.success) throw new Error(res.message || 'Failed to fetch default parameters')
+    return res.data
   },
 }

@@ -1,11 +1,20 @@
 const db = require('../config/db')
 
 const Screenshot = {
-  async create({ employee_id, file_path, file_url }) {
+  async create({ employee_id, file_path, file_url, active_window_title, monitor_name, monitor_count }) {
     const { rows } = await db.query(
-      `INSERT INTO screenshots (employee_id, file_path, file_url)
-       VALUES ($1, $2, $3) RETURNING *`,
-      [employee_id, file_path, file_url]
+      `INSERT INTO screenshots
+         (employee_id, file_path, file_url, active_window_title, monitor_name, monitor_count)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [
+        employee_id,
+        file_path,
+        file_url,
+        active_window_title || null,
+        monitor_name        || null,
+        monitor_count       || 1,
+      ]
     )
     return rows[0]
   },

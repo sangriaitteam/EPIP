@@ -1,21 +1,23 @@
 import { api } from './api'
-import { mockScreenshots } from '../utils/mockData'
 
 export const screenshotService = {
   getAll: async (params = {}) => {
     const q = new URLSearchParams(params).toString()
     const res = await api.get(`/screenshots${q ? '?' + q : ''}`)
-    return res.success ? res.data : mockScreenshots
+    if (!res.success) throw new Error(res.message || 'Failed to fetch screenshots')
+    return res.data
   },
 
   getByEmployee: async (id, params = {}) => {
     const q = new URLSearchParams(params).toString()
     const res = await api.get(`/screenshots/employee/${id}${q ? '?' + q : ''}`)
-    return res.success ? res.data : mockScreenshots.filter(s => s.employeeId === id)
+    if (!res.success) throw new Error(res.message || 'Failed to fetch employee screenshots')
+    return res.data
   },
 
   countToday: async (employeeId) => {
     const res = await api.get(`/screenshots/count/today/${employeeId}`)
-    return res.success ? res.data.count : 0
+    if (!res.success) return 0
+    return res.data.count
   },
 }

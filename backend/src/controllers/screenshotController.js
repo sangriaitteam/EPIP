@@ -13,9 +13,12 @@ const uploadMy = async (req, res, next) => {
 
     const file_url = getFileUrl('screenshots', req.file.filename)
     const screenshot = await Screenshot.create({
-      employee_id: employee.id,
-      file_path:   req.file.path,
+      employee_id:          employee.id,
+      file_path:            req.file.path,
       file_url,
+      active_window_title:  req.body.active_window_title || null,
+      monitor_name:         req.body.monitor_name        || null,
+      monitor_count:        req.body.monitor_count       ? parseInt(req.body.monitor_count) : 1,
     })
     return created(res, screenshot, 'Screenshot saved')
   } catch (err) { next(err) }
@@ -31,8 +34,11 @@ const upload = async (req, res, next) => {
     const file_url  = getFileUrl('screenshots', req.file.filename)
     const screenshot = await Screenshot.create({
       employee_id,
-      file_path: req.file.path,
+      file_path:           req.file.path,
       file_url,
+      active_window_title: req.body.active_window_title || null,
+      monitor_name:        req.body.monitor_name        || null,
+      monitor_count:       req.body.monitor_count       ? parseInt(req.body.monitor_count) : 1,
     })
     return created(res, screenshot, 'Screenshot saved')
   } catch (err) { next(err) }

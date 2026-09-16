@@ -15,6 +15,19 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
   },
+  build: {
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react':  ['react', 'react-dom', 'react-router-dom'],
+          'vendor-motion': ['framer-motion'],
+          'vendor-charts': ['recharts'],
+          'vendor-ui':     ['lucide-react', 'react-hot-toast'],
+        },
+      },
+    },
+  },
   // ── Vitest configuration ──────────────────────────────────────────────────
   test: {
     globals:     true,

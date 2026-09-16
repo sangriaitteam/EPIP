@@ -1,16 +1,17 @@
 import { api } from './api'
-import { mockNotifications } from '../utils/mockData'
 
 export const notificationService = {
   getAll: async (params = {}) => {
     const q = new URLSearchParams(params).toString()
     const res = await api.get(`/notifications${q ? '?' + q : ''}`)
-    return res.success ? res.data : { notifications: mockNotifications, unread_count: mockNotifications.filter(n => !n.isRead).length }
+    if (!res.success) throw new Error(res.message || 'Failed to fetch notifications')
+    return res.data
   },
 
   getCount: async () => {
     const res = await api.get('/notifications/count')
-    return res.success ? res.data.unread_count : 0
+    if (!res.success) return 0
+    return res.data.unread_count
   },
 
   markRead: async (id) => {

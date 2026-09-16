@@ -3,6 +3,10 @@
 .env.local
 .env.production
 .env.docker
+backend/.env
+backend/.env.production
+frontend/.env
+frontend/.env.production
 
 # Docker volumes
 epip_pgdata/

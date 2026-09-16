@@ -1,0 +1,53 @@
+{
+  "name": "epip-agent",
+  "version": "1.0.0",
+  "description": "EPIP Desktop Screenshot Agent — captures full Windows screen and uploads to EPIP backend",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder --win portable --x64",
+    "build:nsis": "electron-builder --win nsis --x64",
+    "build:dir": "electron-builder --win --x64 --dir"
+  },
+  "build": {
+    "appId": "com.epip.agent",
+    "productName": "EPIP Agent",
+    "copyright": "Copyright © 2026 EPIP",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "capture.js",
+      "scheduler.js",
+      "auth.js",
+      "config.js",
+      "renderer/**/*",
+      "assets/**/*",
+      "epip-agent.config.json",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": [
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "portable": {
+      "artifactName": "EPIP-Agent-${version}.exe"
+    }
+  },
+  "dependencies": {
+    "axios": "1.7.9",
+    "electron-store": "8.2.0",
+    "form-data": "4.0.1"
+  },
+  "devDependencies": {
+    "electron": "32.2.7",
+    "electron-builder": "24.13.3"
+  },
+  "author": "EPIP",
+  "license": "MIT"
+}

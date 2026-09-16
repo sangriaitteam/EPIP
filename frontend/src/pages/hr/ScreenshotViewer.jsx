@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Camera, Lock, Clock, Users, Eye, RefreshCw, X } from 'lucide-react'
+import { Camera, Lock, Clock, Users, Eye, RefreshCw, X, Monitor } from 'lucide-react'
 import Card, { CardHeader, CardBody } from '../../components/common/Card'
 import Avatar from '../../components/common/Avatar'
 import StatCard from '../../components/common/StatCard'
@@ -222,11 +222,16 @@ const ScreenshotViewer = () => {
                       </div>
                     </div>
 
-                    {/* Timestamp */}
+                    {/* Timestamp + active window */}
                     <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5 bg-gradient-to-t from-black/70 to-transparent">
                       <p className="text-[10px] text-white/90 font-mono">
                         {fmtTime(shot.captured_at || shot.created_at)}
                       </p>
+                      {shot.active_window_title && (
+                        <p className="text-[9px] text-white/70 truncate mt-0.5">
+                          {shot.active_window_title}
+                        </p>
+                      )}
                     </div>
                   </motion.div>
                 ))}
@@ -256,6 +261,14 @@ const ScreenshotViewer = () => {
                   <p className="text-xs text-gray-400">
                     {fmtDate(preview.captured_at || preview.created_at)} · {fmtTime(preview.captured_at || preview.created_at)}
                   </p>
+                  {preview.active_window_title && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <Monitor size={11} className="text-primary-400" />
+                      <p className="text-xs text-primary-400 font-medium truncate max-w-xs">
+                        {preview.active_window_title}
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <button onClick={() => setPreview(null)}
                   className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-dark-700 text-gray-400">

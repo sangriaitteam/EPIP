@@ -308,7 +308,7 @@ const AdminSettings = () => {
                 <div className="flex items-start gap-2 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
                   <Camera size={14} className="text-blue-500 flex-shrink-0 mt-0.5"/>
                   <p className="text-xs text-blue-600 dark:text-blue-400">
-                    Changes apply on employee's next login session. Current sessions use existing interval.
+                    The EPIP Desktop Agent reads this interval on each employee login. Changes apply within 30 seconds on active sessions.
                   </p>
                 </div>
 
