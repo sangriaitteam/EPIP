@@ -37,7 +37,7 @@ app.use(helmet({
 // ── CORS ──────────────────────────────────────────────────────────────────
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow all localhost origins (any port) + configured CLIENT_URL
+    // Allow all localhost origins (any port) + configured CLIENT_URL + vercel deployments
     const allowed = [
       'http://localhost:5173',
       'http://localhost:5174',
@@ -48,7 +48,11 @@ app.use(cors({
       process.env.CLIENT_URL,
     ].filter(Boolean)
 
-    if (!origin || allowed.includes(origin)) {
+    // Allow any vercel.app subdomain (for preview deployments too)
+    const isVercel = origin && origin.endsWith('.vercel.app')
+    const isRailway = origin && origin.endsWith('.railway.app')
+
+    if (!origin || allowed.includes(origin) || isVercel || isRailway) {
       callback(null, true)
     } else {
       callback(new Error(`CORS: ${origin} not allowed`))
