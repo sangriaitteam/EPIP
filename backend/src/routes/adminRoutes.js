@@ -21,6 +21,11 @@ router.delete('/admins/:id',      ctrl.deleteAdmin)          // permanently dele
 router.put('/users/:id',          ctrl.updateUser)
 router.patch('/users/:id/deactivate', ctrl.deactivateUser)
 
+// Project Managers
+router.get('/project-managers',           ctrl.getProjectManagers)
+router.post('/create-project-manager',    ctrl.createProjectManager)
+router.delete('/project-managers/:id',    ctrl.deleteProjectManager)
+
 // Settings
 router.get('/settings',           ctrl.getSettings)
 router.put('/settings',           ctrl.updateSettings)

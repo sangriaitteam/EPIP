@@ -39,6 +39,13 @@ const navConfig = {
     { label: 'My Tasks',        icon: CheckSquare,     path: '/employee/tasks' },
     { label: 'Goals / KPIs',    icon: Target,          path: '/employee/goals' },
   ],
+  project_manager: [
+    { label: 'Dashboard',       icon: LayoutDashboard, path: '/pm/dashboard' },
+    { label: 'Projects',        icon: FolderOpen,      path: '/pm/projects' },
+    { label: 'Team Overview',   icon: Users,           path: '/pm/team' },
+    { label: 'Tasks',           icon: CheckSquare,     path: '/pm/tasks' },
+    { label: 'Reports',         icon: FileText,        path: '/pm/reports' },
+  ],
 }
 
 const navItemVariants = {
@@ -112,7 +119,7 @@ const Sidebar = ({ collapsed, onToggle, onClose }) => {
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{user?.name}</p>
                 <p className="text-xs text-gray-400 dark:text-gray-500 capitalize">
-                  {user?.role === 'admin' ? 'Super Admin' : user?.role === 'hr' ? 'Admin' : 'Employee'}
+                  {user?.role === 'admin' ? 'Super Admin' : user?.role === 'hr' ? 'Admin' : user?.role === 'project_manager' ? 'Project Manager' : 'Employee'}
                 </p>
               </div>
             </div>

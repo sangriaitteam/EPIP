@@ -13,8 +13,9 @@ import { formatDate } from '../../utils/helpers'
 import toast from 'react-hot-toast'
 
 const ROLES = [
-  { name: 'Admin',    color: 'bg-purple-500', glow: 'shadow-purple-500/30', desc: 'Full system access' },
-  { name: 'Employee', color: 'bg-gray-500',   glow: 'shadow-gray-500/20',   desc: 'Own data & self-assessment' },
+  { name: 'Admin',          color: 'bg-purple-500', glow: 'shadow-purple-500/30', desc: 'Full system access' },
+  { name: 'Project Manager',color: 'bg-blue-500',   glow: 'shadow-blue-500/30',   desc: 'Project oversight & team management' },
+  { name: 'Employee',       color: 'bg-gray-500',   glow: 'shadow-gray-500/20',   desc: 'Own data & self-assessment' },
 ]
 
 const PERMISSIONS = [
@@ -64,6 +65,15 @@ const AdminRolesPermissions = () => {
   const [deactivating,   setDeactivating]   = useState(null)
   const [deleting,       setDeleting]       = useState(null)
 
+  // Project Manager modal
+  const [showPMModal,    setShowPMModal]    = useState(false)
+  const [pmForm,         setPmForm]         = useState({ name: '', username: '', password: '' })
+  const [showPMPass,     setShowPMPass]     = useState(false)
+  const [pmSaving,       setPmSaving]       = useState(false)
+  const [pmDone,         setPmDone]         = useState(false)
+  const [projectManagers,setProjectManagers]= useState([])
+  const [deletingPM,     setDeletingPM]     = useState(null)
+
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const loadAttendance = async (silent = false) => {
@@ -89,6 +99,13 @@ const AdminRolesPermissions = () => {
     } catch {}
   }
 
+  const loadProjectManagers = async () => {
+    try {
+      const res = await api.get('/admin/project-managers')
+      if (res.success) setProjectManagers(res.data || [])
+    } catch {}
+  }
+
   const handleDeactivate = async (adminId, adminName) => {
     if (!window.confirm(`Deactivate "${adminName}"? They will lose access immediately.`)) return
     setDeactivating(adminId)
@@ -102,8 +119,47 @@ const AdminRolesPermissions = () => {
     setDeactivating(null)
   }
 
-  // Load admins on mount + after create
-  useEffect(() => { loadAdmins() }, [])
+  // Load admins + project managers on mount
+  useEffect(() => { loadAdmins(); loadProjectManagers() }, [])
+
+  const handleDeletePM = async (pmId, pmName) => {
+    if (!window.confirm(`Delete "${pmName}" permanently? This cannot be undone.`)) return
+    setDeletingPM(pmId)
+    try {
+      const res = await api.delete(`/admin/project-managers/${pmId}`)
+      if (res.success) {
+        toast.success(`🗑 ${pmName} permanently deleted`)
+        loadProjectManagers()
+      } else { toast.error(res.message || 'Delete failed') }
+    } catch { toast.error('Cannot connect to server') }
+    setDeletingPM(null)
+  }
+
+  const handleCreatePM = async () => {
+    if (!pmForm.name.trim())     { toast.error('Name is required'); return }
+    if (!pmForm.username.trim()) { toast.error('Username is required'); return }
+    const pwd = pmForm.password
+    if (pwd.length < 8)            { toast.error('Password must be at least 8 characters'); return }
+    if (!/[A-Z]/.test(pwd))        { toast.error('Password must contain at least one uppercase letter'); return }
+    if (!/[0-9]/.test(pwd))        { toast.error('Password must contain at least one number'); return }
+    if (!/[!@#$%^&*]/.test(pwd))   { toast.error('Password must contain at least one special character (!@#$%^&*)'); return }
+    setPmSaving(true)
+    const res = await api.post('/admin/create-project-manager', pmForm)
+    setPmSaving(false)
+    if (res.success) {
+      setPmDone(true)
+      toast.success('Project Manager created!')
+      loadProjectManagers()
+    } else {
+      toast.error(res.message || 'Failed to create project manager')
+    }
+  }
+
+  const handleClosePM = () => {
+    setShowPMModal(false)
+    setPmDone(false)
+    setPmForm({ name: '', username: '', password: '' })
+  }
 
   const handleDelete = async (adminId, adminName) => {
     if (!window.confirm(`⚠️ Permanently delete "${adminName}"?\n\nThis will delete their account, profile and all related data. This cannot be undone.`)) return
@@ -175,8 +231,9 @@ const AdminRolesPermissions = () => {
           transition={{ delay: i * 0.08, type: 'spring', stiffness: 130 }}
           whileHover={{ y: -6, scale: 1.03 }}
           onClick={() => {
-            if (role.name === 'Admin')    setShowModal(true)
-            if (role.name === 'Employee') handleEmpCardClick()
+            if (role.name === 'Admin')           setShowModal(true)
+            if (role.name === 'Project Manager') setShowPMModal(true)
+            if (role.name === 'Employee')        handleEmpCardClick()
           }}
           className={`p-4 rounded-2xl border border-gray-100 dark:border-dark-600 bg-white dark:bg-dark-800 shadow-lg ${role.glow} cursor-pointer`}
         >
@@ -191,6 +248,9 @@ const AdminRolesPermissions = () => {
           <p className="text-xs text-gray-400 mt-0.5">{role.desc}</p>
           {role.name === 'Admin' && (
             <p className="text-xs text-primary-500 mt-1 font-medium">Click to add Admin →</p>
+          )}
+          {role.name === 'Project Manager' && (
+            <p className="text-xs text-blue-500 mt-1 font-medium">Click to add Project Manager →</p>
           )}
           {role.name === 'Employee' && (
             <p className="text-xs text-green-500 mt-1 font-medium">Click to view attendance →</p>
@@ -491,6 +551,76 @@ const AdminRolesPermissions = () => {
       </Card>
     </motion.div>
 
+    {/* ── Project Manager Accounts List ── */}
+    <motion.div variants={fadeUp}>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                <UserCheck size={16} className="text-blue-500" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Project Manager Accounts</h3>
+                <p className="text-xs text-gray-400">
+                  {projectManagers.filter(p => p.is_active).length}/2 active · Click "Project Manager" card above to add new
+                </p>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400">
+              Max 2
+            </span>
+          </div>
+        </CardHeader>
+        <CardBody>
+          {projectManagers.length === 0 ? (
+            <div className="py-8 text-center">
+              <UserCheck size={28} className="mx-auto text-gray-300 dark:text-dark-500 mb-2" />
+              <p className="text-sm text-gray-400">No project managers yet — click the Project Manager card above to create one</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {projectManagers.map((pm, i) => (
+                <motion.div key={pm.id}
+                  initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.06 }}
+                  className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-dark-700 border border-gray-100 dark:border-dark-600">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Avatar name={pm.name} size="sm" online={pm.is_active} />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">{pm.name}</p>
+                      <p className="text-xs text-gray-400 font-mono">@{pm.username}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      pm.is_active
+                        ? 'bg-green-500/10 text-green-600 dark:text-green-400'
+                        : 'bg-gray-500/10 text-gray-500'
+                    }`}>
+                      {pm.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                    <motion.button
+                      onClick={() => handleDeletePM(pm.id, pm.name)}
+                      disabled={deletingPM === pm.id}
+                      whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                      title="Delete permanently"
+                      className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50">
+                      {deletingPM === pm.id
+                        ? <motion.div animate={{ rotate: 360 }} transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
+                            className="w-3.5 h-3.5 border-2 border-red-500/30 border-t-red-500 rounded-full" />
+                        : <Trash2 size={13} />
+                      }
+                    </motion.button>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </CardBody>
+      </Card>
+    </motion.div>
+
     {/* ── Add Admin Modal ── */}
     <AnimatePresence>
       {showModal && (
@@ -586,6 +716,105 @@ const AdminRolesPermissions = () => {
                     {saving
                       ? <motion.div animate={{ rotate: 360 }} transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }} className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
                       : <><UserPlus size={14}/> Create Admin</>
+                    }
+                  </motion.button>
+                </div>
+              </>
+            )}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+
+    {/* ── Add Project Manager Modal ── */}
+    <AnimatePresence>
+      {showPMModal && (
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          onClick={e => e.target === e.currentTarget && handleClosePM()}
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1,   opacity: 1, y: 0  }}
+            exit={{    scale: 0.9, opacity: 0, y: 20 }}
+            className="bg-white dark:bg-dark-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-dark-600 w-full max-w-md p-6"
+          >
+            {pmDone ? (
+              <div className="text-center py-4 space-y-3">
+                <div className="w-14 h-14 rounded-full bg-green-500/10 flex items-center justify-center mx-auto">
+                  <CheckCircle size={28} className="text-green-500" />
+                </div>
+                <p className="font-semibold text-gray-900 dark:text-white">Project Manager Created!</p>
+                <p className="text-sm text-gray-400">They can now login with the credentials you set.</p>
+                <button onClick={handleClosePM}
+                  className="mt-2 px-6 py-2 rounded-xl bg-blue-500 text-white text-sm font-medium">
+                  Done
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+                    <UserPlus size={16} className="text-white" />
+                  </div>
+                  <div>
+                    <h2 className="font-semibold text-gray-900 dark:text-white">Create Project Manager</h2>
+                    <p className="text-xs text-gray-400">Up to 2 Project Managers allowed</p>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 dark:text-gray-400 block mb-1.5">Full Name *</label>
+                    <input value={pmForm.name} onChange={e => setPmForm(f => ({ ...f, name: e.target.value }))}
+                      placeholder="Project Manager's full name"
+                      className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 dark:text-gray-400 block mb-1.5">Username *</label>
+                    <input value={pmForm.username} onChange={e => setPmForm(f => ({ ...f, username: e.target.value.toLowerCase().replace(/\s+/g,'') }))}
+                      placeholder="e.g. pm.john"
+                      className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 dark:text-gray-400 block mb-1.5">Password *</label>
+                    <div className="relative">
+                      <input type={showPMPass ? 'text' : 'password'} value={pmForm.password} onChange={e => setPmForm(f => ({ ...f, password: e.target.value }))}
+                        placeholder="Min 8 chars, uppercase, number, symbol"
+                        className="w-full px-4 py-2.5 pr-10 text-sm rounded-xl border border-gray-200 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      <button type="button" onClick={() => setShowPMPass(s => !s)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                        {showPMPass ? <EyeOff size={15}/> : <Eye size={15}/>}
+                      </button>
+                    </div>
+                    {pmForm.password.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {[
+                          { label: 'At least 8 characters',       ok: pmForm.password.length >= 8 },
+                          { label: 'Uppercase letter (A-Z)',       ok: /[A-Z]/.test(pmForm.password) },
+                          { label: 'Number (0-9)',                 ok: /[0-9]/.test(pmForm.password) },
+                          { label: 'Special character (!@#$%^&*)', ok: /[!@#$%^&*]/.test(pmForm.password) },
+                        ].map(({ label, ok }) => (
+                          <div key={label} className="flex items-center gap-1.5">
+                            {ok ? <Check size={11} className="text-green-500 flex-shrink-0" /> : <X size={11} className="text-red-400 flex-shrink-0" />}
+                            <span className={`text-xs ${ok ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`}>{label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-3 mt-6">
+                  <button onClick={handleClosePM}
+                    className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-dark-600 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-dark-700">
+                    Cancel
+                  </button>
+                  <motion.button onClick={handleCreatePM} disabled={pmSaving}
+                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-sm font-semibold disabled:opacity-60">
+                    {pmSaving
+                      ? <motion.div animate={{ rotate: 360 }} transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }} className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+                      : <><UserPlus size={14}/> Create PM</>
                     }
                   </motion.button>
                 </div>

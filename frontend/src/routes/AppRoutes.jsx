@@ -15,6 +15,9 @@ import EmployeeTasks from '../pages/employee/Tasks'
 import EmployeeGoals from '../pages/employee/Goals'
 import VerifyDocuments from '../pages/employee/VerifyDocuments'
 
+// Project Manager pages
+import PMDashboard from '../pages/project-manager/Dashboard'
+
 // HR (Admin) pages
 import HRDashboard from '../pages/hr/Dashboard'
 import HREmployeeManagement from '../pages/hr/EmployeeManagement'
@@ -38,10 +41,11 @@ const RootRedirect = () => {
   const { user, isAuthenticated } = useAuth()
   if (!isAuthenticated) return <Navigate to="/home" replace />
   const map = {
-    superadmin: '/admin/dashboard',
-    admin:      '/admin/dashboard',
-    hr:         '/hr/dashboard',
-    employee:   '/employee/dashboard',
+    superadmin:      '/admin/dashboard',
+    admin:           '/admin/dashboard',
+    hr:              '/hr/dashboard',
+    employee:        '/employee/dashboard',
+    project_manager: '/pm/dashboard',
   }
   return <Navigate to={map[user?.role] || '/home'} replace />
 }
@@ -93,6 +97,13 @@ const AppRoutes = () => (
         <Route path="/admin/roles"       element={<AdminRolesPermissions />} />
         <Route path="/admin/settings"    element={<AdminSettings />} />
         <Route path="/admin/holidays"    element={<AdminHolidayCalendar />} />
+      </Route>
+    </Route>
+
+    {/* Project Manager */}
+    <Route element={<ProtectedRoute allowedRoles={['project_manager']} />}>
+      <Route element={<DashboardLayout />}>
+        <Route path="/pm/dashboard" element={<PMDashboard />} />
       </Route>
     </Route>
 

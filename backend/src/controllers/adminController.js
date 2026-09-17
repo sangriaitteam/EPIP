@@ -303,9 +303,78 @@ const getAuditLogs = async (req, res, next) => {
   } catch (err) { next(err) }
 }
 
+// ── Project Manager ────────────────────────────────────────────────────────
+
+// GET /api/admin/project-managers
+const getProjectManagers = async (req, res, next) => {
+  try {
+    const { rows } = await query(
+      `SELECT id, name, username, is_active, is_first_login, created_at
+       FROM users WHERE role = 'project_manager' ORDER BY created_at ASC`
+    )
+    return ok(res, rows)
+  } catch (err) { next(err) }
+}
+
+// POST /api/admin/create-project-manager  — Superadmin only, max 2 accounts
+const createProjectManager = async (req, res, next) => {
+  try {
+    const { name, username, password } = req.body
+    if (!name || !username || !password)
+      return fail(res, 'Name, username and password are required', 400)
+    if (password.length < 8)
+      return fail(res, 'Password must be at least 8 characters', 400)
+    if (!/[A-Z]/.test(password))
+      return fail(res, 'Password must contain at least one uppercase letter', 400)
+    if (!/[0-9]/.test(password))
+      return fail(res, 'Password must contain at least one number', 400)
+    if (!/[!@#$%^&*]/.test(password))
+      return fail(res, 'Password must contain at least one special character (!@#$%^&*)', 400)
+
+    const existing = await User.findByUsername(username)
+    if (existing) return fail(res, 'Username already taken', 409)
+
+    // Max 2 project managers
+    const { rows: pmRows } = await query(
+      `SELECT id FROM users WHERE role = 'project_manager' AND is_active = true`
+    )
+    if (pmRows.length >= 2)
+      return fail(res, 'Maximum 2 Project Managers allowed. Deactivate an existing one first.', 409)
+
+    const bcrypt = require('bcryptjs')
+    const hash   = await bcrypt.hash(password, 12)
+    const placeholderEmail = `${username}@pm.epip.internal`
+    const { rows } = await query(
+      `INSERT INTO users (name, email, username, password_hash, role, is_active, is_first_login)
+       VALUES ($1, $2, $3, $4, 'project_manager', true, false)
+       RETURNING id, name, username, role`,
+      [name, placeholderEmail, username, hash]
+    )
+    await auditLog(req.user.id, 'CREATE_PROJECT_MANAGER', 'user', rows[0].id)
+    return created(res, rows[0], 'Project Manager created successfully')
+  } catch (err) { next(err) }
+}
+
+// DELETE /api/admin/project-managers/:id  — permanently remove a project manager
+const deleteProjectManager = async (req, res, next) => {
+  try {
+    const { id } = req.params
+    const { rows } = await query(`SELECT id, role FROM users WHERE id = $1`, [id])
+    if (!rows.length) return fail(res, 'User not found', 404)
+    if (rows[0].role !== 'project_manager') return fail(res, 'Can only delete Project Manager users', 403)
+
+    await query(`DELETE FROM notifications WHERE user_id = $1`, [id])
+    await query(`DELETE FROM audit_logs    WHERE user_id = $1`, [id])
+    await query(`DELETE FROM users         WHERE id = $1`,      [id])
+    await auditLog(req.user.id, 'DELETE_PROJECT_MANAGER', 'user', id)
+    return ok(res, null, 'Project Manager deleted permanently')
+  } catch (err) { next(err) }
+}
+
 module.exports = {
   getDepartments, createDepartment, updateDepartment, deleteDepartment,
   getUsers, updateUser, deactivateUser, createAdmin, getAdmins, deleteAdmin,
+  createProjectManager, getProjectManagers, deleteProjectManager,
   getSettings, updateSettings,
   getHolidays, createHoliday, deleteHoliday,
   getShifts, createShift, updateShift, deleteShift,

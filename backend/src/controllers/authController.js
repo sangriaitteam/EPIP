@@ -80,7 +80,7 @@ const login = async (req, res, next) => {
 
     // Role tab enforcement
     if (expectedRole && user.role !== expectedRole) {
-      const roleLabel = { employee: 'Employee', hr: 'Admin', admin: 'Super Admin' }
+      const roleLabel = { employee: 'Employee', hr: 'Admin', admin: 'Super Admin', project_manager: 'Project Manager' }
       return fail(res,
         `This account is a ${roleLabel[user.role] || user.role} account. Please use the ${roleLabel[user.role] || user.role} login tab.`,
         403

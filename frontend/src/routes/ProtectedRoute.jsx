@@ -20,9 +20,10 @@ const ProtectedRoute = ({ allowedRoles }) => {
 
   if (allowedRoles && !allowedRoles.includes(user?.role)) {
     const redirectMap = {
-      admin:    '/admin/dashboard',
-      hr:       '/hr/dashboard',
-      employee: '/employee/dashboard',
+      admin:           '/admin/dashboard',
+      hr:              '/hr/dashboard',
+      employee:        '/employee/dashboard',
+      project_manager: '/pm/dashboard',
     }
     return <Navigate to={redirectMap[user?.role] || '/login'} replace />
   }

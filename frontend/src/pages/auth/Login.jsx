@@ -9,9 +9,10 @@ import toast from 'react-hot-toast'
 
 // Roles — Employee uses username, Admin uses username, Super Admin uses email
 const ROLES = [
-  { label: 'Employee',    isUsername: true  },
-  { label: 'Admin',       isUsername: true  },
-  { label: 'Super Admin', isUsername: false },
+  { label: 'Employee',        isUsername: true  },
+  { label: 'Admin',           isUsername: true  },
+  { label: 'Super Admin',     isUsername: false },
+  { label: 'Project Manager', isUsername: true  },
 ]
 
 const Login = () => {
@@ -80,7 +81,7 @@ const Login = () => {
       return
     }
 
-    const roleMap      = { 0: 'employee', 1: 'hr', 2: 'admin' }
+    const roleMap      = { 0: 'employee', 1: 'hr', 2: 'admin', 3: 'project_manager' }
     const expectedRole = roleMap[selectedRole]
 
     setLoading(true)
@@ -97,9 +98,10 @@ const Login = () => {
         return
       }
       const map = {
-        admin:    '/admin/dashboard',
-        hr:       '/hr/dashboard',
-        employee: '/employee/dashboard',
+        admin:           '/admin/dashboard',
+        hr:              '/hr/dashboard',
+        employee:        '/employee/dashboard',
+        project_manager: '/pm/dashboard',
       }
       navigate(map[result.user.role])
     } else {
@@ -183,8 +185,8 @@ const Login = () => {
             <p className={`text-xs sm:text-sm mt-1 ${subTxt}`}>Choose your role and enter your credentials</p>
           </div>
 
-          {/* Role selector — 3 cols on sm+, stacked on xs */}
-          <div className="grid grid-cols-3 gap-2 mb-5">
+          {/* Role selector — 2 cols on xs, 4 cols on sm+ */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-5">
             {ROLES.map((r, i) => {
               const isActive = selectedRole === i
               return (
