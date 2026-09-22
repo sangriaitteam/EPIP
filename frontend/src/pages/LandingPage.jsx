@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import ThemeToggle from '../components/common/ThemeToggle'
 import { useTheme } from '../context/ThemeContext'
-import sangriaLogo from '../assets/sangria-logo.png'
+import sangriaLogo from '../assets/sangria.png'
 
 // ── EPIP Actual Features (what's really built) ────────────────────────────
 const features = [
@@ -195,6 +195,9 @@ export default function LandingPage() {
       <nav className={`relative z-10 flex items-center justify-between px-4 md:px-10 py-3 sm:py-4 ${glassCls} border-b ${navBorder} sticky top-0`}>
         <div className="flex items-center gap-2 sm:gap-3">
           <img src={sangriaLogo} alt="Sangria Edutainment" className="h-8 sm:h-10 w-auto object-contain flex-shrink-0" />
+          <span className={`font-bold text-sm hidden sm:block ${isDark ? 'text-white' : 'text-slate-900'}`}>
+            Sangria <span className={`font-normal text-xs block ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Edutainment</span>
+          </span>
         </div>
 
         <div className={`hidden md:flex items-center gap-8 text-sm ${textMuted}`}>
@@ -478,6 +481,7 @@ export default function LandingPage() {
         ${isDark ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400'}`}>
         <div className="flex items-center justify-center gap-2 mb-2">
           <img src={sangriaLogo} alt="Sangria" className="h-7 w-auto object-contain" />
+          <span className={`font-semibold text-sm ${isDark ? 'text-white' : 'text-slate-700'}`}>Sangria Edutainment</span>
         </div>
         <p>© 2026 Sangria Edutainment Pvt Ltd · Employee Performance Intelligence Platform</p>
         <p className={`text-xs mt-1 ${isDark ? 'text-slate-600' : 'text-slate-300'}`}>
