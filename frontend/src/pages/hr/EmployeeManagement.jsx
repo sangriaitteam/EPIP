@@ -15,9 +15,8 @@ import toast from 'react-hot-toast'
 const fadeUp = { hidden: { opacity: 0, y: 18 }, show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 120, damping: 14 } } }
 
 const EMPTY_FORM = {
-  first_name: '', last_name: '', email: '', phone: '',
-  department_id: '', designation: '', work_mode: 'Office',
-  join_date: new Date().toISOString().split('T')[0],
+  profile_name: '', email: '',
+  department_id: '',
   username: '', password: '',
 }
 
@@ -58,15 +57,11 @@ const EmployeeManagement = () => {
 
   const handleEdit = (emp) => {
     setEditEmp(emp)
+    const name = emp.name || `${emp.first_name || ''} ${emp.last_name || ''}`.trim()
     setForm({
-      first_name:    emp.first_name  || emp.name?.split(' ')[0] || '',
-      last_name:     emp.last_name   || emp.name?.split(' ').slice(1).join(' ') || '',
+      profile_name:  name,
       email:         emp.email       || '',
-      phone:         emp.phone       || '',
       department_id: '',
-      designation:   emp.designation || '',
-      work_mode:     emp.work_mode   || emp.workMode || 'Office',
-      join_date:     emp.join_date   || emp.joinDate || new Date().toISOString().split('T')[0],
       username: '', password: '',
     })
     setCredentials(null)
@@ -74,22 +69,22 @@ const EmployeeManagement = () => {
   }
 
   const handleSave = async () => {
-    if (!form.first_name || !form.last_name) { toast.error('First and last name required'); return }
+    if (!form.profile_name.trim()) { toast.error('Profile name is required'); return }
     if (!editEmp) {
       if (!form.username.trim())    { toast.error('Username is required'); return }
       if (form.password.length < 6) { toast.error('Password must be at least 6 characters'); return }
     }
+    // Split profile_name into first_name + last_name
+    const parts = form.profile_name.trim().split(/\s+/)
+    const first_name = parts[0] || ''
+    const last_name  = parts.slice(1).join(' ') || '.'
     setSaving(true)
     try {
       if (editEmp) {
         const res = await api.put(`/employees/${editEmp.id}`, {
-          first_name:  form.first_name,
-          last_name:   form.last_name,
-          email:       form.email,
-          phone:       form.phone,
-          designation: form.designation,
-          work_mode:   form.work_mode,
-          join_date:   form.join_date,
+          first_name,
+          last_name,
+          email: form.email,
         })
         if (res.success) {
           setEmployees(prev => prev.map(e => e.id === editEmp.id ? { ...e, ...res.data } : e))
@@ -97,7 +92,7 @@ const EmployeeManagement = () => {
           setShowForm(false); setEditEmp(null); setForm(EMPTY_FORM)
         } else toast.error(res.message || 'Update failed')
       } else {
-        const res = await api.post('/employees', form)
+        const res = await api.post('/employees', { ...form, first_name, last_name })
         if (res.success) {
           setCredentials({ username: form.username, password: form.password })
           setEmployees(prev => [...prev, res.data.employee])
@@ -336,30 +331,12 @@ const EmployeeManagement = () => {
                     </div>
                   ) : (
                     <>
-                      {/* Name — stacked on mobile, side by side on sm+ */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <Input label="First Name *" placeholder="First name"
-                          value={form.first_name} onChange={e => setF('first_name', e.target.value)} />
-                        <Input label="Last Name *" placeholder="Last name"
-                          value={form.last_name} onChange={e => setF('last_name', e.target.value)} />
-                      </div>
+                      {/* Profile Name */}
+                      <Input label="Profile Name *" placeholder="Full name e.g. John Doe"
+                        value={form.profile_name} onChange={e => setF('profile_name', e.target.value)} />
 
                       <Input label="Email *" type="email" placeholder="employee@example.com"
                         value={form.email} onChange={e => setF('email', e.target.value)} />
-
-                      <Input label="Phone" placeholder="+91 99999 99999"
-                        value={form.phone} onChange={e => setF('phone', e.target.value)} />
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <Select label="Work Mode" value={form.work_mode} onChange={e => setF('work_mode', e.target.value)}>
-                          {['Office','Remote','Hybrid'].map(m => <option key={m} value={m}>{m}</option>)}
-                        </Select>
-                        <Input label="Join Date" type="date"
-                          value={form.join_date} onChange={e => setF('join_date', e.target.value)} />
-                      </div>
-
-                      <Input label="Designation" placeholder="Job title"
-                        value={form.designation} onChange={e => setF('designation', e.target.value)} />
 
                       {/* Credentials — only for new employee */}
                       {!editEmp && (
