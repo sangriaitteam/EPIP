@@ -4,19 +4,21 @@ const nodemailer = require('nodemailer')
  * Create a fresh transporter each time so .env changes take effect
  * without restarting the server (lazy creation).
  */
-const createTransporter = () =>
-  nodemailer.createTransport({
+const createTransporter = () => {
+  const port = parseInt(process.env.SMTP_PORT) || 587
+  return nodemailer.createTransport({
     host:   process.env.SMTP_HOST || 'smtp.gmail.com',
-    port:   parseInt(process.env.SMTP_PORT) || 587,
-    secure: false,                  // TLS via STARTTLS on port 587
+    port,
+    secure: port === 465,           // true for 465, false for 587
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
     tls: {
-      rejectUnauthorized: false,    // allow self-signed certs in dev
+      rejectUnauthorized: false,
     },
   })
+}
 
 const FROM = () =>
   `"EPIP Platform" <${process.env.SMTP_USER || 'noreply@epip.com'}>`

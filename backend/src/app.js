@@ -29,6 +29,9 @@ const projectRoutes        = require('./routes/projectRoutes')
 
 const app = express()
 
+// Trust Railway/Vercel reverse proxy
+app.set('trust proxy', 1)
+
 // ── Security ──────────────────────────────────────────────────────────────
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' }, // allow serving uploaded files
