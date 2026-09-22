@@ -15,7 +15,7 @@ import toast from 'react-hot-toast'
 const fadeUp = { hidden: { opacity: 0, y: 18 }, show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 120, damping: 14 } } }
 
 const EMPTY_FORM = {
-  profile_name: '', email: '',
+  profile_name: '',
   department_id: '',
   username: '', password: '',
 }
@@ -60,7 +60,6 @@ const EmployeeManagement = () => {
     const name = emp.name || `${emp.first_name || ''} ${emp.last_name || ''}`.trim()
     setForm({
       profile_name:  name,
-      email:         emp.email       || '',
       department_id: '',
       username: '', password: '',
     })
@@ -84,7 +83,6 @@ const EmployeeManagement = () => {
         const res = await api.put(`/employees/${editEmp.id}`, {
           first_name,
           last_name,
-          email: form.email,
         })
         if (res.success) {
           setEmployees(prev => prev.map(e => e.id === editEmp.id ? { ...e, ...res.data } : e))
@@ -92,7 +90,12 @@ const EmployeeManagement = () => {
           setShowForm(false); setEditEmp(null); setForm(EMPTY_FORM)
         } else toast.error(res.message || 'Update failed')
       } else {
-        const res = await api.post('/employees', { ...form, first_name, last_name })
+        const res = await api.post('/employees', {
+          ...form,
+          first_name,
+          last_name,
+          email: `${form.username}@epip.internal`,
+        })
         if (res.success) {
           setCredentials({ username: form.username, password: form.password })
           setEmployees(prev => [...prev, res.data.employee])
@@ -334,9 +337,6 @@ const EmployeeManagement = () => {
                       {/* Profile Name */}
                       <Input label="Profile Name *" placeholder="Full name e.g. John Doe"
                         value={form.profile_name} onChange={e => setF('profile_name', e.target.value)} />
-
-                      <Input label="Email *" type="email" placeholder="employee@example.com"
-                        value={form.email} onChange={e => setF('email', e.target.value)} />
 
                       {/* Credentials — only for new employee */}
                       {!editEmp && (
