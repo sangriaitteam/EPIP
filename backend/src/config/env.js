@@ -3,12 +3,15 @@
 // rather than failing silently at runtime.
 
 const REQUIRED = [
+  'JWT_SECRET',
+]
+
+const DB_VARS = [
   'DB_HOST',
   'DB_PORT',
   'DB_NAME',
   'DB_USER',
   'DB_PASSWORD',
-  'JWT_SECRET',
 ]
 
 const INSECURE_DEFAULTS = [
@@ -30,6 +33,15 @@ function validateEnv() {
   for (const key of REQUIRED) {
     if (!process.env[key]) {
       errors.push(`Missing required env var: ${key}`)
+    }
+  }
+
+  // DB vars required only if DATABASE_URL is not set
+  if (!process.env.DATABASE_URL) {
+    for (const key of DB_VARS) {
+      if (!process.env[key]) {
+        errors.push(`Missing required env var: ${key}`)
+      }
     }
   }
 
