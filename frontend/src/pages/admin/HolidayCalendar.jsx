@@ -105,7 +105,7 @@ const AddModal = ({ date, onClose, onAdded }) => {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Holiday Type <span className="text-red-500">*</span>
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               {HOLIDAY_TYPES.map(t => (
                 <button key={t.value} onClick={() => setF('type', t.value)}
                   className={`py-2.5 px-2 rounded-xl text-xs font-semibold border-2 transition-all text-center ${
@@ -421,7 +421,7 @@ const AdminHolidayCalendar = () => {
 
           {/* ── 12-month Calendar Grid ── */}
           <div className="flex-1 min-w-0">
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
               {Array.from({ length: 12 }, (_, mi) => (
                 <MonthGrid
                   key={mi}

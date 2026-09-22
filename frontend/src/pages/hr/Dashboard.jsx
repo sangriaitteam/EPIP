@@ -81,7 +81,7 @@ const HRDashboard = () => {
 
       {/* Header */}
       <motion.div variants={item}>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">HR Dashboard</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">HR Dashboard</h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
           Company-wide overview · {now.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
         </p>
@@ -234,21 +234,7 @@ const HRDashboard = () => {
 
       </div>
 
-      {/* Stats summary footer */}
-      <motion.div variants={item}
-        className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-2xl bg-gray-50 dark:bg-dark-800 border border-gray-100 dark:border-dark-600">
-        {[
-          { label: 'Total Departments', val: stats?.total_departments ?? departments.length },
-          { label: 'Total Reviews',     val: stats?.total_reviews ?? '—' },
-          { label: 'Active Employees',  val: stats?.active_employees ?? '—' },
-          { label: 'Avg Attendance',    val: stats?.attendance_rate ? `${stats.attendance_rate}%` : '—' },
-        ].map(s => (
-          <div key={s.label} className="text-center">
-            <p className="text-xl font-bold text-gray-900 dark:text-white">{s.val}</p>
-            <p className="text-xs text-gray-400 mt-0.5">{s.label}</p>
-          </div>
-        ))}
-      </motion.div>
+
 
     </motion.div>
   )

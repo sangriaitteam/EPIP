@@ -1,18 +1,33 @@
 const { Pool } = require('pg')
 
-const pool = new Pool({
-  host:     process.env.DB_HOST     || 'localhost',
-  port:     parseInt(process.env.DB_PORT) || 5432,
-  database: process.env.DB_NAME     || 'epip_db',
-  user:     process.env.DB_USER     || 'postgres',
-  password: process.env.DB_PASSWORD || '',
-  max:                     10,      // max pool size
-  min:                      2,      // keep 2 connections alive
-  idleTimeoutMillis:    60000,      // 60s before idle connection closed
-  connectionTimeoutMillis: 5000,    // 5s to get connection from pool
-  keepAlive:             true,      // TCP keepalive to prevent timeout
-  keepAliveInitialDelayMillis: 10000,
-})
+// Supabase / production: use DATABASE_URL connection string
+// Local dev: use individual DB_* env vars
+const poolConfig = process.env.DATABASE_URL
+  ? {
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }, // required for Supabase
+      max:                     10,
+      min:                      2,
+      idleTimeoutMillis:    60000,
+      connectionTimeoutMillis: 5000,
+      keepAlive:             true,
+      keepAliveInitialDelayMillis: 10000,
+    }
+  : {
+      host:     process.env.DB_HOST     || 'localhost',
+      port:     parseInt(process.env.DB_PORT) || 5432,
+      database: process.env.DB_NAME     || 'epip_db',
+      user:     process.env.DB_USER     || 'postgres',
+      password: process.env.DB_PASSWORD || '',
+      max:                     10,
+      min:                      2,
+      idleTimeoutMillis:    60000,
+      connectionTimeoutMillis: 5000,
+      keepAlive:             true,
+      keepAliveInitialDelayMillis: 10000,
+    }
+
+const pool = new Pool(poolConfig)
 
 // Test connection on startup
 pool.connect((err, client, release) => {

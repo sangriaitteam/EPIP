@@ -1,15 +1,15 @@
+import React, { useState } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, Users, Clock, CheckSquare, Target,
   FileText, Settings, LogOut, ChevronRight, ChevronDown,
-  Camera, Shield, Building2, Calendar, Star, FolderOpen
+  Camera, Shield, Building2, Calendar, Star, FolderOpen, TrendingUp
 } from 'lucide-react'
-import { useState } from 'react'
 import { cn } from '../../utils/helpers'
 import { useAuth } from '../../context/AuthContext'
 import Avatar from '../common/Avatar'
-import sangriaLogo from '../../assets/sangria-logo.png'
+import sangriaLogo from '../../assets/sangria.png'
 
 // ── Nav config ────────────────────────────────────────────────────────────
 const navConfig = {
@@ -26,9 +26,7 @@ const navConfig = {
     { label: 'My Profile',         icon: Users,           path: '/hr/profile' },
     { label: 'Employees',          icon: Users,           path: '/hr/employees' },
     { label: "Today's Attendance", icon: Clock,           path: '/hr/attendance' },
-    { label: 'Assign Tasks',       icon: CheckSquare,     path: '/hr/tasks' },
     { label: 'Leave Requests',     icon: Calendar,        path: '/hr/leaves' },
-    { label: 'Performance',        icon: Star,            path: '/hr/performance' },
     { label: 'Reports',            icon: FileText,        path: '/hr/reports' },
     { label: 'Screenshots',        icon: Camera,          path: '/hr/screenshots' },
   ],
@@ -37,14 +35,14 @@ const navConfig = {
     { label: 'My Profile',      icon: Users,           path: '/employee/profile' },
     { label: 'Attendance',      icon: Clock,           path: '/employee/attendance' },
     { label: 'My Tasks',        icon: CheckSquare,     path: '/employee/tasks' },
+    { label: 'My Projects',     icon: FolderOpen,      path: '/employee/projects' },
     { label: 'Goals / KPIs',    icon: Target,          path: '/employee/goals' },
   ],
   project_manager: [
-    { label: 'Dashboard',       icon: LayoutDashboard, path: '/pm/dashboard' },
-    { label: 'Projects',        icon: FolderOpen,      path: '/pm/projects' },
-    { label: 'Team Overview',   icon: Users,           path: '/pm/team' },
-    { label: 'Tasks',           icon: CheckSquare,     path: '/pm/tasks' },
-    { label: 'Reports',         icon: FileText,        path: '/pm/reports' },
+    { label: 'Home',            icon: LayoutDashboard, path: '/pm/dashboard' },
+    { label: 'Reports',         icon: FileText,        path: '/pm/reports'   },
+    { label: 'Projects',        icon: FolderOpen,      path: '/pm/projects'  },
+    { label: 'Project Updates', icon: TrendingUp,      path: '/pm/updates'   },
   ],
 }
 
@@ -71,6 +69,20 @@ const Sidebar = ({ collapsed, onToggle, onClose }) => {
 
   const handleLogout = () => { logout(); navigate('/login') }
 
+  // Recent Projects — only for project_manager role
+  const [recentProjects, setRecentProjects] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem('epip_recent_projects') || '[]') } catch { return [] }
+  })
+
+  React.useEffect(() => {
+    if (user?.role !== 'project_manager') return
+    const update = () => {
+      try { setRecentProjects(JSON.parse(localStorage.getItem('epip_recent_projects') || '[]')) } catch {}
+    }
+    window.addEventListener('recent-projects-updated', update)
+    return () => window.removeEventListener('recent-projects-updated', update)
+  }, [user?.role])
+
   return (
       <motion.aside
       animate={{ width: collapsed ? 64 : 256 }}
@@ -85,7 +97,7 @@ const Sidebar = ({ collapsed, onToggle, onClose }) => {
         <motion.div
           whileHover={{ rotate: 360, scale: 1.1 }}
           transition={{ duration: 0.6 }}
-          className="w-8 h-8 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0 shadow-lg"
+          className="w-8 h-8 flex items-center justify-center flex-shrink-0"
         >
           <img src={sangriaLogo} alt="Sangria" className="w-full h-full object-contain" />
         </motion.div>
@@ -248,6 +260,30 @@ const Sidebar = ({ collapsed, onToggle, onClose }) => {
           ))}
         </div>
       </nav>
+
+      {/* Recent Projects — PM only */}
+      {user?.role === 'project_manager' && !collapsed && recentProjects.length > 0 && (
+        <div className="px-3 py-2 border-t border-gray-100 dark:border-dark-600">
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Recent Projects</p>
+          </div>
+          <div className="space-y-0.5">
+            {recentProjects.map(p => (
+              <NavLink
+                key={p.id}
+                to="/pm/projects"
+                onClick={() => onClose?.()}
+                className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 transition-colors group"
+              >
+                <FolderOpen size={12} className="text-primary-400 flex-shrink-0" />
+                <span className="text-xs text-gray-500 dark:text-gray-400 truncate group-hover:text-gray-800 dark:group-hover:text-white transition-colors">
+                  {p.name}
+                </span>
+              </NavLink>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Logout */}
       <div className="px-2 py-3 border-t border-gray-100 dark:border-dark-600">

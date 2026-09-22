@@ -6,6 +6,7 @@ import DashboardLayout from '../components/layout/DashboardLayout'
 import Login from '../pages/auth/Login'
 import LandingPage from '../pages/LandingPage'
 import SuperAdminSetup from '../pages/auth/SuperAdminSetup'
+import PMLogin from '../pages/auth/PMLogin'
 
 // Employee pages
 import EmployeeDashboard from '../pages/employee/Dashboard'
@@ -13,20 +14,22 @@ import EmployeeProfile from '../pages/employee/Profile'
 import EmployeeAttendance from '../pages/employee/Attendance'
 import EmployeeTasks from '../pages/employee/Tasks'
 import EmployeeGoals from '../pages/employee/Goals'
+import EmployeeProjects from '../pages/employee/Projects'
 import VerifyDocuments from '../pages/employee/VerifyDocuments'
 
 // Project Manager pages
-import PMDashboard from '../pages/project-manager/Dashboard'
+import PMDashboard     from '../pages/project-manager/Dashboard'
+import PMReports       from '../pages/project-manager/Reports'
+import PMProjects      from '../pages/project-manager/Projects'
+import PMProjectUpdates from '../pages/project-manager/ProjectUpdates'
 
 // HR (Admin) pages
 import HRDashboard from '../pages/hr/Dashboard'
 import HREmployeeManagement from '../pages/hr/EmployeeManagement'
-import HRPerformanceReviews from '../pages/hr/PerformanceReviews'
 import HRReports from '../pages/hr/Reports'
 import HRScreenshotViewer from '../pages/hr/ScreenshotViewer'
 import HRLeaveRequests from '../pages/hr/LeaveRequests'
 import HRTodayAttendance from '../pages/hr/TodayAttendance'
-import HRAssignTasks from '../pages/hr/AssignTasks'
 // Super Admin pages
 import AdminDepartments from '../pages/admin/Departments'
 import AdminRolesPermissions from '../pages/admin/RolesPermissions'
@@ -55,6 +58,7 @@ const AppRoutes = () => (
     <Route path="/"      element={<RootRedirect />} />
     <Route path="/home"  element={<LandingPage />} />
     <Route path="/login" element={<Login />} />
+    <Route path="/pm/login" element={<PMLogin />} />
     <Route path="/superadmin/setup" element={<SuperAdminSetup />} />
 
     {/* Employee OR hr (Admin) — verify documents (outside DashboardLayout) */}
@@ -69,6 +73,7 @@ const AppRoutes = () => (
         <Route path="/employee/profile"         element={<EmployeeProfile />} />
         <Route path="/employee/attendance"      element={<EmployeeAttendance />} />
         <Route path="/employee/tasks"           element={<EmployeeTasks />} />
+        <Route path="/employee/projects"        element={<EmployeeProjects />} />
         <Route path="/employee/goals"           element={<EmployeeGoals />} />
       </Route>
     </Route>
@@ -79,12 +84,10 @@ const AppRoutes = () => (
         <Route path="/hr/dashboard"   element={<HRDashboard />} />
         <Route path="/hr/profile"     element={<EmployeeProfile />} />
         <Route path="/hr/employees"   element={<HREmployeeManagement />} />
-        <Route path="/hr/performance" element={<HRPerformanceReviews />} />
         <Route path="/hr/reports"     element={<HRReports />} />
         <Route path="/hr/screenshots" element={<HRScreenshotViewer />} />
         <Route path="/hr/leaves"      element={<HRLeaveRequests />} />
         <Route path="/hr/attendance"  element={<HRTodayAttendance />} />
-        <Route path="/hr/tasks"       element={<HRAssignTasks />} />
       </Route>
     </Route>
 
@@ -104,6 +107,9 @@ const AppRoutes = () => (
     <Route element={<ProtectedRoute allowedRoles={['project_manager']} />}>
       <Route element={<DashboardLayout />}>
         <Route path="/pm/dashboard" element={<PMDashboard />} />
+        <Route path="/pm/reports"   element={<PMReports />} />
+        <Route path="/pm/projects"  element={<PMProjects />} />
+        <Route path="/pm/updates"   element={<PMProjectUpdates />} />
       </Route>
     </Route>
 

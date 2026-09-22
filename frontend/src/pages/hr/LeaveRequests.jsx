@@ -186,7 +186,7 @@ const HRLeaveRequests = () => {
       </motion.div>
 
       {/* Stats */}
-      <motion.div variants={fadeUp} initial="hidden" animate="show" className="grid grid-cols-3 gap-3 sm:gap-4">
+      <motion.div variants={fadeUp} initial="hidden" animate="show" className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <StatCard title="Pending"  value={pending}  subtitle="Awaiting review" icon={Clock}        color="yellow" delay={0.1} />
         <StatCard title="Approved" value={approved} subtitle="This period"    icon={CheckCircle}  color="green"  delay={0.2} />
         <StatCard title="Rejected" value={rejected} subtitle="This period"    icon={XCircle}      color="red"    delay={0.3} />

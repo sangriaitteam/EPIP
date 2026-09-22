@@ -2,30 +2,44 @@ const { query }    = require('../config/db')
 const { ok, created, fail } = require('../utils/response')
 const auditLog     = require('../utils/auditLog')
 
-// Valid status values (matches frontend STATUS_OPTIONS)
-const VALID_STATUSES = ['planning', 'in_progress', 'review', 'completed']
+// Valid status values
+const VALID_STATUSES = ['planning', 'in_progress', 'review', 'completed', 'on_hold', 'cancelled']
 
-// GET /api/projects — with team members
+// GET /api/projects — with team members + task counts + real completion %
 const getAll = async (req, res, next) => {
   try {
     const { rows: projects } = await query(
       `SELECT p.*,
-              u.name AS created_by_name
+              u.name AS created_by_name,
+              COUNT(DISTINCT t.id)::int                                               AS task_count,
+              COUNT(DISTINCT CASE WHEN t.status = 'done' THEN t.id END)::int         AS done_count,
+              COALESCE(ROUND(AVG(t.completion_percent)::numeric, 0), 0)::int         AS avg_task_completion
        FROM projects p
        LEFT JOIN users u ON p.created_by = u.id
+       LEFT JOIN tasks t ON t.project_id = p.id
+       GROUP BY p.id, u.name
        ORDER BY p.created_at DESC`
     )
 
-    // Load members for each project
     const withMembers = await Promise.all(projects.map(async p => {
       const { rows: members } = await query(
         `SELECT pm.employee_id, pm.role,
-                e.first_name, e.last_name
+                e.first_name, e.last_name, e.avatar_url
          FROM project_members pm
          JOIN employees e ON pm.employee_id = e.id
          WHERE pm.project_id = $1`, [p.id]
       )
-      return { ...p, members }
+      // Use average of task completion_percent if tasks exist, else project's own field
+      const computedPct = p.task_count > 0
+        ? parseInt(p.avg_task_completion) || 0
+        : p.completion_percent || 0
+      return {
+        ...p,
+        members,
+        task_count:         p.task_count || 0,
+        done_count:         p.done_count || 0,
+        completion_percent: computedPct,
+      }
     }))
 
     return ok(res, withMembers)
@@ -147,4 +161,61 @@ const remove = async (req, res, next) => {
   } catch (err) { next(err) }
 }
 
-module.exports = { getAll, create, update, remove }
+// GET /api/projects/my — employee's own projects (member of)
+const getMyProjects = async (req, res, next) => {
+  try {
+    const empId = req.user.employee_id || req.user.id
+
+    // Find all projects where this employee is a member
+    const { rows: memberRows } = await query(
+      `SELECT pm.project_id
+       FROM project_members pm
+       JOIN employees e ON pm.employee_id = e.id
+       WHERE e.user_id = $1 OR pm.employee_id = $1`,
+      [req.user.id]
+    )
+
+    if (!memberRows.length) return ok(res, [])
+
+    const projectIds = memberRows.map(r => r.project_id)
+
+    const { rows: projects } = await query(
+      `SELECT p.*,
+              u.name AS created_by_name,
+              COUNT(DISTINCT t.id)::int                                               AS task_count,
+              COUNT(DISTINCT CASE WHEN t.status = 'done' THEN t.id END)::int         AS done_count,
+              COALESCE(ROUND(AVG(t.completion_percent)::numeric, 0), 0)::int         AS avg_task_completion
+       FROM projects p
+       LEFT JOIN users u ON p.created_by = u.id
+       LEFT JOIN tasks t ON t.project_id = p.id
+       WHERE p.id = ANY($1::int[])
+       GROUP BY p.id, u.name
+       ORDER BY p.created_at DESC`,
+      [projectIds]
+    )
+
+    const withMembers = await Promise.all(projects.map(async p => {
+      const { rows: members } = await query(
+        `SELECT pm.employee_id, pm.role,
+                e.first_name, e.last_name, e.avatar_url
+         FROM project_members pm
+         JOIN employees e ON pm.employee_id = e.id
+         WHERE pm.project_id = $1`, [p.id]
+      )
+      const computedPct = p.task_count > 0
+        ? parseInt(p.avg_task_completion) || 0
+        : p.completion_percent || 0
+      return {
+        ...p,
+        members,
+        task_count:         p.task_count || 0,
+        done_count:         p.done_count || 0,
+        completion_percent: computedPct,
+      }
+    }))
+
+    return ok(res, withMembers)
+  } catch (err) { next(err) }
+}
+
+module.exports = { getAll, getMyProjects, create, update, remove }

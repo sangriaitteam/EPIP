@@ -124,7 +124,7 @@ const GoalModal = ({ goal, onClose, onSaved }) => {
           </div>
 
           {/* Type + Period */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Type</label>
               <select value={form.type} onChange={e => setF('type', e.target.value)} className={inputCls}>
@@ -142,7 +142,7 @@ const GoalModal = ({ goal, onClose, onSaved }) => {
           </div>
 
           {/* KPI Metric + Due Date */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">KPI Metric</label>
               <input value={form.kpi_metric} onChange={e => setF('kpi_metric', e.target.value)}
@@ -156,7 +156,7 @@ const GoalModal = ({ goal, onClose, onSaved }) => {
           </div>
 
           {/* Weightage + Completion */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">
                 Weightage (%) <span className="text-red-500">*</span>

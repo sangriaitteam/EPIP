@@ -10,13 +10,19 @@ const ProtectedRoute = ({ allowedRoles }) => {
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-900">
         <div className="flex flex-col items-center gap-4">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-purple-600 animate-pulse" />
-          <p className="text-gray-500 dark:text-gray-400 text-sm">Loading EPIP...</p>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">Loading...</p>
         </div>
       </div>
     )
   }
 
-  if (!isAuthenticated) return <Navigate to="/login" replace />
+  if (!isAuthenticated) {
+    // PM routes → PM login page ge redirect
+    if (location.pathname.startsWith('/pm/')) {
+      return <Navigate to="/pm/login" replace />
+    }
+    return <Navigate to="/login" replace />
+  }
 
   if (allowedRoles && !allowedRoles.includes(user?.role)) {
     const redirectMap = {

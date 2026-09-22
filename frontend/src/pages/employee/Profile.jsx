@@ -133,9 +133,9 @@ const Section = ({ title, icon: Icon, children, onEdit, delay = 0 }) => (
 )
 
 const InfoRow = ({ label, value }) => (
-  <div className="flex justify-between items-center py-2 border-b border-gray-50 dark:border-dark-700 last:border-0">
-    <span className="text-sm text-gray-500 dark:text-gray-400">{label}</span>
-    <span className="text-sm font-medium text-gray-800 dark:text-gray-200 capitalize text-right max-w-[200px] truncate">{value || '—'}</span>
+    <div className="flex justify-between items-center py-2 border-b border-gray-50 dark:border-dark-700 last:border-0">
+    <span className="text-sm text-gray-500 dark:text-gray-400 flex-shrink-0 mr-2">{label}</span>
+    <span className="text-sm font-medium text-gray-800 dark:text-gray-200 capitalize text-right max-w-[120px] sm:max-w-[200px] truncate">{value || '—'}</span>
   </div>
 )
 
@@ -343,7 +343,7 @@ const EmployeeProfile = () => {
               {/* Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-3 mb-1">
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{name}</h2>
+                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">{name}</h2>
                   <Badge label={status}   color="text-green-500 bg-green-500/10" dot />
                   <Badge label={workMode} color="bg-primary-500/10 text-primary-500" />
                 </div>
@@ -370,7 +370,7 @@ const EmployeeProfile = () => {
               <div className="flex flex-col items-end gap-2 flex-shrink-0">
                 <p className="text-xs text-gray-400">Profile Completion</p>
                 <motion.p initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', delay: 0.3 }}
-                  className="text-3xl font-bold text-primary-500">{completion}%</motion.p>
+                  className="text-2xl sm:text-3xl font-bold text-primary-500">{completion}%</motion.p>
                 <ProgressBar value={completion} className="w-32" size="sm" showPercent={false} color="bg-primary-500" />
                 <p className="text-xs text-gray-400 font-mono">ID: {empId}</p>
               </div>

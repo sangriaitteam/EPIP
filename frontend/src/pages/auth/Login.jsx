@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Eye, EyeOff, Mail, Lock, User, Sun, Moon, ShieldCheck, Timer, AlertTriangle, ArrowLeft } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
-import sangriaLogo from '../../assets/sangria-logo.png'
+import sangriaLogo from '../../assets/sangria.png'
 import toast from 'react-hot-toast'
 
 // Roles — Employee uses username, Admin uses username, Super Admin uses email
@@ -171,7 +171,7 @@ const Login = () => {
 
           {/* Logo + Company */}
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-lg flex-shrink-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center flex-shrink-0">
               <img src={sangriaLogo} alt="Sangria" className="w-full h-full object-contain" />
             </div>
             <p className={`font-bold text-sm sm:text-base leading-tight ${headTxt}`}>

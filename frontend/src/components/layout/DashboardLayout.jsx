@@ -1,31 +1,14 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import Sidebar from './Sidebar'
 import Navbar from './Navbar'
 import { useAuth } from '../../context/AuthContext'
-import { startCapture, stopCapture } from '../../services/screenshotCaptureService'
-import { api } from '../../services/api'
 
 const DashboardLayout = () => {
   const [collapsed,  setCollapsed]  = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const { user } = useAuth()
-
-  // Auto-capture screenshots for employees only
-  useEffect(() => {
-    if (user?.role !== 'employee') return
-
-    // Get screenshot interval from settings (default 10 min)
-    api.get('/admin/settings').then(res => {
-      const interval = parseInt(res.data?.screenshot_interval_minutes || res.data?.screenshot_interval || 10)
-      startCapture(interval)
-    }).catch(() => {
-      startCapture(10) // default 10 min
-    })
-
-    return () => stopCapture()
-  }, [user?.role])
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-900 flex">

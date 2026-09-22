@@ -104,7 +104,7 @@ const SuperAdminSetup = () => {
             <Shield size={24} className="text-white" />
           </motion.div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Super Admin Setup</h1>
-          <p className="text-sm text-gray-400 mt-1">Sangria Edutainment Pvt Ltd · EPIP</p>
+          <p className="text-sm text-gray-400 mt-1">Sangria Edutainment Pvt Ltd</p>
         </div>
 
         {/* Step indicator */}
@@ -200,7 +200,7 @@ const SuperAdminSetup = () => {
                   onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   placeholder="000000"
                   maxLength={6}
-                  className="w-full px-4 py-3 text-2xl text-center tracking-[0.5em] rounded-xl border border-gray-200 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono"
+                  className="w-full px-4 py-3 text-xl sm:text-2xl text-center tracking-[0.3em] sm:tracking-[0.5em] rounded-xl border border-gray-200 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono"
                 />
               </div>
               <motion.button

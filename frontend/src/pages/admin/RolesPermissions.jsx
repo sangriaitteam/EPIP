@@ -216,13 +216,13 @@ const AdminRolesPermissions = () => {
     {/* Header */}
     <motion.div variants={fadeUp} className="flex items-center justify-between">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Roles & Permissions</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Roles & Permissions</h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Manage role-based access control</p>
       </div>
     </motion.div>
 
     {/* Role cards */}
-    <motion.div variants={fadeUp} className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <motion.div variants={fadeUp} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
       {ROLES.map((role, i) => (
         <motion.div
           key={role.name}
@@ -461,14 +461,14 @@ const AdminRolesPermissions = () => {
                   initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.06 }}
                   className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-dark-700 border border-gray-100 dark:border-dark-600">
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                     <Avatar name={admin.name} size="sm" online={admin.is_active} />
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">{admin.name}</p>
                       <p className="text-xs text-gray-400 font-mono">@{admin.username}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
                     {admin.is_first_login && (
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-yellow-500/15 text-yellow-600 dark:text-yellow-400">
                         Pending setup

@@ -56,8 +56,8 @@ const AdminDashboard = () => {
   return (
   <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
     <motion.div variants={item}>
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Admin Dashboard</h1>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Full system control · EPIP Platform</p>
+      <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Admin Dashboard</h1>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Full system control · Sangria Edutainment</p>
     </motion.div>
 
     {/* Stats */}

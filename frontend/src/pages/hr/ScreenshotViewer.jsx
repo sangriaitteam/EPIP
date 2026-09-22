@@ -128,7 +128,7 @@ const ScreenshotViewer = () => {
           <CardHeader>
             <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Employees</h3>
           </CardHeader>
-          <CardBody className="p-2 space-y-1">
+          <CardBody className="p-2 space-y-1 max-h-48 lg:max-h-none overflow-y-auto">
             {employees.length === 0 ? (
               <p className="text-xs text-gray-400 text-center py-4">No employees</p>
             ) : employees.map((emp, i) => {

@@ -11,7 +11,7 @@ router.put('/my',                ctrl.updateMyProfile)
 router.get('/team',              authorize('admin'), ctrl.getTeam)
 router.get('/verify-documents/check-id', ctrl.checkCompanyId)  // duplicate check
 router.post('/verify-documents', uploadVerifyDocs, ctrl.verifyDocuments)  // multipart — must be before /:id
-router.get('/',                  authorize('admin', 'hr', 'superadmin'), ctrl.getAll)
+router.get('/',                  authorize('admin', 'hr', 'superadmin', 'project_manager'), ctrl.getAll)
 router.get('/:id',               ctrl.getById)
 router.post('/',                 authorize('admin', 'hr', 'superadmin'), ctrl.create)
 router.put('/:id',               authorize('admin', 'hr', 'superadmin'), ctrl.update)

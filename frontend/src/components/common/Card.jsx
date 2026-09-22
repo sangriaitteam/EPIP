@@ -9,13 +9,10 @@ const Card = ({ children, className, hover = false, glass = false, onClick, anim
     animate: { opacity: 1, y: 0 },
     transition: { duration: 0.45, delay, type: 'spring', stiffness: 110 },
     whileHover: hover ? {
-      y: -6,
-      rotateX: 4,
-      rotateY: 2,
+      y: -4,
       scale: 1.01,
-      transition: { duration: 0.25 }
+      transition: { duration: 0.2 }
     } : undefined,
-    style: { transformStyle: 'preserve-3d', perspective: 800 }
   } : {}
 
   return (
@@ -39,19 +36,19 @@ const Card = ({ children, className, hover = false, glass = false, onClick, anim
 }
 
 export const CardHeader = ({ children, className, ...props }) => (
-  <div className={cn('px-6 py-4 border-b border-gray-100 dark:border-dark-600', className)} {...props}>
+  <div className={cn('px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-dark-600', className)} {...props}>
     {children}
   </div>
 )
 
 export const CardBody = ({ children, className, ...props }) => (
-  <div className={cn('px-6 py-4', className)} {...props}>
+  <div className={cn('px-4 sm:px-6 py-3 sm:py-4', className)} {...props}>
     {children}
   </div>
 )
 
 export const CardFooter = ({ children, className, ...props }) => (
-  <div className={cn('px-6 py-4 border-t border-gray-100 dark:border-dark-600', className)} {...props}>
+  <div className={cn('px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-dark-600', className)} {...props}>
     {children}
   </div>
 )

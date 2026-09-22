@@ -236,7 +236,7 @@ const generatePDF = (data, reportType, employee, periodLabel) => {
   ${contentHTML}
 
   <div class="footer">
-    <span>EPIP — Employee Performance Intelligence Platform</span>
+    <span>Sangria Edutainment — Employee Performance Intelligence Platform</span>
     <span>Confidential — ${companyName}</span>
   </div>
 
@@ -495,7 +495,7 @@ const HRReports = () => {
                 {/* Attendance preview */}
                 {selectedType === 'attendance' && reportData.summary && (
                   <>
-                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mb-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
                       {[
                         { label: 'Present',    val: reportData.summary.present    || 0, color: 'text-green-600 bg-green-500/10' },
                         { label: 'Absent',     val: reportData.summary.absent     || 0, color: 'text-red-500 bg-red-500/10' },
@@ -511,7 +511,7 @@ const HRReports = () => {
                       ))}
                     </div>
                     <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
+                      <table className="w-full text-xs" style={{ minWidth: '600px' }}>
                         <thead>
                           <tr className="bg-gray-50 dark:bg-dark-700">
                             {['Date','Check In','Check Out','Hours','Status','Late','Mode'].map(h => (

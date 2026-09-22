@@ -16,42 +16,38 @@ const StatCard = ({ title, value, subtitle, icon: Icon, trend, trendValue, color
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 30, rotateX: -15, scale: 0.9 }}
-      animate={{ opacity: 1, y: 0, rotateX: 0, scale: 1 }}
-      transition={{ duration: 0.5, delay, type: 'spring', stiffness: 120, damping: 14 }}
+      initial={{ opacity: 0, y: 20, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.4, delay, type: 'spring', stiffness: 120, damping: 14 }}
       whileHover={{
-        y: -8,
-        rotateX: 6,
-        rotateY: 4,
-        scale: 1.03,
-        transition: { duration: 0.25 }
+        y: -4,
+        scale: 1.02,
+        transition: { duration: 0.2 }
       }}
-      style={{ transformStyle: 'preserve-3d', perspective: 1000 }}
       className={cn(
-        'rounded-2xl p-5 border bg-white dark:bg-dark-800 cursor-default',
+        'rounded-2xl p-4 sm:p-5 border bg-white dark:bg-dark-800 cursor-default relative overflow-hidden',
         'border-gray-100 dark:border-dark-600',
-        'shadow-lg hover:shadow-2xl',
-        `hover:${c.glow}`,
+        'shadow-md hover:shadow-xl',
         className
       )}
     >
       {/* Top accent bar */}
-      <div className={`h-1 w-full rounded-full bg-gradient-to-r ${c.bar} mb-4 opacity-70`} />
+      <div className={`h-1 w-full rounded-full bg-gradient-to-r ${c.bar} mb-3 sm:mb-4 opacity-70`} />
 
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">{title}</p>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 font-medium truncate">{title}</p>
 
           <motion.p
             initial={{ opacity: 0, scale: 0.5 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: delay + 0.2, duration: 0.4, type: 'spring' }}
-            className="text-3xl font-bold text-gray-900 dark:text-white mt-1"
+            className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mt-1 truncate"
           >
             {value}
           </motion.p>
 
-          {subtitle && <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{subtitle}</p>}
+          {subtitle && <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 truncate">{subtitle}</p>}
 
           {trend && (
             <motion.div
@@ -71,20 +67,14 @@ const StatCard = ({ title, value, subtitle, icon: Icon, trend, trendValue, color
 
         {Icon && (
           <motion.div
-            whileHover={{ rotate: 360, scale: 1.2 }}
-            transition={{ duration: 0.6 }}
-            className={cn('p-3 rounded-xl', c.bg)}
+            whileHover={{ rotate: 15, scale: 1.15 }}
+            transition={{ duration: 0.3 }}
+            className={cn('p-2.5 sm:p-3 rounded-xl flex-shrink-0', c.bg)}
           >
-            <Icon size={22} className={c.icon} />
+            <Icon size={20} className={c.icon} />
           </motion.div>
         )}
       </div>
-
-      {/* 3D depth shadow layer */}
-      <motion.div
-        className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/5 to-transparent pointer-events-none"
-        style={{ transform: 'translateZ(-4px)' }}
-      />
     </motion.div>
   )
 }

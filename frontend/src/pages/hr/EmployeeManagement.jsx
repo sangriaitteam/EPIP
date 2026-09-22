@@ -212,7 +212,7 @@ const EmployeeManagement = () => {
                     >
                       {/* Top row */}
                       <div className="flex items-start gap-3 mb-3">
-                        <Avatar name={name} size="lg" online={status === 'active'} />
+                        <Avatar name={name} src={emp.avatar_url} size="lg" online={status === 'active'} />
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-gray-900 dark:text-white truncate text-sm sm:text-base">{name}</p>
                           <p className="text-xs text-gray-400 truncate">{emp.designation || '—'}</p>
