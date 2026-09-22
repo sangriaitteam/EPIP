@@ -194,7 +194,7 @@ export default function LandingPage() {
       {/* ── NAV ────────────────────────────────────────────────────────────── */}
       <nav className={`relative z-10 flex items-center justify-between px-4 md:px-10 py-3 sm:py-4 ${glassCls} border-b ${navBorder} sticky top-0`}>
         <div className="flex items-center gap-2 sm:gap-3">
-          <img src={sangriaLogo} alt="Sangria Edutainment" className={`h-8 sm:h-10 w-auto object-contain flex-shrink-0 ${isDark ? 'brightness-0 invert' : ''}`} />
+          <img src={sangriaLogo} alt="Sangria Edutainment" className="h-8 sm:h-10 w-auto object-contain flex-shrink-0" />
         </div>
 
         <div className={`hidden md:flex items-center gap-8 text-sm ${textMuted}`}>
@@ -477,7 +477,7 @@ export default function LandingPage() {
       <footer className={`relative z-10 border-t py-8 px-6 text-center text-sm
         ${isDark ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400'}`}>
         <div className="flex items-center justify-center gap-2 mb-2">
-          <img src={sangriaLogo} alt="Sangria" className={`h-7 w-auto object-contain ${isDark ? 'brightness-0 invert' : ''}`} />
+          <img src={sangriaLogo} alt="Sangria" className="h-7 w-auto object-contain" />
         </div>
         <p>© 2026 Sangria Edutainment Pvt Ltd · Employee Performance Intelligence Platform</p>
         <p className={`text-xs mt-1 ${isDark ? 'text-slate-600' : 'text-slate-300'}`}>
