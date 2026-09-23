@@ -472,7 +472,7 @@ const VerifyDocuments = () => {
                   <Field label="Department" required>
                     <SelectInput value={form.department} onChange={e => set('department', e.target.value)}>
                       <option value="">Select department</option>
-                      {['Sales','Marketing','Operations','HR','IT','Admin'].map(d => (
+                      {['Sales','Marketing','Operations','HR','IT','Admin','Accountant'].map(d => (
                         <option key={d} value={d}>{d}</option>
                       ))}
                     </SelectInput>
@@ -480,7 +480,7 @@ const VerifyDocuments = () => {
                   <Field label="Designation" required>
                     <SelectInput value={form.designation} onChange={e => set('designation', e.target.value)}>
                       <option value="">Select designation</option>
-                      {['Trainee','Executive','Junior Executive','Senior Executive','Team Lead','Project Manager'].map(d => (
+                      {['Intern','Trainee','Executive','Junior Executive','Senior Executive','Team Lead','Project Manager'].map(d => (
                         <option key={d} value={d}>{d}</option>
                       ))}
                     </SelectInput>
@@ -557,7 +557,7 @@ const VerifyDocuments = () => {
                     label="Stamp Size Photo"
                     accept="image/jpeg,image/png,image/jpg"
                     file={form.photo}
-                    hint="JPG / PNG only • Max 150KB • Passport/stamp size"
+                    hint="JPG / PNG only • Max 150KB • Passport/stamp size • Background must be white"
                     required
                     onChange={e => set('photo', e.target.files[0])}
                   />
