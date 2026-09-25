@@ -461,10 +461,27 @@ const CreateProjectModal = ({ onClose, onCreated }) => {
 
 // ── Use Template modal ────────────────────────────────────────────────────────
 const UseTemplateModal = ({ template, onClose, onCreated }) => {
-  const [name,      setName]      = useState(`${template.name} — ${new Date().toLocaleDateString('en-IN',{month:'short',year:'numeric'})}`)
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
-  const [deadline,  setDeadline]  = useState('')
-  const [saving,    setSaving]    = useState(false)
+  const [name,        setName]        = useState(`${template.name} — ${new Date().toLocaleDateString('en-IN',{month:'short',year:'numeric'})}`)
+  const [startDate,   setStartDate]   = useState(new Date().toISOString().split('T')[0])
+  const [deadline,    setDeadline]    = useState('')
+  const [saving,      setSaving]      = useState(false)
+  const [employees,   setEmployees]   = useState([])
+  // taskAssignees: { [taskIndex]: employeeId }
+  const [taskAssignees, setTaskAssignees] = useState({})
+
+  // Load employees on mount
+  useEffect(() => {
+    api.get('/employees?limit=200').then(res => {
+      if (res.success) setEmployees(res.data || [])
+    }).catch(() => {})
+  }, [])
+
+  const empName = (e) => e.name || `${e.first_name || ''} ${e.last_name || ''}`.trim()
+
+  const setAssignee = (idx, empId) =>
+    setTaskAssignees(prev => ({ ...prev, [idx]: empId }))
+
+  const assignedCount = Object.values(taskAssignees).filter(Boolean).length
 
   const handleCreate = async () => {
     if (!name.trim()) { toast.error('Project name is required'); return }
@@ -472,7 +489,7 @@ const UseTemplateModal = ({ template, onClose, onCreated }) => {
     try {
       // 1. Create project
       const projRes = await api.post('/projects', {
-        name: name.trim(),
+        name:        name.trim(),
         description: template.desc,
         start_date:  startDate || null,
         deadline:    deadline  || null,
@@ -482,19 +499,26 @@ const UseTemplateModal = ({ template, onClose, onCreated }) => {
       if (!projRes.success) { toast.error(projRes.message || 'Failed to create project'); setSaving(false); return }
 
       const project = projRes.data
-      // 2. Create template tasks for this project (best effort)
-      for (const t of template.tasks) {
+
+      // 2. Create template tasks — each with its assignee
+      for (let i = 0; i < template.tasks.length; i++) {
+        const t = template.tasks[i]
+        const assignedTo = taskAssignees[i] ? parseInt(taskAssignees[i]) : null
         await api.post('/tasks', {
           title:        t.title,
           priority:     t.priority,
           project_id:   project.id,
           project_name: project.name,
-          assigned_to:  null,
+          assigned_to:  assignedTo,
           source:       'project_manager',
         }).catch(() => {})
       }
 
-      toast.success(`Project "${name}" created with ${template.tasks.length} tasks! ✅`)
+      const unassigned = template.tasks.length - assignedCount
+      const msg = unassigned > 0
+        ? `Project created! ${assignedCount} tasks assigned, ${unassigned} unassigned ✅`
+        : `Project "${name}" created with all ${template.tasks.length} tasks assigned! ✅`
+      toast.success(msg)
       onCreated(project)
       onClose()
     } catch { toast.error('Cannot connect to server') }
@@ -513,9 +537,10 @@ const UseTemplateModal = ({ template, onClose, onCreated }) => {
         initial={{ scale: 0.92, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.92, opacity: 0 }}
-        className="relative bg-white dark:bg-dark-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-dark-600 w-full max-w-md p-6"
+        className="relative bg-white dark:bg-dark-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-dark-600 w-full max-w-lg flex flex-col max-h-[90vh]"
       >
-        <div className="flex items-center gap-3 mb-5">
+        {/* Header */}
+        <div className="flex items-center gap-3 px-6 pt-6 pb-4 flex-shrink-0">
           <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${template.color} flex items-center justify-center flex-shrink-0`}>
             <template.icon size={18} className="text-white" />
           </div>
@@ -528,11 +553,16 @@ const UseTemplateModal = ({ template, onClose, onCreated }) => {
           </button>
         </div>
 
-        <div className="space-y-4">
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-6 pb-4 space-y-4">
+
+          {/* Project name */}
           <div>
             <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">Project Name *</label>
             <input value={name} onChange={e => setName(e.target.value)} className={inputCls} autoFocus />
           </div>
+
+          {/* Dates */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">Start Date</label>
@@ -544,23 +574,59 @@ const UseTemplateModal = ({ template, onClose, onCreated }) => {
             </div>
           </div>
 
-          {/* Task preview */}
+          {/* Task assignee list */}
           <div>
-            <p className="text-xs font-semibold text-gray-500 mb-2">Tasks included ({template.tasks.length})</p>
-            <div className="max-h-36 overflow-y-auto space-y-1 pr-1">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold text-gray-600 dark:text-gray-400">
+                Assign Tasks ({assignedCount}/{template.tasks.length} assigned)
+              </p>
+              {assignedCount < template.tasks.length && (
+                <span className="text-[10px] text-orange-500 font-medium">
+                  {template.tasks.length - assignedCount} unassigned
+                </span>
+              )}
+            </div>
+
+            <div className="space-y-2 border border-gray-100 dark:border-dark-600 rounded-xl overflow-hidden">
               {template.tasks.map((t, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 py-0.5">
-                  <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                <div key={i}
+                  className="flex items-center gap-3 px-3 py-2.5 border-b border-gray-50 dark:border-dark-700 last:border-0">
+                  {/* Priority dot */}
+                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
                     t.priority === 'high' ? 'bg-red-500' : t.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
                   }`} />
-                  {t.title}
+
+                  {/* Task title */}
+                  <span className="text-xs text-gray-700 dark:text-gray-200 flex-1 truncate" title={t.title}>
+                    {t.title}
+                  </span>
+
+                  {/* Assignee dropdown */}
+                  <select
+                    value={taskAssignees[i] || ''}
+                    onChange={e => setAssignee(i, e.target.value)}
+                    className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 dark:border-dark-600
+                      bg-white dark:bg-dark-700 text-gray-700 dark:text-gray-300
+                      focus:outline-none focus:ring-1 focus:ring-primary-500 max-w-[140px]"
+                  >
+                    <option value="">— Unassigned —</option>
+                    {employees.map(e => (
+                      <option key={e.id} value={e.id}>{empName(e)}</option>
+                    ))}
+                  </select>
                 </div>
               ))}
             </div>
+
+            {employees.length === 0 && (
+              <p className="text-xs text-gray-400 text-center mt-2">Loading employees…</p>
+            )}
           </div>
+
         </div>
 
-        <div className="flex gap-3 mt-6">
+        {/* Footer */}
+        <div className="flex gap-3 px-6 pb-6 pt-3 border-t border-gray-100 dark:border-dark-600 flex-shrink-0">
           <button onClick={onClose}
             className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-dark-600 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-dark-700">
             Cancel
