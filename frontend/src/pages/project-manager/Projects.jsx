@@ -6,7 +6,7 @@ import {
   FolderOpen, RefreshCw, Search, Plus, Users, Calendar,
   ChevronRight, LayoutGrid, List, Archive, Copy,
   CheckCircle, Clock, TrendingUp, X, Layers,
-  BookTemplate, Star, Code, Megaphone, Building
+  BookTemplate, Star, Code, Megaphone, Building, Trash2, UserPlus
 } from 'lucide-react'
 import Avatar from '../../components/common/Avatar'
 import Card, { CardHeader, CardBody } from '../../components/common/Card'
@@ -580,13 +580,175 @@ const UseTemplateModal = ({ template, onClose, onCreated }) => {
   )
 }
 
+// ── Add Member Panel (inline dropdown) ───────────────────────────────────────
+const AddMemberPanel = ({ project, onClose, onUpdated }) => {
+  const [employees,   setEmployees]   = useState([])
+  const [search,      setSearch]      = useState('')
+  const [saving,      setSaving]      = useState(null)
+
+  const currentIds = (project.members || []).map(m => m.id)
+
+  useEffect(() => {
+    api.get('/employees?limit=200').then(res => {
+      if (res.success) setEmployees(res.data || [])
+    }).catch(() => {})
+  }, [])
+
+  const empName = (e) => e.name || `${e.first_name || ''} ${e.last_name || ''}`.trim()
+
+  const filtered = employees.filter(e =>
+    empName(e).toLowerCase().includes(search.toLowerCase()) ||
+    (e.designation || '').toLowerCase().includes(search.toLowerCase())
+  )
+
+  const handleAdd = async (emp) => {
+    setSaving(emp.id)
+    const newIds = [...currentIds, emp.id]
+    try {
+      const res = await api.put(`/projects/${project.id}`, { team_member_ids: newIds })
+      if (res.success) {
+        toast.success(`${empName(emp)} added ✅`)
+        onUpdated()
+        onClose()
+      } else { toast.error(res.message || 'Failed') }
+    } catch { toast.error('Cannot connect to server') }
+    setSaving(null)
+  }
+
+  const handleRemove = async (emp) => {
+    setSaving(emp.id)
+    const newIds = currentIds.filter(id => id !== emp.id)
+    try {
+      const res = await api.put(`/projects/${project.id}`, { team_member_ids: newIds })
+      if (res.success) {
+        toast.success(`${empName(emp)} removed`)
+        onUpdated()
+        onClose()
+      } else { toast.error(res.message || 'Failed') }
+    } catch { toast.error('Cannot connect to server') }
+    setSaving(null)
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95, y: -8 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.95, y: -8 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+      className="absolute right-0 top-8 z-50 w-64 bg-white dark:bg-dark-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-dark-600 overflow-hidden"
+      onClick={e => e.stopPropagation()}
+    >
+      <div className="flex items-center justify-between px-3 py-2.5 border-b border-gray-100 dark:border-dark-600 bg-gray-50 dark:bg-dark-700">
+        <p className="text-xs font-semibold text-gray-700 dark:text-white">Manage Members</p>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <X size={13} />
+        </button>
+      </div>
+
+      {/* Search */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 dark:border-dark-600">
+        <Search size={11} className="text-gray-400 flex-shrink-0" />
+        <input
+          autoFocus
+          value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="Search employee…"
+          className="flex-1 text-xs bg-transparent text-gray-900 dark:text-white placeholder-gray-400 outline-none"
+        />
+      </div>
+
+      {/* Current members */}
+      {currentIds.length > 0 && (
+        <div className="px-3 pt-2 pb-1">
+          <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Current</p>
+          <div className="space-y-1 max-h-24 overflow-y-auto">
+            {(project.members || []).map(m => {
+              const name = `${m.first_name || ''} ${m.last_name || ''}`.trim()
+              return (
+                <div key={m.id} className="flex items-center gap-2 py-1">
+                  <div className="w-5 h-5 rounded-full bg-primary-500 flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0">
+                    {name.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="text-xs text-gray-700 dark:text-gray-200 flex-1 truncate">{name}</span>
+                  <button
+                    onClick={() => handleRemove(m)}
+                    disabled={saving === m.id}
+                    className="text-gray-300 hover:text-red-500 transition-colors disabled:opacity-50"
+                    title="Remove"
+                  >
+                    {saving === m.id
+                      ? <motion.div animate={{ rotate: 360 }} transition={{ duration: 0.6, repeat: Infinity, ease: 'linear' }}
+                          className="w-3 h-3 border border-red-400/30 border-t-red-400 rounded-full" />
+                      : <X size={11} />
+                    }
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+          <div className="border-t border-gray-100 dark:border-dark-600 mt-1.5 pt-1.5">
+            <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Add</p>
+          </div>
+        </div>
+      )}
+
+      {/* Employee list to add */}
+      <div className="max-h-44 overflow-y-auto divide-y divide-gray-50 dark:divide-dark-700">
+        {filtered.filter(e => !currentIds.includes(e.id)).length === 0 ? (
+          <p className="text-xs text-gray-400 text-center py-4">
+            {employees.length === 0 ? 'Loading…' : 'No employees to add'}
+          </p>
+        ) : (
+          filtered.filter(e => !currentIds.includes(e.id)).map(emp => (
+            <button
+              key={emp.id}
+              onClick={() => handleAdd(emp)}
+              disabled={saving === emp.id}
+              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-primary-500/5 transition-colors text-left disabled:opacity-50"
+            >
+              <div className="w-6 h-6 rounded-full bg-gray-300 dark:bg-dark-500 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+                {empName(emp).charAt(0).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-gray-800 dark:text-gray-200 truncate">{empName(emp)}</p>
+                {emp.designation && <p className="text-[10px] text-gray-400 truncate">{emp.designation}</p>}
+              </div>
+              {saving === emp.id
+                ? <motion.div animate={{ rotate: 360 }} transition={{ duration: 0.6, repeat: Infinity, ease: 'linear' }}
+                    className="w-3.5 h-3.5 border border-primary-400/30 border-t-primary-400 rounded-full flex-shrink-0" />
+                : <Plus size={12} className="text-primary-500 flex-shrink-0" />
+              }
+            </button>
+          ))
+        )}
+      </div>
+    </motion.div>
+  )
+}
+
 // ── Tab: Active Projects ──────────────────────────────────────────────────────
-const ActiveProjectsTab = ({ projects, loading, onOpenKanban }) => {
+const ActiveProjectsTab = ({ projects, loading, onOpenKanban, onDeleteProject, onRefresh }) => {
   const [search, setSearch] = useState('')
+  const [memberPanel, setMemberPanel] = useState(null) // project id with open panel
+  const [deleting, setDeleting] = useState(null)
+
   const filtered = projects.filter(p =>
     p.status !== 'completed' && p.status !== 'cancelled' &&
     (p.name || '').toLowerCase().includes(search.toLowerCase())
   )
+
+  const handleDelete = async (e, p) => {
+    e.stopPropagation()
+    if (!window.confirm(`Delete project "${p.name}"? This will also delete all its tasks.`)) return
+    setDeleting(p.id)
+    try {
+      const res = await api.delete(`/projects/${p.id}`)
+      if (res.success) {
+        toast.success(`"${p.name}" deleted`)
+        onDeleteProject(p.id)
+      } else { toast.error(res.message || 'Delete failed') }
+    } catch { toast.error('Cannot connect to server') }
+    setDeleting(null)
+  }
 
   return (
     <div className="space-y-3">
@@ -656,10 +818,10 @@ const ActiveProjectsTab = ({ projects, loading, onOpenKanban }) => {
 
             {/* Desktop table — hidden on mobile */}
             <div className="hidden sm:block overflow-x-auto">
-              <table className="w-full text-xs" style={{ minWidth: 760 }}>
+              <table className="w-full text-xs" style={{ minWidth: 800 }}>
               <thead>
                 <tr className="bg-gray-50 dark:bg-dark-700 border-b border-gray-100 dark:border-dark-600">
-                  {['ID','Project Name','%','Owner','Status','Tasks','Members','Start Date','End Date'].map(h => (
+                  {['ID','Project Name','%','Owner','Status','Tasks','Members','Start Date','End Date','Actions'].map(h => (
                     <th key={h} className="px-4 py-3 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">
                       {h}
                     </th>
@@ -714,20 +876,44 @@ const ActiveProjectsTab = ({ projects, loading, onOpenKanban }) => {
                         <span>{p.task_count || 0}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <div className="flex -space-x-1.5">
-                        {(p.members || []).slice(0, 4).map((m, mi) => (
-                          <Avatar key={mi} name={`${m.first_name} ${m.last_name}`} src={m.avatar_url} size="xs"
-                            className="ring-2 ring-white dark:ring-dark-800" />
-                        ))}
-                        {(p.members || []).length > 4 && (
-                          <div className="w-5 h-5 rounded-full bg-gray-200 dark:bg-dark-600 flex items-center justify-center text-[9px] font-bold text-gray-500 ring-2 ring-white dark:ring-dark-800">
-                            +{p.members.length - 4}
-                          </div>
-                        )}
-                        {!(p.members?.length) && <span className="text-gray-400 text-[10px]">—</span>}
+
+                    {/* Members + Add button */}
+                    <td className="px-4 py-3 whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center gap-1.5 relative">
+                        <div className="flex -space-x-1.5">
+                          {(p.members || []).slice(0, 3).map((m, mi) => (
+                            <Avatar key={mi} name={`${m.first_name} ${m.last_name}`} src={m.avatar_url} size="xs"
+                              className="ring-2 ring-white dark:ring-dark-800" />
+                          ))}
+                          {(p.members || []).length > 3 && (
+                            <div className="w-5 h-5 rounded-full bg-gray-200 dark:bg-dark-600 flex items-center justify-center text-[9px] font-bold text-gray-500 ring-2 ring-white dark:ring-dark-800">
+                              +{p.members.length - 3}
+                            </div>
+                          )}
+                        </div>
+                        {/* + Add button */}
+                        <motion.button
+                          whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}
+                          onClick={e => { e.stopPropagation(); setMemberPanel(memberPanel === p.id ? null : p.id) }}
+                          className="w-5 h-5 rounded-full bg-primary-500/10 hover:bg-primary-500 text-primary-500 hover:text-white transition-colors flex items-center justify-center flex-shrink-0"
+                          title="Add/remove member"
+                        >
+                          <UserPlus size={10} />
+                        </motion.button>
+
+                        {/* Inline member panel */}
+                        <AnimatePresence>
+                          {memberPanel === p.id && (
+                            <AddMemberPanel
+                              project={p}
+                              onClose={() => setMemberPanel(null)}
+                              onUpdated={() => { setMemberPanel(null); onRefresh() }}
+                            />
+                          )}
+                        </AnimatePresence>
                       </div>
                     </td>
+
                     <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{fmtDate(p.start_date)}</td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {p.deadline || p.end_date ? (
@@ -737,6 +923,23 @@ const ActiveProjectsTab = ({ projects, loading, onOpenKanban }) => {
                           {fmtDate(p.deadline || p.end_date)}
                         </span>
                       ) : '—'}
+                    </td>
+
+                    {/* Delete button */}
+                    <td className="px-4 py-3 whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                      <motion.button
+                        whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}
+                        onClick={e => handleDelete(e, p)}
+                        disabled={deleting === p.id}
+                        className="p-1.5 rounded-lg hover:bg-red-500/10 text-gray-300 hover:text-red-500 transition-colors disabled:opacity-50"
+                        title="Delete project"
+                      >
+                        {deleting === p.id
+                          ? <motion.div animate={{ rotate: 360 }} transition={{ duration: 0.6, repeat: Infinity, ease: 'linear' }}
+                              className="w-3.5 h-3.5 border border-red-400/30 border-t-red-400 rounded-full" />
+                          : <Trash2 size={13} />
+                        }
+                      </motion.button>
                     </td>
                   </motion.tr>
                 ))}
@@ -1315,7 +1518,7 @@ const PMProjects = () => {
           initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.18 }}
         >
-          {tab === 'active'    && <ActiveProjectsTab    projects={projects} loading={loading} onOpenKanban={openKanban} />}
+          {tab === 'active'    && <ActiveProjectsTab    projects={projects} loading={loading} onOpenKanban={openKanban} onDeleteProject={(id) => setProjects(prev => prev.filter(p => p.id !== id))} onRefresh={() => load(true)} />}
           {tab === 'groups'    && <ProjectGroupsTab     projects={projects} loading={loading} onOpenKanban={openKanban} />}
           {tab === 'templates' && <ProjectTemplatesTab  onTemplateUsed={handleTemplateUsed} />}
         </motion.div>
