@@ -227,46 +227,18 @@ const VerifyDocuments = () => {
     }
 
     if (step === 6) {
-      if (!form.educationType) { toast.error('Please select your qualification type'); return }
-
-      // 10th — required for all
-      if (!form.marks10th) { toast.error('10th marks card is required'); return }
-      if (!checkDocFile(form.marks10th, '10th marks card')) return
-      if (!checkFileSize(form.marks10th, MAX_DOC_KB, '10th marks card')) return
-
-      if (form.educationType === 'degree') {
-        // 12th — required
-        if (!form.marks12th) { toast.error('12th marks card is required'); return }
-        if (!checkDocFile(form.marks12th, '12th marks card')) return
-        if (!checkFileSize(form.marks12th, MAX_DOC_KB, '12th marks card')) return
-        // Degree marksheet — REMOVED (not required)
-        // Degree certificate — optional, just validate if uploaded
-        if (form.degreeCertificate) {
-          if (!checkDocFile(form.degreeCertificate, 'Degree certificate')) return
-          if (!checkFileSize(form.degreeCertificate, MAX_DOC_KB, 'Degree certificate')) return
-        }
-      }
-
-      if (form.educationType === 'diploma') {
-        if (!form.diplomaMarksheet)   { toast.error('Diploma marks sheet is required'); return }
-        if (!checkDocFile(form.diplomaMarksheet, 'Diploma marks sheet')) return
-        if (!checkFileSize(form.diplomaMarksheet, MAX_DOC_KB, 'Diploma marks sheet')) return
-        if (!form.diplomaCertificate) { toast.error('Diploma certificate is required'); return }
-        if (!checkDocFile(form.diplomaCertificate, 'Diploma certificate')) return
-        if (!checkFileSize(form.diplomaCertificate, MAX_DOC_KB, 'Diploma certificate')) return
-      }
+      // All educational documents are optional — just validate file type/size if uploaded
+      if (form.marks10th)         { if (!checkDocFile(form.marks10th, '10th marks card')) return; if (!checkFileSize(form.marks10th, MAX_DOC_KB, '10th marks card')) return }
+      if (form.marks12th)         { if (!checkDocFile(form.marks12th, '12th marks card')) return; if (!checkFileSize(form.marks12th, MAX_DOC_KB, '12th marks card')) return }
+      if (form.degreeCertificate) { if (!checkDocFile(form.degreeCertificate, 'Degree certificate')) return; if (!checkFileSize(form.degreeCertificate, MAX_DOC_KB, 'Degree certificate')) return }
+      if (form.diplomaMarksheet)  { if (!checkDocFile(form.diplomaMarksheet, 'Diploma marksheet')) return; if (!checkFileSize(form.diplomaMarksheet, MAX_DOC_KB, 'Diploma marksheet')) return }
+      if (form.diplomaCertificate){ if (!checkDocFile(form.diplomaCertificate, 'Diploma certificate')) return; if (!checkFileSize(form.diplomaCertificate, MAX_DOC_KB, 'Diploma certificate')) return }
     }
 
     if (step === 7) {
-      if (form.hasExperience === 'yes') {
-        if (!form.experienceLetter) { toast.error('Experience letter is required'); return }
-        if (!checkDocFile(form.experienceLetter, 'Experience letter')) return
-        if (!checkFileSize(form.experienceLetter, MAX_DOC_KB, 'Experience letter')) return
-
-        if (!form.relievingLetter)  { toast.error('Relieving letter is required'); return }
-        if (!checkDocFile(form.relievingLetter, 'Relieving letter')) return
-        if (!checkFileSize(form.relievingLetter, MAX_DOC_KB, 'Relieving letter')) return
-      }
+      // Experience documents are optional — just validate if uploaded
+      if (form.experienceLetter) { if (!checkDocFile(form.experienceLetter, 'Experience letter')) return; if (!checkFileSize(form.experienceLetter, MAX_DOC_KB, 'Experience letter')) return }
+      if (form.relievingLetter)  { if (!checkDocFile(form.relievingLetter, 'Relieving letter')) return; if (!checkFileSize(form.relievingLetter, MAX_DOC_KB, 'Relieving letter')) return }
     }
 
     if (step === 8) {
@@ -602,50 +574,44 @@ const VerifyDocuments = () => {
               {/* ── STEP 6: Qualifications ── */}
               {step === 6 && (
                 <>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    All document names must match your personal details. Accepted: PDF, JPG, PNG.
-                  </p>
+                  <div className="flex items-start gap-2 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                    <Info size={14} className="text-blue-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-blue-600 dark:text-blue-400">
+                      All educational documents are <strong>optional</strong>. You can skip and upload them later from your profile.
+                    </p>
+                  </div>
 
-                  <Field label="Qualification Type" required>
+                  <Field label="Qualification Type" hint="Optional — select if you want to upload documents">
                     <SelectInput value={form.educationType} onChange={e => set('educationType', e.target.value)}>
-                      <option value="">Select qualification</option>
+                      <option value="">Select qualification (optional)</option>
                       <option value="degree">Degree / BE / B.Tech / Any Graduate</option>
                       <option value="diploma">Diploma</option>
                     </SelectInput>
                   </Field>
 
-                  {!form.educationType && (
-                    <div className="flex items-center gap-3 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
-                      <BookOpen size={16} className="text-blue-500 flex-shrink-0" />
-                      <p className="text-sm text-blue-600 dark:text-blue-400">
-                        Select your qualification above to see required documents.
-                      </p>
-                    </div>
-                  )}
-
                   {/* Degree */}
                   {form.educationType === 'degree' && (
                     <div className="space-y-3">
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Degree / BE Documents</p>
-                      <UploadBox label="10th Marks Card" accept=".pdf,image/*" file={form.marks10th}
-                        hint="SSLC / 10th marksheet • Max 500KB" required onChange={e => set('marks10th', e.target.files[0])} />
-                      <UploadBox label="12th Marks Card" accept=".pdf,image/*" file={form.marks12th}
-                        hint="PUC / 12th marksheet • Max 500KB" required onChange={e => set('marks12th', e.target.files[0])} />
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Degree Documents — All Optional</p>
+                      <UploadBox label="10th Marks Card (Optional)" accept=".pdf,image/*" file={form.marks10th}
+                        hint="SSLC / 10th marksheet • Max 500KB" onChange={e => set('marks10th', e.target.files[0])} />
+                      <UploadBox label="12th Marks Card (Optional)" accept=".pdf,image/*" file={form.marks12th}
+                        hint="PUC / 12th marksheet • Max 500KB" onChange={e => set('marks12th', e.target.files[0])} />
                       <UploadBox label="Degree Certificate (Optional)" accept=".pdf,image/*" file={form.degreeCertificate}
-                        hint="Final degree / provisional certificate — optional" onChange={e => set('degreeCertificate', e.target.files[0])} />
+                        hint="Final degree / provisional certificate" onChange={e => set('degreeCertificate', e.target.files[0])} />
                     </div>
                   )}
 
                   {/* Diploma */}
                   {form.educationType === 'diploma' && (
                     <div className="space-y-3">
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Diploma Documents</p>
-                      <UploadBox label="10th Marks Card" accept=".pdf,image/*" file={form.marks10th}
-                        hint="SSLC / 10th marksheet" required onChange={e => set('marks10th', e.target.files[0])} />
-                      <UploadBox label="Diploma Marks Sheet" accept=".pdf,image/*" file={form.diplomaMarksheet}
-                        hint="Diploma consolidated marksheet" required onChange={e => set('diplomaMarksheet', e.target.files[0])} />
-                      <UploadBox label="Diploma Certificate" accept=".pdf,image/*" file={form.diplomaCertificate}
-                        hint="Diploma completion certificate" required onChange={e => set('diplomaCertificate', e.target.files[0])} />
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Diploma Documents — All Optional</p>
+                      <UploadBox label="10th Marks Card (Optional)" accept=".pdf,image/*" file={form.marks10th}
+                        hint="SSLC / 10th marksheet • Max 500KB" onChange={e => set('marks10th', e.target.files[0])} />
+                      <UploadBox label="Diploma Marks Sheet (Optional)" accept=".pdf,image/*" file={form.diplomaMarksheet}
+                        hint="Diploma consolidated marksheet" onChange={e => set('diplomaMarksheet', e.target.files[0])} />
+                      <UploadBox label="Diploma Certificate (Optional)" accept=".pdf,image/*" file={form.diplomaCertificate}
+                        hint="Diploma completion certificate" onChange={e => set('diplomaCertificate', e.target.files[0])} />
                     </div>
                   )}
                 </>
@@ -654,58 +620,56 @@ const VerifyDocuments = () => {
               {/* ── STEP 7: Experience ── */}
               {step === 7 && (
                 <>
-                  <Field label="Do you have prior work experience?">
-                    <div className="flex gap-3">
-                      {['yes','no'].map(opt => (
-                        <button
-                          key={opt}
-                          type="button"
-                          onClick={() => set('hasExperience', opt)}
-                          className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-all ${
-                            form.hasExperience === opt
-                              ? 'bg-primary-500 text-white border-transparent'
-                              : 'border-gray-200 dark:border-dark-600 text-gray-600 dark:text-gray-400'
-                          }`}
-                        >
-                          {opt === 'yes' ? 'Yes — Experienced' : 'No — Fresher'}
+                  <Field label="Experience Status" required>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { val: 'no',  label: 'Fresher',    sub: 'No prior work experience' },
+                        { val: 'yes', label: 'Experienced', sub: 'Have prior work experience' },
+                      ].map(opt => (
+                        <button key={opt.val} type="button"
+                          onClick={() => set('hasExperience', opt.val)}
+                          className={`p-4 rounded-xl border-2 text-left transition-all ${
+                            form.hasExperience === opt.val
+                              ? 'border-primary-500 bg-primary-500/10'
+                              : 'border-gray-200 dark:border-dark-600 hover:border-primary-300'
+                          }`}>
+                          <p className={`font-semibold text-sm ${form.hasExperience === opt.val ? 'text-primary-600 dark:text-primary-400' : 'text-gray-800 dark:text-gray-200'}`}>
+                            {opt.label}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-0.5">{opt.sub}</p>
                         </button>
                       ))}
                     </div>
                   </Field>
 
-                  {form.hasExperience === 'yes' && (
-                    <div className="space-y-3">
-                      <div className="flex items-start gap-2 p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
-                        <AlertCircle size={14} className="text-yellow-500 flex-shrink-0 mt-0.5" />
-                        <p className="text-xs text-yellow-700 dark:text-yellow-400">
-                          Both letters must be original, on company letterhead, and clearly show your name.
+                  {form.hasExperience === 'no' && (
+                    <div className="flex items-center gap-3 p-4 rounded-xl bg-green-500/10 border border-green-500/20">
+                      <CheckCircle size={18} className="text-green-500 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-semibold text-green-700 dark:text-green-400">Fresher — No documents needed</p>
+                        <p className="text-xs text-green-600/70 dark:text-green-400/70 mt-0.5">
+                          Click Next to proceed to Bank Details.
                         </p>
                       </div>
-                      <UploadBox
-                        label="Experience Letter"
-                        accept=".pdf,image/*"
-                        file={form.experienceLetter}
-                        hint="From previous employer • Max 500KB • Name must be clearly visible"
-                        required
-                        onChange={e => set('experienceLetter', e.target.files[0])}
-                      />
-                      <UploadBox
-                        label="Relieving Letter"
-                        accept=".pdf,image/*"
-                        file={form.relievingLetter}
-                        hint="Relieving / resignation acceptance letter • Max 500KB • Name must be clearly visible"
-                        required
-                        onChange={e => set('relievingLetter', e.target.files[0])}
-                      />
                     </div>
                   )}
 
-                  {form.hasExperience === 'no' && (
-                    <div className="flex items-center gap-3 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
-                      <CheckCircle size={18} className="text-blue-500 flex-shrink-0" />
-                      <p className="text-sm text-blue-600 dark:text-blue-400">
-                        No experience documents needed for freshers. You can proceed to review.
-                      </p>
+                  {form.hasExperience === 'yes' && (
+                    <div className="space-y-3">
+                      <div className="flex items-start gap-2 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                        <Info size={14} className="text-blue-500 flex-shrink-0 mt-0.5" />
+                        <p className="text-xs text-blue-600 dark:text-blue-400">
+                          Both documents are <strong>optional</strong>. You can skip and upload them later from your profile.
+                        </p>
+                      </div>
+                      <UploadBox label="Experience Letter (Optional)" accept=".pdf,image/*"
+                        file={form.experienceLetter}
+                        hint="From previous employer • Max 500KB"
+                        onChange={e => set('experienceLetter', e.target.files[0])} />
+                      <UploadBox label="Relieving Letter (Optional)" accept=".pdf,image/*"
+                        file={form.relievingLetter}
+                        hint="Relieving / resignation acceptance letter • Max 500KB"
+                        onChange={e => set('relievingLetter', e.target.files[0])} />
                     </div>
                   )}
                 </>

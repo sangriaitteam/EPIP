@@ -17,12 +17,11 @@ const container = { hidden: {}, show: { transition: { staggerChildren: 0.07 } } 
 const item = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 120, damping: 14 } } }
 
 const HRDashboard = () => {
-  const [stats,         setStats]         = useState(null)
-  const [departments,   setDepartments]   = useState([])
-  const [employees,     setEmployees]     = useState([])
-  const [weeklyData,    setWeeklyData]    = useState([])
-  const [holidays,      setHolidays]      = useState([])
-  const [loading,       setLoading]       = useState(true)
+  const [stats,       setStats]       = useState(null)
+  const [departments, setDepartments] = useState([])
+  const [employees,   setEmployees]   = useState([])
+  const [holidays,    setHolidays]    = useState([])
+  const [loading,     setLoading]     = useState(true)
 
   const now = new Date()
 
@@ -30,17 +29,9 @@ const HRDashboard = () => {
     const init = async () => {
       setLoading(true)
       await Promise.all([
-        // HR stats — real
         dashboardService.getHR().then(d => { if (d) setStats(d) }),
-        // Departments — real
         adminService.getDepartments().then(d => { if (d?.length) setDepartments(d) }),
-        // All employees for top performers
         employeeService.getAll().then(d => { if (d?.length) setEmployees(d) }),
-        // Attendance weekly for current month
-        api.get(`/attendance/today-all`).then(res => {
-          // Use today-all to compute weekly-like stats
-        }),
-        // Holidays
         api.get('/attendance/holidays').then(res => {
           if (res.success && res.data?.length) setHolidays(res.data)
         }),
@@ -50,24 +41,11 @@ const HRDashboard = () => {
     init()
   }, [])
 
-  // Upcoming holidays — next 5 from today
   const today = new Date()
   const upcomingHolidays = holidays
     .filter(h => new Date(h.date) >= today)
     .sort((a, b) => new Date(a.date) - new Date(b.date))
     .slice(0, 5)
-
-  // Top performers — employees sorted by profile_completion as proxy
-  const topPerformers = [...employees]
-    .filter(e => e.name || (e.first_name && e.last_name))
-    .sort((a, b) => (b.profile_completion || b.profileCompletion || 0) - (a.profile_completion || a.profileCompletion || 0))
-    .slice(0, 3)
-
-  // Dept scores — use departments with employee count
-  const deptScoreData = departments.slice(0, 6).map(d => ({
-    name:  d.name,
-    score: d.employees || d.employee_count || 0,
-  }))
 
   if (loading) return (
     <div className="flex items-center justify-center py-32">
@@ -87,8 +65,8 @@ const HRDashboard = () => {
         </p>
       </motion.div>
 
-      {/* Stats — all real */}
-      <motion.div variants={item} className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Stats */}
+      <motion.div variants={item} className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard
           title="Total Employees"
           value={stats?.total_employees ?? '—'}
@@ -102,20 +80,14 @@ const HRDashboard = () => {
           icon={Clock} color="green" delay={0.2}
         />
         <StatCard
-          title="Avg Performance"
-          value={stats?.avg_performance || '—'}
-          subtitle="All employees"
-          icon={TrendingUp} color="blue" delay={0.3}
-        />
-        <StatCard
-          title="Pending Reviews"
-          value={stats?.pending_reviews ?? '—'}
-          subtitle="Needs action"
-          icon={BarChart3} color="yellow" delay={0.4}
+          title="Total Departments"
+          value={stats?.total_departments ?? '—'}
+          subtitle="Active departments"
+          icon={BarChart3} color="blue" delay={0.3}
         />
       </motion.div>
 
-      {/* No real chart data note */}
+      {/* No data note */}
       {employees.length === 0 && departments.length === 0 && (
         <motion.div variants={item}
           className="flex items-center gap-3 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
@@ -126,7 +98,7 @@ const HRDashboard = () => {
         </motion.div>
       )}
 
-      {/* Departments + Top Performers + Holidays */}
+      {/* Departments + Employees + Holidays */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
 
         {/* Department Overview */}
@@ -159,7 +131,7 @@ const HRDashboard = () => {
           </CardBody>
         </Card>
 
-        {/* Top Performers */}
+        {/* Employees */}
         <Card delay={0.5}>
           <CardHeader>
             <div className="flex items-center gap-2">
@@ -171,7 +143,7 @@ const HRDashboard = () => {
             {employees.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-6">No employees added yet</p>
             ) : employees.slice(0, 4).map((emp, i) => {
-              const name = emp.name || `${emp.first_name||''} ${emp.last_name||''}`.trim()
+              const name = emp.name || `${emp.first_name || ''} ${emp.last_name || ''}`.trim()
               return (
                 <div key={emp.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-gray-50 dark:bg-dark-700">
                   <div className="relative flex-shrink-0">
@@ -233,8 +205,6 @@ const HRDashboard = () => {
         </Card>
 
       </div>
-
-
 
     </motion.div>
   )

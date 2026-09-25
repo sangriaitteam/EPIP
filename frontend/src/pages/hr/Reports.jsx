@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  FileText, Download, Users, Calendar, ChevronDown,
-  Clock, Target, CheckSquare, TrendingUp, Loader, AlertCircle
+  FileText, Download, Users, Calendar,
+  Clock, CheckSquare, AlertCircle
 } from 'lucide-react'
 import Card, { CardBody, CardHeader } from '../../components/common/Card'
 import Avatar from '../../components/common/Avatar'
@@ -18,10 +18,8 @@ const MONTHS = [
 ]
 
 const REPORT_TYPES = [
-  { key: 'attendance',  label: 'Monthly Attendance',      icon: Clock,        color: 'bg-green-500/10 text-green-500',   desc: 'Check-in/out times, hours worked, late arrivals' },
-  { key: 'performance', label: 'Monthly Work Performance', icon: TrendingUp,   color: 'bg-blue-500/10 text-blue-500',    desc: 'Performance reviews, scores, manager feedback' },
-  { key: 'tasks',       label: 'Task Completion',          icon: CheckSquare,  color: 'bg-orange-500/10 text-orange-500', desc: 'Daily/weekly task status and completion rates' },
-  { key: 'kpi',         label: 'Monthly KPI',              icon: Target,       color: 'bg-purple-500/10 text-purple-500', desc: 'Goal achievement, KPI scores, weighted performance' },
+  { key: 'attendance',  label: 'Monthly Attendance', icon: Clock,       color: 'bg-green-500/10 text-green-500',   desc: 'Check-in/out times, hours worked, late arrivals' },
+  { key: 'tasks',       label: 'Task Completion',     icon: CheckSquare, color: 'bg-orange-500/10 text-orange-500', desc: 'Daily/weekly task status and completion rates' },
 ]
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
@@ -67,40 +65,6 @@ const generatePDF = (data, reportType, employee, periodLabel) => {
       </table>`
   }
 
-  else if (reportType === 'performance') {
-    contentHTML = `
-      <div class="section-title">Performance Reviews</div>
-      ${data.reviews?.length === 0 ? '<p class="no-data">No performance reviews for this period.</p>' : ''}
-      ${(data.reviews || []).map(r => `
-        <div class="review-card">
-          <div class="review-header">
-            <span><strong>Cycle:</strong> ${r.cycle}</span>
-            <span><strong>Type:</strong> ${r.type}</span>
-            <span><strong>Status:</strong> <span class="badge ${r.status}">${r.status}</span></span>
-            <span class="score">${r.overall_score || '—'}<small>/100</small></span>
-          </div>
-          ${r.manager_comments ? `<div class="comment"><strong>Manager Comments:</strong> ${r.manager_comments}</div>` : ''}
-        </div>`).join('')}
-      ${data.parameters?.length ? `
-        <div class="section-title" style="margin-top:20px">Parameter Breakdown</div>
-        <table>
-          <thead><tr><th>Parameter</th><th>Score</th><th>Comments</th></tr></thead>
-          <tbody>${data.parameters.map(p => `<tr><td>${p.name}</td><td>${p.score}</td><td>${p.comments||'—'}</td></tr>`).join('')}</tbody>
-        </table>` : ''}
-      ${data.self_assessment ? `
-        <div class="section-title" style="margin-top:20px">Self Assessment (${data.self_assessment.period})</div>
-        <table>
-          <thead><tr><th>Area</th><th>Response</th></tr></thead>
-          <tbody>
-            <tr><td>Achievements</td><td>${data.self_assessment.achievements||'—'}</td></tr>
-            <tr><td>Challenges</td><td>${data.self_assessment.challenges||'—'}</td></tr>
-            <tr><td>Strengths</td><td>${data.self_assessment.strengths||'—'}</td></tr>
-            <tr><td>Areas for Improvement</td><td>${data.self_assessment.weaknesses||'—'}</td></tr>
-            <tr><td>Career Goals</td><td>${data.self_assessment.career_goals||'—'}</td></tr>
-          </tbody>
-        </table>` : ''}`
-  }
-
   else if (reportType === 'tasks') {
     const s = data.summary
     contentHTML = `
@@ -124,36 +88,6 @@ const generatePDF = (data, reportType, employee, periodLabel) => {
                 <span style="font-size:11px">${r.completion_percent||0}%</span>
               </td>
               <td>${r.due_date ? formatDate(r.due_date) : '—'}</td>
-            </tr>`).join('')}
-        </tbody>
-      </table>`
-  }
-
-  else if (reportType === 'kpi') {
-    const s = data.kpi_summary
-    contentHTML = `
-      <div class="summary-grid">
-        <div class="summary-card blue"><div class="num">${s.total_goals}</div><div class="lbl">Total Goals</div></div>
-        <div class="summary-card green"><div class="num">${s.achieved}</div><div class="lbl">Achieved</div></div>
-        <div class="summary-card orange"><div class="num">${s.in_progress}</div><div class="lbl">In Progress</div></div>
-        <div class="summary-card purple"><div class="num">${s.weighted_score}%</div><div class="lbl">KPI Score</div></div>
-        <div class="summary-card teal"><div class="num">${s.attendance_pct}%</div><div class="lbl">Attendance</div></div>
-      </div>
-      <table>
-        <thead><tr><th>Goal / KPI</th><th>Type</th><th>Metric</th><th>Target</th><th>Actual</th><th>Completion</th><th>Weight</th></tr></thead>
-        <tbody>
-          ${(data.records || []).map(g => `
-            <tr>
-              <td>${g.title}</td>
-              <td>${g.type}</td>
-              <td>${g.kpi_metric||'—'}</td>
-              <td>${g.target_value||'—'}</td>
-              <td>${g.actual_value||'—'}</td>
-              <td>
-                <div class="progress-bar"><div class="progress-fill" style="width:${g.completion_percent||0}%"></div></div>
-                <span style="font-size:11px">${g.completion_percent||0}%</span>
-              </td>
-              <td>${g.weightage||0}%</td>
             </tr>`).join('')}
         </tbody>
       </table>`
@@ -577,83 +511,6 @@ const HRReports = () => {
                   </>
                 )}
 
-                {/* KPI preview */}
-                {selectedType === 'kpi' && reportData.kpi_summary && (
-                  <>
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
-                      {[
-                        { label: 'Total Goals',  val: reportData.kpi_summary.total_goals,   color: 'text-blue-600 bg-blue-500/10' },
-                        { label: 'Achieved',     val: reportData.kpi_summary.achieved,      color: 'text-green-600 bg-green-500/10' },
-                        { label: 'In Progress',  val: reportData.kpi_summary.in_progress,   color: 'text-orange-500 bg-orange-500/10' },
-                        { label: 'KPI Score',    val: `${reportData.kpi_summary.weighted_score}%`, color: 'text-purple-600 bg-purple-500/10' },
-                        { label: 'Attendance',   val: `${reportData.kpi_summary.attendance_pct}%`, color: 'text-teal-600 bg-teal-500/10' },
-                      ].map(s => (
-                        <div key={s.label} className={`rounded-xl p-3 text-center ${s.color}`}>
-                          <p className="text-xl font-bold">{s.val}</p>
-                          <p className="text-xs opacity-70">{s.label}</p>
-                        </div>
-                      ))}
-                    </div>
-                    {reportData.records?.length === 0
-                      ? <p className="text-center text-gray-400 py-6">No KPI goals found for this period</p>
-                      : <div className="overflow-x-auto">
-                          <table className="w-full text-xs">
-                            <thead>
-                              <tr className="bg-gray-50 dark:bg-dark-700">
-                                {['Goal / KPI','Type','Metric','Target','Actual','Completion','Weight'].map(h => (
-                                  <th key={h} className="px-3 py-2 text-left font-semibold text-gray-500 dark:text-gray-400">{h}</th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100 dark:divide-dark-600">
-                              {reportData.records?.map((g, i) => (
-                                <tr key={i}>
-                                  <td className="px-3 py-2 font-medium text-gray-900 dark:text-white">{g.title}</td>
-                                  <td className="px-3 py-2 capitalize">{g.type}</td>
-                                  <td className="px-3 py-2">{g.kpi_metric||'—'}</td>
-                                  <td className="px-3 py-2">{g.target_value||'—'}</td>
-                                  <td className="px-3 py-2">{g.actual_value||'—'}</td>
-                                  <td className="px-3 py-2"><span className="text-primary-500 font-bold">{g.completion_percent||0}%</span></td>
-                                  <td className="px-3 py-2">{g.weightage||0}%</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                    }
-                  </>
-                )}
-
-                {/* Performance preview */}
-                {selectedType === 'performance' && (
-                  <div className="space-y-3">
-                    {!reportData.reviews?.length && !reportData.self_assessment
-                      ? <div className="flex items-center gap-3 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
-                          <AlertCircle size={16} className="text-yellow-500" />
-                          <p className="text-sm text-yellow-700 dark:text-yellow-400">No performance data found for this period.</p>
-                        </div>
-                      : <>
-                          {reportData.reviews?.map((r, i) => (
-                            <div key={i} className="p-4 rounded-xl bg-gray-50 dark:bg-dark-700 border border-gray-100 dark:border-dark-600">
-                              <div className="flex items-center gap-3 flex-wrap mb-2">
-                                <span className="text-sm font-semibold text-gray-900 dark:text-white">{r.cycle}</span>
-                                <span className="text-xs px-2 py-0.5 rounded-full bg-primary-500/10 text-primary-500">{r.type}</span>
-                                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${r.status==='completed'?'bg-green-500/10 text-green-600':'bg-yellow-500/10 text-yellow-600'}`}>{r.status}</span>
-                                <span className="text-2xl font-bold text-primary-500 ml-auto">{r.overall_score||'—'}<span className="text-xs text-gray-400">/100</span></span>
-                              </div>
-                              {r.manager_comments && <p className="text-xs text-gray-500 italic">{r.manager_comments}</p>}
-                            </div>
-                          ))}
-                          {reportData.self_assessment && (
-                            <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
-                              <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-2">Self Assessment — {reportData.self_assessment.period}</p>
-                              <p className="text-xs text-gray-600 dark:text-gray-300 line-clamp-2">{reportData.self_assessment.achievements || 'No achievements recorded'}</p>
-                            </div>
-                          )}
-                        </>
-                    }
-                  </div>
-                )}
 
                 <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-dark-600 mt-4">
                   <button onClick={handlePDF}

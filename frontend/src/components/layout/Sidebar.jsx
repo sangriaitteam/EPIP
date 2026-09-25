@@ -2,9 +2,9 @@ import React, { useState } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  LayoutDashboard, Users, Clock, CheckSquare, Target,
+  LayoutDashboard, Users, Clock, CheckSquare,
   FileText, Settings, LogOut, ChevronRight, ChevronDown,
-  Camera, Shield, Building2, Calendar, Star, FolderOpen, TrendingUp
+  Camera, Shield, Building2, Calendar, FolderOpen, TrendingUp, IdCard
 } from 'lucide-react'
 import { cn } from '../../utils/helpers'
 import { useAuth } from '../../context/AuthContext'
@@ -15,15 +15,14 @@ import sangriaLogo from '../../assets/sangria.png'
 const navConfig = {
   admin: [
     { label: 'Dashboard',     icon: LayoutDashboard, path: '/admin/dashboard' },
-    { label: 'Projects',      icon: FolderOpen,      path: '/admin/projects' },
     { label: 'Departments',   icon: Building2,       path: '/admin/departments' },
     { label: 'Roles & Perms', icon: Shield,          path: '/admin/roles' },
     { label: 'Holiday Cal.',  icon: Calendar,        path: '/admin/holidays' },
+    { label: 'ID Templates',  icon: IdCard,          path: '/admin/id-templates' },
     { label: 'Settings',      icon: Settings,        path: '/admin/settings' },
   ],
   hr: [
     { label: 'Dashboard',          icon: LayoutDashboard, path: '/hr/dashboard' },
-    { label: 'My Profile',         icon: Users,           path: '/hr/profile' },
     { label: 'Employees',          icon: Users,           path: '/hr/employees' },
     { label: "Today's Attendance", icon: Clock,           path: '/hr/attendance' },
     { label: 'Leave Requests',     icon: Calendar,        path: '/hr/leaves' },
@@ -36,7 +35,6 @@ const navConfig = {
     { label: 'Attendance',      icon: Clock,           path: '/employee/attendance' },
     { label: 'My Tasks',        icon: CheckSquare,     path: '/employee/tasks' },
     { label: 'My Projects',     icon: FolderOpen,      path: '/employee/projects' },
-    { label: 'Goals / KPIs',    icon: Target,          path: '/employee/goals' },
   ],
   project_manager: [
     { label: 'Home',            icon: LayoutDashboard, path: '/pm/dashboard' },

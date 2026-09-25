@@ -128,7 +128,7 @@ const CreateProjectModal = ({ onClose, onCreated }) => {
     description: '',
     start_date:  new Date().toISOString().split('T')[0],
     deadline:    '',
-    status:      'planning',
+    priority:    'medium',
   })
   const [employees,   setEmployees]   = useState([])
   const [empSearch,   setEmpSearch]   = useState('')
@@ -171,6 +171,7 @@ const CreateProjectModal = ({ onClose, onCreated }) => {
         deadline:        form.deadline    || null,
         team_member_ids: selectedIds,
         status:          'planning',
+        priority:        form.priority || 'medium',
       })
       if (!res.success) { toast.error(res.message || 'Failed to create project'); setSaving(false); return }
       toast.success(`Project "${form.name}" created! ✅`)
@@ -185,10 +186,9 @@ const CreateProjectModal = ({ onClose, onCreated }) => {
     focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all`
 
   const STATUS_OPTIONS = [
-    { value: 'planning',    label: 'Planning',     color: 'border-gray-300 text-gray-600 dark:text-gray-400' },
-    { value: 'in_progress', label: 'Active',       color: 'border-green-400 text-green-600' },
-    { value: 'review',      label: 'Review',       color: 'border-yellow-400 text-yellow-600' },
-    { value: 'on_hold',     label: 'On Hold',      color: 'border-orange-400 text-orange-600' },
+    { value: 'low',    label: 'Low',    color: 'border-green-400 text-green-600' },
+    { value: 'medium', label: 'Medium', color: 'border-yellow-400 text-yellow-600' },
+    { value: 'high',   label: 'High',   color: 'border-red-400 text-red-600' },
   ]
 
   return (
@@ -279,23 +279,22 @@ const CreateProjectModal = ({ onClose, onCreated }) => {
             </div>
           </div>
 
-          {/* Status */}
+          {/* Priority */}
           <div>
             <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
-              Initial Status
+              Priority
             </label>
             <div className="flex gap-2 flex-wrap">
               {STATUS_OPTIONS.map(s => (
                 <button
                   key={s.value}
                   type="button"
-                  onClick={() => setF('status', s.value)}
+                  onClick={() => setF('priority', s.value)}
                   className={`px-3 py-1.5 rounded-xl text-xs font-semibold border-2 transition-all ${
-                    form.status === s.value
+                    form.priority === s.value
                       ? `${s.color} bg-current/10`
                       : 'border-gray-200 dark:border-dark-600 text-gray-400 hover:border-gray-300'
                   }`}
-                  style={form.status === s.value ? { background: 'transparent' } : {}}
                 >
                   {s.label}
                 </button>
@@ -754,27 +753,9 @@ const ActiveProjectsTab = ({ projects, loading, onOpenKanban }) => {
   )
 }
 
-// ── Tab: Project Groups ───────────────────────────────────────────────────────
+// ── Tab: Project Groups — Project-wise Member Breakdown ──────────────────────
 const ProjectGroupsTab = ({ projects, loading, onOpenKanban }) => {
-  // Group by type
-  const groups = projects.reduce((acc, p) => {
-    const key = p.type || 'Other'
-    if (!acc[key]) acc[key] = []
-    acc[key].push(p)
-    return acc
-  }, {})
-
-  if (!Object.keys(groups).length) {
-    groups['Ungrouped Projects'] = projects
-  }
-
-  const groupColors = {
-    'pre-production': 'from-purple-500 to-indigo-600',
-    'production':     'from-green-500 to-teal-600',
-    'post-production':'from-orange-500 to-red-600',
-    'Other':          'from-gray-400 to-gray-600',
-    'Ungrouped Projects': 'from-blue-500 to-cyan-600',
-  }
+  const active = projects.filter(p => p.status !== 'completed' && p.status !== 'cancelled')
 
   return (
     <div className="space-y-4">
@@ -783,66 +764,101 @@ const ProjectGroupsTab = ({ projects, loading, onOpenKanban }) => {
           <motion.div animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
             className="w-7 h-7 border-2 border-primary-500/30 border-t-primary-500 rounded-full" />
         </div>
+      ) : active.length === 0 ? (
+        <div className="py-14 text-center">
+          <Layers size={32} className="mx-auto text-gray-300 mb-3" />
+          <p className="text-sm text-gray-400">No active projects</p>
+        </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Object.entries(groups).map(([groupName, items]) => (
-            <motion.div key={groupName}
-              initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-              className="bg-white dark:bg-dark-800 rounded-2xl border border-gray-100 dark:border-dark-600 shadow-sm overflow-hidden hover:shadow-md transition-shadow"
-            >
-              {/* Group header */}
-              <div className={`h-2 bg-gradient-to-r ${groupColors[groupName] || 'from-primary-500 to-purple-600'}`} />
-              <div className="p-4">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${groupColors[groupName] || 'from-primary-500 to-purple-600'} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}>
-                    {groupName.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-gray-900 dark:text-white text-sm capitalize">
-                      {groupName.replace('-', ' ')}
-                    </h3>
-                    <p className="text-xs text-gray-400">{items.length} project{items.length !== 1 ? 's' : ''}</p>
+          {active.map((p, i) => {
+            const members = p.members || []
+            return (
+              <motion.div key={p.id}
+                initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.06 }}
+                className="bg-white dark:bg-dark-800 rounded-2xl border border-gray-100 dark:border-dark-600 shadow-sm hover:shadow-md transition-shadow overflow-hidden"
+              >
+                {/* Top accent bar */}
+                <div className="h-1.5 bg-gradient-to-r from-primary-500 to-purple-500" />
+
+                {/* Project header */}
+                <div className="p-4 pb-3 border-b border-gray-50 dark:border-dark-700">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-xl bg-primary-500/10 flex items-center justify-center flex-shrink-0">
+                        <FolderOpen size={14} className="text-primary-500" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-gray-900 dark:text-white text-sm truncate">{p.name}</h3>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusBadge(p.status)}`}>
+                            {statusLabel(p.status)}
+                          </span>
+                          <span className="text-[10px] text-gray-400">
+                            {p.task_count || 0} tasks · {p.done_count || 0} done
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <button onClick={() => onOpenKanban(p)}
+                      className="text-[10px] px-2 py-1 rounded-lg bg-primary-500/10 text-primary-600 dark:text-primary-400 hover:bg-primary-500 hover:text-white transition-colors flex-shrink-0 font-semibold">
+                      Open
+                    </button>
                   </div>
                 </div>
 
-                {/* Member avatars across all projects */}
-                <div className="flex -space-x-1.5 mb-3">
-                  {[...new Set(
-                    items.flatMap(p => (p.members || []).map(m => `${m.first_name} ${m.last_name}`))
-                  )].slice(0, 6).map((name, i) => (
-                    <Avatar key={i} name={name} size="xs" className="ring-2 ring-white dark:ring-dark-800" />
-                  ))}
-                  {items.reduce((s, p) => s + (p.members?.length || 0), 0) > 6 && (
-                    <div className="w-5 h-5 rounded-full bg-gray-200 dark:bg-dark-600 flex items-center justify-center text-[9px] font-bold text-gray-500 ring-2 ring-white dark:ring-dark-800">
-                      +{items.reduce((s, p) => s + (p.members?.length || 0), 0) - 6}
+                {/* Members section */}
+                <div className="p-4">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2.5">
+                    Team Members — {members.length} {members.length === 1 ? 'person' : 'people'}
+                  </p>
+
+                  {members.length === 0 ? (
+                    <p className="text-xs text-gray-400 italic">No members assigned</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {members.map((m, mi) => {
+                        const name = `${m.first_name || ''} ${m.last_name || ''}`.trim()
+                        return (
+                          <motion.div key={mi}
+                            initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: i * 0.06 + mi * 0.04 }}
+                            className="flex items-center gap-2.5 p-2 rounded-xl bg-gray-50 dark:bg-dark-700">
+                            <Avatar name={name} src={m.avatar_url} size="sm" animate={false} />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-gray-800 dark:text-white truncate">{name}</p>
+                              {m.designation && (
+                                <p className="text-[10px] text-gray-400 truncate">{m.designation}</p>
+                              )}
+                            </div>
+                            <div className="flex-shrink-0 w-5 h-5 rounded-full bg-green-500/10 flex items-center justify-center">
+                              <span className="text-[9px] font-bold text-green-600">✓</span>
+                            </div>
+                          </motion.div>
+                        )
+                      })}
                     </div>
                   )}
-                  {items.every(p => !p.members?.length) && (
-                    <span className="text-xs text-gray-400">No members</span>
-                  )}
-                </div>
 
-                {/* Project list */}
-                <div className="space-y-1.5">
-                  {items.slice(0, 4).map(p => (
-                    <button key={p.id} onClick={() => onOpenKanban(p)}
-                      className="w-full flex items-center gap-2 p-2 rounded-xl hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors text-left group">
-                      <FolderOpen size={12} className="text-primary-500 flex-shrink-0" />
-                      <span className="text-xs text-gray-700 dark:text-gray-300 truncate group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors flex-1">
-                        {p.name}
-                      </span>
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md flex-shrink-0 ${statusBadge(p.status)}`}>
-                        {statusLabel(p.status)}
-                      </span>
-                    </button>
-                  ))}
-                  {items.length > 4 && (
-                    <p className="text-xs text-gray-400 text-center py-1">+{items.length - 4} more projects</p>
+                  {/* Completion bar */}
+                  {(p.task_count || 0) > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-100 dark:border-dark-600">
+                      <div className="flex justify-between text-[10px] mb-1">
+                        <span className="text-gray-400">Progress</span>
+                        <span className="font-bold text-primary-500">{p.completion_percent || 0}%</span>
+                      </div>
+                      <div className="h-1.5 bg-gray-100 dark:bg-dark-600 rounded-full overflow-hidden">
+                        <motion.div initial={{ width: 0 }} animate={{ width: `${p.completion_percent || 0}%` }}
+                          transition={{ duration: 0.8, delay: i * 0.06 }}
+                          className="h-full bg-gradient-to-r from-primary-500 to-purple-500 rounded-full" />
+                      </div>
+                    </div>
                   )}
                 </div>
-              </div>
-            </motion.div>
-          ))}
+              </motion.div>
+            )
+          })}
         </div>
       )}
     </div>
@@ -1181,7 +1197,6 @@ const TABS = [
   { id: 'active',    label: 'Active Projects',    icon: FolderOpen   },
   { id: 'groups',    label: 'Project Groups',     icon: Layers       },
   { id: 'templates', label: 'Project Templates',  icon: Copy         },
-  { id: 'archived',  label: 'Archived Projects',  icon: Archive      },
 ]
 
 const PMProjects = () => {
@@ -1303,7 +1318,6 @@ const PMProjects = () => {
           {tab === 'active'    && <ActiveProjectsTab    projects={projects} loading={loading} onOpenKanban={openKanban} />}
           {tab === 'groups'    && <ProjectGroupsTab     projects={projects} loading={loading} onOpenKanban={openKanban} />}
           {tab === 'templates' && <ProjectTemplatesTab  onTemplateUsed={handleTemplateUsed} />}
-          {tab === 'archived'  && <ArchivedTab          projects={projects} loading={loading} onOpenKanban={openKanban} />}
         </motion.div>
       </AnimatePresence>
 

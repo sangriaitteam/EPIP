@@ -47,12 +47,83 @@ const getMyProfile = async (req, res, next) => {
       `SELECT photo_url, aadhaar_url, marks_10th_url, marks_12th_url,
               degree_marksheet_url, degree_url, diploma_marksheet_url,
               diploma_cert_url, experience_letter_url, relieving_letter_url,
-              education_type, has_experience
+              education_type, has_experience, verified_at,
+              bank_account_name, bank_account_number, bank_ifsc_code, bank_branch,
+              city, state, address_line1, dob, gender, contact_number
        FROM employee_verifications WHERE employee_id=$1 LIMIT 1`,
       [employee.id]
     )
     const verification = verRows[0] || null
-    return ok(res, { ...employee, ...( verification || {}) })
+
+    // Get missing docs list
+    const missingDocs = await Employee.getMissingDocs(employee.id)
+
+    // Calculate days since verification (for 1-week reminder)
+    let daysSinceVerification = null
+    if (verification?.verified_at) {
+      const diff = Date.now() - new Date(verification.verified_at).getTime()
+      daysSinceVerification = Math.floor(diff / (1000 * 60 * 60 * 24))
+    }
+
+    // Show reminder if verified within last 7 days and has missing docs
+    const showDocReminder = missingDocs.length > 0 &&
+      (daysSinceVerification === null || daysSinceVerification <= 7)
+
+    return ok(res, {
+      ...employee,
+      ...(verification || {}),
+      missing_docs:          missingDocs,
+      show_doc_reminder:     showDocReminder,
+      days_since_verification: daysSinceVerification,
+    })
+  } catch (err) { next(err) }
+}
+
+// POST /api/employees/my/upload-doc — employee uploads a missing document
+const uploadMissingDoc = async (req, res, next) => {
+  try {
+    const employee = await Employee.findByUserId(req.user.id)
+    if (!employee) return fail(res, 'Employee profile not found', 404)
+    if (!req.file)  return fail(res, 'No file uploaded', 400)
+
+    const { doc_type } = req.body
+    const ALLOWED_DOC_TYPES = {
+      'marks_10th':          'marks_10th_url',
+      'marks_12th':          'marks_12th_url',
+      'degree_certificate':  'degree_url',
+      'diploma_marksheet':   'diploma_marksheet_url',
+      'diploma_certificate': 'diploma_cert_url',
+      'experience_letter':   'experience_letter_url',
+      'relieving_letter':    'relieving_letter_url',
+    }
+
+    if (!doc_type || !ALLOWED_DOC_TYPES[doc_type]) {
+      return fail(res, 'Invalid document type', 400)
+    }
+
+    const column  = ALLOWED_DOC_TYPES[doc_type]
+    const fileUrl = getFileUrl('documents', req.file.filename)
+
+    // Upsert into employee_verifications
+    await query(
+      `INSERT INTO employee_verifications (employee_id, ${column})
+       VALUES ($1, $2)
+       ON CONFLICT (employee_id) DO UPDATE SET ${column} = $2, updated_at = NOW()`,
+      [employee.id, fileUrl]
+    )
+
+    // Recalculate profile completion
+    const newPct = await Employee.updateProfileCompletion(employee.id)
+    const missingDocs = await Employee.getMissingDocs(employee.id)
+
+    await auditLog(req.user.id, 'UPLOAD_MISSING_DOC', 'employee', employee.id)
+
+    return ok(res, {
+      doc_type,
+      file_url:        fileUrl,
+      missing_docs:    missingDocs,
+      profile_completion: newPct,
+    }, 'Document uploaded successfully')
   } catch (err) { next(err) }
 }
 
@@ -365,4 +436,4 @@ const getTeam = async (req, res, next) => {
   } catch (err) { next(err) }
 }
 
-module.exports = { getAll, getById, getMyProfile, updateMyProfile, create, update, uploadAvatar, getTeam, verifyDocuments, remove, checkCompanyId }
+module.exports = { getAll, getById, getMyProfile, updateMyProfile, uploadMissingDoc, create, update, uploadAvatar, getTeam, verifyDocuments, remove, checkCompanyId }

@@ -204,7 +204,8 @@ const getHolidays = async (req, res, next) => {
 // GET /api/attendance/today-all  — HR/Admin all employees today
 const getTodayAll = async (req, res, next) => {
   try {
-    const today = new Date().toISOString().split('T')[0]
+    // Allow ?date=YYYY-MM-DD — defaults to today
+    const date = req.query.date || new Date().toISOString().split('T')[0]
     const { rows } = await query(
       `SELECT
          e.id          AS employee_id,
@@ -212,6 +213,7 @@ const getTodayAll = async (req, res, next) => {
          e.first_name,
          e.last_name,
          e.designation,
+         e.avatar_url,
          d.name        AS department,
          a.id          AS attendance_id,
          a.check_in,
@@ -227,7 +229,7 @@ const getTodayAll = async (req, res, next) => {
        JOIN users u ON e.user_id = u.id
        WHERE u.is_active = true
        ORDER BY e.first_name, e.last_name`,
-      [today]
+      [date]
     )
     return ok(res, rows)
   } catch (err) { next(err) }

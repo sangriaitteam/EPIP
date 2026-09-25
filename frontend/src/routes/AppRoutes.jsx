@@ -13,7 +13,6 @@ import EmployeeDashboard from '../pages/employee/Dashboard'
 import EmployeeProfile from '../pages/employee/Profile'
 import EmployeeAttendance from '../pages/employee/Attendance'
 import EmployeeTasks from '../pages/employee/Tasks'
-import EmployeeGoals from '../pages/employee/Goals'
 import EmployeeProjects from '../pages/employee/Projects'
 import VerifyDocuments from '../pages/employee/VerifyDocuments'
 
@@ -36,7 +35,7 @@ import AdminRolesPermissions from '../pages/admin/RolesPermissions'
 import AdminSettings from '../pages/admin/Settings'
 import AdminHolidayCalendar from '../pages/admin/HolidayCalendar'
 import AdminDashboard from '../pages/admin/AdminDashboard'
-import AdminProjects from '../pages/admin/Projects'
+import IDCardTemplates from '../pages/admin/IDCardTemplates'
 
 import { useAuth } from '../context/AuthContext'
 
@@ -74,7 +73,6 @@ const AppRoutes = () => (
         <Route path="/employee/attendance"      element={<EmployeeAttendance />} />
         <Route path="/employee/tasks"           element={<EmployeeTasks />} />
         <Route path="/employee/projects"        element={<EmployeeProjects />} />
-        <Route path="/employee/goals"           element={<EmployeeGoals />} />
       </Route>
     </Route>
 
@@ -82,7 +80,6 @@ const AppRoutes = () => (
     <Route element={<ProtectedRoute allowedRoles={['hr']} />}>
       <Route element={<DashboardLayout />}>
         <Route path="/hr/dashboard"   element={<HRDashboard />} />
-        <Route path="/hr/profile"     element={<EmployeeProfile />} />
         <Route path="/hr/employees"   element={<HREmployeeManagement />} />
         <Route path="/hr/reports"     element={<HRReports />} />
         <Route path="/hr/screenshots" element={<HRScreenshotViewer />} />
@@ -95,11 +92,11 @@ const AppRoutes = () => (
     <Route element={<ProtectedRoute allowedRoles={['admin', 'superadmin']} />}>
       <Route element={<DashboardLayout />}>
         <Route path="/admin/dashboard"   element={<AdminDashboard />} />
-        <Route path="/admin/projects"    element={<AdminProjects />} />
         <Route path="/admin/departments" element={<AdminDepartments />} />
         <Route path="/admin/roles"       element={<AdminRolesPermissions />} />
         <Route path="/admin/settings"    element={<AdminSettings />} />
         <Route path="/admin/holidays"    element={<AdminHolidayCalendar />} />
+        <Route path="/admin/id-templates" element={<IDCardTemplates />} />
       </Route>
     </Route>
 

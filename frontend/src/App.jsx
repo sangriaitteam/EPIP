@@ -16,6 +16,12 @@ const App = () => (
             duration: 3000,
             style: { background: 'var(--toast-bg)', color: 'var(--toast-color)', borderRadius: '12px' },
             className: 'dark:bg-dark-700 dark:text-white bg-white text-gray-900 border border-gray-100 dark:border-dark-600 shadow-xl',
+            success: {
+              className: 'dark:bg-dark-700 dark:text-white bg-white text-gray-900 border border-gray-100 dark:border-dark-600 shadow-xl',
+            },
+            error: {
+              className: 'dark:bg-dark-700 dark:text-white bg-white text-gray-900 border border-gray-100 dark:border-dark-600 shadow-xl',
+            },
           }}
         />
       </AuthProvider>

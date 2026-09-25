@@ -34,9 +34,9 @@ const ProtectedRoute = ({ allowedRoles }) => {
     return <Navigate to={redirectMap[user?.role] || '/login'} replace />
   }
 
-  // Employee OR hr (Admin/Manager) first login → redirect to verification
+  // Employee first login → redirect to verification (HR excluded)
   if (
-    (user?.role === 'employee' || user?.role === 'hr') &&
+    user?.role === 'employee' &&
     user?.isFirstLogin === true &&
     location.pathname !== '/employee/verify-documents'
   ) {

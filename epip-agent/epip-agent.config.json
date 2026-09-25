@@ -1,6 +1,6 @@
 {
-  "serverUrl": "http://localhost:5000",
+  "serverUrl": "https://epip-production-1b98.up.railway.app",
   "autoStart": true,
   "intervalMinutes": 10,
-  "_comment": "Change serverUrl to your production server before distributing to employees. Example: https://epip.yourcompany.com"
+  "_comment": "Production server — Sangria Edutainment EPIP Platform"
 }

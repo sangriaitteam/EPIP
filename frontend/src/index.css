@@ -2,10 +2,41 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── CSS Variables for theme-aware components ─────────────────────────── */
+:root {
+  --toast-bg:    #ffffff;
+  --toast-color: #111827;
+}
+.dark {
+  --toast-bg:    #1a1a2e;
+  --toast-color: #ffffff;
+}
+
 @layer base {
+  html {
+    @apply text-gray-900 dark:text-white;
+  }
+
   body {
-    @apply font-sans antialiased;
+    @apply font-sans antialiased text-gray-900 dark:text-white bg-gray-50 dark:bg-dark-900;
     transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  /* Default text colors for all elements */
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-gray-900 dark:text-white;
+  }
+
+  p {
+    @apply text-gray-700 dark:text-gray-200;
+  }
+
+  span, label, div {
+    color: inherit;
+  }
+
+  input, textarea, select {
+    @apply text-gray-900 dark:text-white bg-white dark:bg-dark-700;
   }
 }
 

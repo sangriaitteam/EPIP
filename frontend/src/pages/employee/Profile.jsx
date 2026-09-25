@@ -1,13 +1,16 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
 import {
   Edit2, Plus, MapPin, Mail, Phone, Calendar, Briefcase,
-  BookOpen, Award, User, Camera, X, Check, Loader2
+  BookOpen, Award, User, Camera, X, Check, Loader2, IdCard,
+  AlertTriangle, Upload, CheckCircle, FileText, Clock, ArrowRight
 } from 'lucide-react'
 import Card, { CardHeader, CardBody } from '../../components/common/Card'
 import Badge from '../../components/common/Badge'
 import Button from '../../components/common/Button'
 import ProgressBar from '../../components/common/ProgressBar'
+import GenerateIDCard from '../../components/common/GenerateIDCard'
 import { employeeService } from '../../services/employeeService'
 import { useAuth } from '../../context/AuthContext'
 import { formatDate } from '../../utils/helpers'
@@ -280,6 +283,56 @@ const EmployeeProfile = () => {
   const [empData,         setEmpData]         = useState(null)
   const [loading,         setLoading]         = useState(true)
   const [showEditPersonal,setShowEditPersonal]= useState(false)
+  const [showIDCard,      setShowIDCard]      = useState(false)
+  const [uploadingDoc,    setUploadingDoc]    = useState(null) // doc_type being uploaded
+  const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+
+  // Map of missing doc label → { doc_type for API, empData key }
+  const DOC_TYPE_MAP = {
+    '10th Marks Card':     { type: 'marks_10th',         key: 'marks_10th_url' },
+    '12th Marks Card':     { type: 'marks_12th',         key: 'marks_12th_url' },
+    'Degree Certificate':  { type: 'degree_certificate', key: 'degree_url' },
+    'Diploma Marksheet':   { type: 'diploma_marksheet',  key: 'diploma_marksheet_url' },
+    'Diploma Certificate': { type: 'diploma_certificate',key: 'diploma_cert_url' },
+    'Experience Letter':   { type: 'experience_letter',  key: 'experience_letter_url' },
+    'Relieving Letter':    { type: 'relieving_letter',   key: 'relieving_letter_url' },
+  }
+
+  const handleUploadMissingDoc = async (docLabel, file) => {
+    const mapping = DOC_TYPE_MAP[docLabel]
+    if (!mapping || !file) return
+    if (!['image/jpeg','image/png','image/jpg','application/pdf'].includes(file.type)) {
+      toast.error('Please upload JPG, PNG or PDF'); return
+    }
+    if (file.size > 500 * 1024) { toast.error('File must be under 500KB'); return }
+
+    setUploadingDoc(docLabel)
+    try {
+      const fd = new FormData()
+      fd.append('doc_type', mapping.type)
+      fd.append('document', file)
+      const token = localStorage.getItem('epip_token')
+      const res = await fetch(`${BASE_URL}/employees/my/upload-doc`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(`${docLabel} uploaded! ✅`)
+        // Update empData — add to uploaded docs list + remove from missing + update %
+        setEmpData(d => ({
+          ...d,
+          [mapping.key]:      data.data.file_url,   // ← immediately show in Uploaded Docs
+          missing_docs:       data.data.missing_docs,
+          profile_completion: data.data.profile_completion,
+        }))
+      } else {
+        toast.error(data.message || 'Upload failed')
+      }
+    } catch { toast.error('Network error') }
+    setUploadingDoc(null)
+  }
 
   useEffect(() => {
     employeeService.getMyProfile()
@@ -325,6 +378,39 @@ const EmployeeProfile = () => {
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-6 max-w-5xl">
+
+      {/* ── ID Card Modal ── */}
+      <AnimatePresence>
+        {showIDCard && (
+          <GenerateIDCard emp={empData} onClose={() => setShowIDCard(false)} />
+        )}
+      </AnimatePresence>
+
+      {/* ── 1-Week Doc Reminder Banner ── */}
+      <AnimatePresence>
+        {empData?.show_doc_reminder && empData?.missing_docs?.length > 0 && (
+          <motion.div variants={fadeUp}
+            initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="flex items-start gap-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25">
+            <Clock size={18} className="text-amber-500 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">
+                Please complete and submit the missing document details within one week.
+              </p>
+              <p className="text-xs text-amber-600/80 dark:text-amber-400/70 mt-1">
+                <strong>Missing Documents:</strong>{' '}
+                {empData.missing_docs.join(', ')}.
+                {' '}Upload them from the <button
+                  onClick={() => setActiveTab('documents')}
+                  className="underline font-semibold hover:text-amber-700 dark:hover:text-amber-300">
+                  Documents tab
+                </button>.
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Profile Header ── */}
       <motion.div variants={fadeUp}>
@@ -373,6 +459,14 @@ const EmployeeProfile = () => {
                   className="text-2xl sm:text-3xl font-bold text-primary-500">{completion}%</motion.p>
                 <ProgressBar value={completion} className="w-32" size="sm" showPercent={false} color="bg-primary-500" />
                 <p className="text-xs text-gray-400 font-mono">ID: {empId}</p>
+                <motion.button
+                  onClick={() => setShowIDCard(true)}
+                  whileHover={{ scale: 1.03, y: -1 }}
+                  whileTap={{ scale: 0.97 }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-primary-500 to-purple-600 shadow-md shadow-primary-500/25 mt-1"
+                >
+                  <IdCard size={12} /> Create ID Card
+                </motion.button>
               </div>
             </div>
           </CardBody>
@@ -522,50 +616,112 @@ const EmployeeProfile = () => {
 
           {/* Documents */}
           {activeTab === 'documents' && (
-            <Section title="Uploaded Documents" delay={0.1}>
-              <div className="space-y-3">
-                {[
-                  { label: 'Stamp Size Photo',    url: empData?.photo_url            || empData?.verification?.photo_url },
-                  { label: 'Aadhaar Card',         url: empData?.aadhaar_url           || empData?.verification?.aadhaar_url },
-                  { label: '10th Marks Card',      url: empData?.marks_10th_url        || empData?.verification?.marks_10th_url },
-                  { label: '12th Marks Card',      url: empData?.marks_12th_url        || empData?.verification?.marks_12th_url },
-                  { label: 'Degree Marksheet',     url: empData?.degree_marksheet_url  || empData?.verification?.degree_marksheet_url },
-                  { label: 'Degree Certificate',   url: empData?.degree_url            || empData?.verification?.degree_url },
-                  { label: 'Diploma Marksheet',    url: empData?.diploma_marksheet_url || empData?.verification?.diploma_marksheet_url },
-                  { label: 'Diploma Certificate',  url: empData?.diploma_cert_url      || empData?.verification?.diploma_cert_url },
-                  { label: 'Experience Letter',    url: empData?.experience_letter_url || empData?.verification?.experience_letter_url },
-                  { label: 'Relieving Letter',     url: empData?.relieving_letter_url  || empData?.verification?.relieving_letter_url },
-                ].filter(d => d.url).map((doc, i) => (
-                  <motion.a key={doc.label} href={doc.url} target="_blank" rel="noopener noreferrer"
-                    initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.06 }}
-                    className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-dark-700
-                      hover:bg-primary-500/10 transition-colors group">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-primary-500/10 flex items-center justify-center flex-shrink-0">
-                        <BookOpen size={14} className="text-primary-500" />
-                      </div>
-                      <span className="text-sm font-medium text-gray-800 dark:text-gray-200
-                        group-hover:text-primary-600 dark:group-hover:text-primary-400">
-                        {doc.label}
-                      </span>
-                    </div>
-                    <span className="text-xs text-primary-500 font-medium">View →</span>
-                  </motion.a>
-                ))}
+            <div className="space-y-4">
 
-                {![empData?.photo_url, empData?.aadhaar_url, empData?.marks_10th_url].some(Boolean) && (
-                  <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-                    className="flex flex-col items-center justify-center py-12 text-center">
-                    <div className="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-dark-700 flex items-center justify-center mb-4">
-                      <BookOpen size={24} className="text-gray-300 dark:text-gray-600" />
-                    </div>
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">No documents uploaded yet</p>
-                    <p className="text-xs text-gray-400 mt-1">Documents are uploaded during first-login verification</p>
-                  </motion.div>
-                )}
-              </div>
-            </Section>
+              {/* ── Missing Documents Section ── */}
+              {empData?.missing_docs?.length > 0 && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle size={16} className="text-amber-500" />
+                        <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Missing Documents</h3>
+                        <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 font-semibold">
+                          {empData.missing_docs.length} pending
+                        </span>
+                      </div>
+                    </CardHeader>
+                    <CardBody className="space-y-3">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Upload the missing documents to improve your profile completion percentage.
+                      </p>
+                      {empData.missing_docs.map(docLabel => (
+                        <div key={docLabel}
+                          className="flex items-center justify-between p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+                              <FileText size={14} className="text-amber-500" />
+                            </div>
+                            <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{docLabel}</span>
+                          </div>
+                          <label className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition-all ${
+                            uploadingDoc === docLabel
+                              ? 'bg-gray-100 dark:bg-dark-700 text-gray-400 pointer-events-none'
+                              : 'bg-primary-500/10 text-primary-600 dark:text-primary-400 hover:bg-primary-500 hover:text-white'
+                          }`}>
+                            {uploadingDoc === docLabel ? (
+                              <><motion.div animate={{ rotate: 360 }} transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
+                                className="w-3 h-3 border-2 border-gray-400/30 border-t-gray-400 rounded-full" /> Uploading…</>
+                            ) : (
+                              <><Upload size={12} /> Upload</>
+                            )}
+                            <input type="file" accept=".pdf,image/*" className="hidden"
+                              disabled={!!uploadingDoc}
+                              onChange={e => {
+                                const file = e.target.files?.[0]
+                                if (file) handleUploadMissingDoc(docLabel, file)
+                                e.target.value = ''
+                              }} />
+                          </label>
+                        </div>
+                      ))}
+                    </CardBody>
+                  </Card>
+                </motion.div>
+              )}
+
+              {/* ── Uploaded Documents ── */}
+              <Section title="Uploaded Documents" delay={0.1}>
+                <div className="space-y-3">
+                  {[
+                    { label: 'Stamp Size Photo',    url: empData?.photo_url },
+                    { label: 'Aadhaar Card',         url: empData?.aadhaar_url },
+                    { label: '10th Marks Card',      url: empData?.marks_10th_url },
+                    { label: '12th Marks Card',      url: empData?.marks_12th_url },
+                    { label: 'Degree Marksheet',     url: empData?.degree_marksheet_url },
+                    { label: 'Degree Certificate',   url: empData?.degree_url },
+                    { label: 'Diploma Marksheet',    url: empData?.diploma_marksheet_url },
+                    { label: 'Diploma Certificate',  url: empData?.diploma_cert_url },
+                    { label: 'Experience Letter',    url: empData?.experience_letter_url },
+                    { label: 'Relieving Letter',     url: empData?.relieving_letter_url },
+                  ].filter(d => d.url).map((doc, i) => (
+                    <motion.a key={doc.label} href={doc.url} target="_blank" rel="noopener noreferrer"
+                      initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.06 }}
+                      className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-dark-700
+                        hover:bg-primary-500/10 transition-colors group">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center flex-shrink-0">
+                          <CheckCircle size={14} className="text-green-500" />
+                        </div>
+                        <span className="text-sm font-medium text-gray-800 dark:text-gray-200
+                          group-hover:text-primary-600 dark:group-hover:text-primary-400">
+                          {doc.label}
+                        </span>
+                      </div>
+                      <span className="text-xs text-primary-500 font-medium">View →</span>
+                    </motion.a>
+                  ))}
+
+                  {![empData?.photo_url, empData?.aadhaar_url, empData?.marks_10th_url].some(Boolean) && (
+                    empData?.missing_docs?.length === 0 ? (
+                      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                        className="flex flex-col items-center justify-center py-12 text-center">
+                        <CheckCircle size={32} className="text-green-500 mb-3" />
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">All documents complete!</p>
+                      </motion.div>
+                    ) : (
+                      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                        className="flex flex-col items-center justify-center py-8 text-center">
+                        <BookOpen size={24} className="text-gray-300 mb-3" />
+                        <p className="text-sm text-gray-400">No documents uploaded yet</p>
+                        <p className="text-xs text-gray-400 mt-1">Documents are uploaded during first-login verification</p>
+                      </motion.div>
+                    )
+                  )}
+                </div>
+              </Section>
+            </div>
           )}
 
         </motion.div>

@@ -223,8 +223,6 @@ const AdminDashboard = () => {
             { label: 'Total Employees',    value: stats?.total_employees ?? stats?.totalEmployees ?? '—', color: 'text-primary-500' },
             { label: 'Active Employees',   value: stats?.active_employees ?? stats?.activeEmployees ?? '—', color: 'text-green-500' },
             { label: 'Attendance Rate',    value: stats?.attendance_rate ? `${stats.attendance_rate}%` : '—', color: 'text-blue-500' },
-            { label: 'Avg Performance',    value: stats?.avg_performance || stats?.avg_performance_score || '—', color: 'text-purple-500' },
-            { label: 'Pending Reviews',    value: stats?.pending_reviews ?? '—', color: 'text-yellow-500' },
             { label: 'Total Departments',  value: depts.length || '—', color: 'text-teal-500' },
           ].map(({ label, value, color }) => (
             <div key={label} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-dark-700">

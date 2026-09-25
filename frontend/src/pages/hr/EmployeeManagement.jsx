@@ -15,10 +15,20 @@ import toast from 'react-hot-toast'
 const fadeUp = { hidden: { opacity: 0, y: 18 }, show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 120, damping: 14 } } }
 
 const EMPTY_FORM = {
-  profile_name: '',
+  profile_name:  '',
   department_id: '',
-  username: '', password: '',
+  designation:   '',
+  phone:         '',
+  location:      '',
+  work_mode:     'office',
+  join_date:     '',
+  username:      '',
+  password:      '',
 }
+
+const DEPARTMENTS = ['Sales','Marketing','Operations','HR','IT','Admin','Accountant']
+const DESIGNATIONS = ['Intern','Trainee','Executive','Junior Executive','Senior Executive','Team Lead','Project Manager']
+const WORK_MODES   = ['office','remote','hybrid']
 
 const EmployeeManagement = () => {
   const [employees,   setEmployees]   = useState([])
@@ -60,7 +70,12 @@ const EmployeeManagement = () => {
     const name = emp.name || `${emp.first_name || ''} ${emp.last_name || ''}`.trim()
     setForm({
       profile_name:  name,
-      department_id: '',
+      department_id: emp.department_id || '',
+      designation:   emp.designation   || '',
+      phone:         emp.phone         || '',
+      location:      emp.location      || '',
+      work_mode:     emp.work_mode     || 'office',
+      join_date:     emp.join_date ? emp.join_date.split('T')[0] : '',
       username: '', password: '',
     })
     setCredentials(null)
@@ -83,6 +98,11 @@ const EmployeeManagement = () => {
         const res = await api.put(`/employees/${editEmp.id}`, {
           first_name,
           last_name,
+          designation: form.designation   || undefined,
+          phone:       form.phone         || undefined,
+          location:    form.location      || undefined,
+          work_mode:   form.work_mode     || undefined,
+          join_date:   form.join_date     || undefined,
         })
         if (res.success) {
           setEmployees(prev => prev.map(e => e.id === editEmp.id ? { ...e, ...res.data } : e))
@@ -238,22 +258,14 @@ const EmployeeManagement = () => {
 
                       <ProgressBar value={pct} size="sm" />
 
-                      {/* Edit / Delete buttons — plain buttons, no motion, no stopPropagation */}
+                      {/* Edit / Delete buttons */}
                       <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-dark-600">
-                        <button
-                          type="button"
-                          onClick={() => handleEdit(emp)}
-                          style={{ cursor: 'pointer' }}
-                          className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-primary-500/10 text-primary-600 dark:text-primary-400 hover:bg-primary-500 hover:text-white transition-colors"
-                        >
+                        <button type="button" onClick={() => handleEdit(emp)} style={{ cursor: 'pointer' }}
+                          className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-primary-500/10 text-primary-600 dark:text-primary-400 hover:bg-primary-500 hover:text-white transition-colors">
                           <Edit2 size={13} /> Edit
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteEmp(emp)}
-                          style={{ cursor: 'pointer' }}
-                          className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500 hover:text-white transition-colors"
-                        >
+                        <button type="button" onClick={() => setDeleteEmp(emp)} style={{ cursor: 'pointer' }}
+                          className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500 hover:text-white transition-colors">
                           <Trash2 size={13} /> Delete
                         </button>
                       </div>
@@ -337,6 +349,49 @@ const EmployeeManagement = () => {
                       {/* Profile Name */}
                       <Input label="Profile Name *" placeholder="Full name e.g. John Doe"
                         value={form.profile_name} onChange={e => setF('profile_name', e.target.value)} />
+
+                      {/* Edit-only fields */}
+                      {editEmp && (
+                        <div className="space-y-3 pt-1">
+                          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Employment Details</p>
+
+                          {/* Designation */}
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Designation</label>
+                            <select value={form.designation} onChange={e => setF('designation', e.target.value)}
+                              className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500">
+                              <option value="">Select designation</option>
+                              {DESIGNATIONS.map(d => <option key={d} value={d}>{d}</option>)}
+                            </select>
+                          </div>
+
+                          {/* Work Mode */}
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Work Mode</label>
+                            <select value={form.work_mode} onChange={e => setF('work_mode', e.target.value)}
+                              className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500">
+                              {WORK_MODES.map(m => <option key={m} value={m}>{m.charAt(0).toUpperCase()+m.slice(1)}</option>)}
+                            </select>
+                          </div>
+
+                          {/* Join Date */}
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Join Date</label>
+                            <input type="date" value={form.join_date} onChange={e => setF('join_date', e.target.value)}
+                              className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                          </div>
+
+                          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide pt-1">Contact & Location</p>
+
+                          {/* Phone */}
+                          <Input label="Phone" placeholder="+91 99999 99999"
+                            value={form.phone} onChange={e => setF('phone', e.target.value)} />
+
+                          {/* Location */}
+                          <Input label="Location" placeholder="e.g. Shimoga, Karnataka"
+                            value={form.location} onChange={e => setF('location', e.target.value)} />
+                        </div>
+                      )}
 
                       {/* Credentials — only for new employee */}
                       {!editEmp && (

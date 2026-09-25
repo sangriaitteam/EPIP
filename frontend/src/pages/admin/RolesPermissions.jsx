@@ -15,7 +15,7 @@ import toast from 'react-hot-toast'
 const ROLES = [
   { name: 'Admin',          color: 'bg-purple-500', glow: 'shadow-purple-500/30', desc: 'Full system access' },
   { name: 'Project Manager',color: 'bg-blue-500',   glow: 'shadow-blue-500/30',   desc: 'Project oversight & team management' },
-  { name: 'Employee',       color: 'bg-gray-500',   glow: 'shadow-gray-500/20',   desc: 'Own data & self-assessment' },
+  { name: 'Employee',       color: 'bg-gray-500',   glow: 'shadow-gray-500/20',   desc: 'Own data & task management' },
 ]
 
 const PERMISSIONS = [
@@ -23,9 +23,6 @@ const PERMISSIONS = [
   { module: 'Attendance View',     admin: true,  employee: true  },
   { module: 'Attendance Edit',     admin: true,  employee: true  },
   { module: 'Task Management',     admin: true,  employee: true  },
-  { module: 'Goal Management',     admin: true,  employee: true  },
-  { module: 'Performance Review',  admin: true,  employee: false },
-  { module: 'Self Assessment',     admin: true,  employee: true  },
   { module: 'Reports Export',      admin: true,  employee: false },
   { module: 'Screenshot Viewer',   admin: true,  employee: false },
   { module: 'Admin Settings',      admin: true,  employee: false },
@@ -513,40 +510,6 @@ const AdminRolesPermissions = () => {
               ))}
             </div>
           )}
-        </CardBody>
-      </Card>
-    </motion.div>
-
-    {/* Permission matrix */}
-    <motion.div variants={fadeUp}>
-      <Card>
-        <CardHeader>
-          <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Permission Matrix</h3>
-          <p className="text-xs text-gray-400 mt-0.5">Access control per module and role</p>
-        </CardHeader>
-        <CardBody className="overflow-x-auto p-0">
-          <table className="w-full text-sm min-w-[500px]">
-            <thead>
-              <tr className="bg-gray-50 dark:bg-dark-700">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Module</th>
-                {ROLES.map(r => (
-                  <th key={r.name} className="px-4 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                    {r.name}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-dark-600">
-              {PERMISSIONS.map((perm, i) => (
-                <motion.tr key={perm.module} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.05 * i }}
-                  className="hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors">
-                  <td className="px-4 py-3 font-medium text-gray-700 dark:text-gray-300 text-sm">{perm.module}</td>
-                  <td className="px-4 py-3 text-center"><Tick allowed={perm.admin} /></td>
-                  <td className="px-4 py-3 text-center"><Tick allowed={perm.employee} /></td>
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
         </CardBody>
       </Card>
     </motion.div>

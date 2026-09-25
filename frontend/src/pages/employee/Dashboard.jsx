@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Clock, CheckSquare, Target, TrendingUp, Calendar,
+  Clock, CheckSquare, TrendingUp, Calendar,
   AlertCircle, Play, Square, LogIn, LogOut,
   PauseCircle, PlayCircle, X, Coffee, Utensils, Users, User, MoreHorizontal
 } from 'lucide-react'
@@ -11,7 +11,6 @@ import ProgressBar from '../../components/common/ProgressBar'
 import Badge from '../../components/common/Badge'
 import { AttendanceBarChart } from '../../components/charts/PerformanceChart'
 import { attendanceService } from '../../services/attendanceService'
-import { goalService } from '../../services/goalService'
 import { api } from '../../services/api'
 import { formatDate, getStatusColor, getPriorityColor, capitalize } from '../../utils/helpers'
 import toast from 'react-hot-toast'
@@ -125,7 +124,6 @@ const EmployeeDashboard = () => {
   const [todayRecord,   setTodayRecord]   = useState(null)
   const [currentTime,   setCurrentTime]   = useState(new Date())
   const [tasks,         setTasks]         = useState([])
-  const [goals,         setGoals]         = useState([])
   const [summary,       setSummary]       = useState(null)
   const [weeklyData,    setWeeklyData]    = useState([])
   const [notifs,        setNotifs]        = useState([])
@@ -158,7 +156,6 @@ const EmployeeDashboard = () => {
     api.get('/tasks/my').then(res => {
       if (res.success && res.data?.length) setTasks(res.data)
     }).catch(() => {})
-    goalService.getMy().then(d => { if (d?.length) setGoals(d) }).catch(() => {})
     attendanceService.getSummary().then(d => { if (d) setSummary(d) }).catch(() => {})
     api.get('/notifications?limit=5').then(res => { if (res.success) setNotifs(res.data || []) }).catch(() => {})
     // Weekly chart data
@@ -248,7 +245,6 @@ const EmployeeDashboard = () => {
   }
 
   const myTasks      = tasks.slice(0, 4)
-  const myGoals      = goals.slice(0, 3)
   const unreadNotifs = notifs.filter(n => !n.is_read).slice(0, 3)
   const timeStr      = currentTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
   const dateStr      = currentTime.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
@@ -363,11 +359,10 @@ const EmployeeDashboard = () => {
       </AnimatePresence>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard title="Attendance"     value={summary ? `${summary.attendance_percent ?? summary.attendancePercent ?? 0}%` : '—'} subtitle="This month"  icon={Clock}       color="green"   delay={0.1} />
         <StatCard title="Tasks Active"   value={myTasks.filter(t => t.status === 'in_progress').length || '—'}  subtitle="In progress" icon={CheckSquare} color="blue"    delay={0.2} />
-        <StatCard title="Goals Progress" value={goals.length ? `${Math.round(goals.reduce((s,g) => s + (g.completion_percent ?? g.completionPercent ?? 0), 0) / goals.length)}%` : '—'} subtitle="Overall" icon={Target} color="purple" delay={0.3} />
-        <StatCard title="Days Present"   value={summary?.present ?? '—'}  subtitle="This month" icon={TrendingUp}  color="primary" delay={0.4} />
+        <StatCard title="Days Present"   value={summary?.present ?? '—'}  subtitle="This month" icon={TrendingUp}  color="primary" delay={0.3} />
       </div>
 
       {/* Middle row */}
@@ -547,8 +542,8 @@ const EmployeeDashboard = () => {
         </Card>
       </div>
 
-      {/* Tasks + Goals */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Tasks */}
+      <div className="grid grid-cols-1 gap-6">
         <Card delay={0.5}>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -579,40 +574,6 @@ const EmployeeDashboard = () => {
                 <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
                   {task.completion_percent ?? task.completionPercent ?? 0}%
                 </span>
-              </motion.div>
-            ))}
-          </CardBody>
-        </Card>
-
-        <Card delay={0.6}>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900 dark:text-white text-sm">My Goals</h3>
-              <a href="/employee/goals" className="text-xs text-primary-500 hover:underline">View all</a>
-            </div>
-          </CardHeader>
-          <CardBody className="space-y-3">
-            {myGoals.map((goal, i) => (
-              <motion.div key={goal.id}
-                initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.6 + i * 0.08 }} whileHover={{ x: -4 }}
-                className="p-3 rounded-xl bg-gray-50 dark:bg-dark-700">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{goal.title}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Badge label={goal.type} color="bg-primary-500/10 text-primary-500" />
-                      <span className="text-xs text-gray-400">{goal.period}</span>
-                    </div>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-sm font-bold text-gray-700 dark:text-gray-200">
-                      {goal.completion_percent ?? goal.completionPercent ?? 0}%
-                    </p>
-                    <p className="text-xs text-gray-400">weight: {goal.weightage}%</p>
-                  </div>
-                </div>
-                <ProgressBar value={goal.completion_percent ?? goal.completionPercent ?? 0} size="sm" className="mt-2" showPercent={false} />
               </motion.div>
             ))}
           </CardBody>

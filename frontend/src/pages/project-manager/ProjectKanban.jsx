@@ -372,6 +372,59 @@ const ProjectKanban = ({ project, onBack }) => {
         </div>
       )}
 
+      {/* ── Team Member Stats ── */}
+      {project.members?.length > 0 && tasks.length > 0 && (
+        <div className="bg-white dark:bg-dark-800 rounded-2xl border border-gray-100 dark:border-dark-600 shadow-sm p-4">
+          <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
+            Team — {project.members.length} member{project.members.length !== 1 ? 's' : ''}
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {project.members.map((m) => {
+              const name     = `${m.first_name || ''} ${m.last_name || ''}`.trim()
+              const empId    = m.id
+              // Count tasks assigned to this member
+              const myTasks  = tasks.filter(t => t.assigned_to === empId || t.assigned_to_name === name)
+              const done     = myTasks.filter(t => t.status === 'done').length
+              const inProg   = myTasks.filter(t => t.status === 'in_progress').length
+              const todo     = myTasks.filter(t => t.status === 'todo').length
+              const total    = myTasks.length
+              const pct      = total > 0 ? Math.round((done / total) * 100) : 0
+
+              return (
+                <motion.div key={empId}
+                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                  className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 dark:bg-dark-700">
+                  <Avatar name={name} src={m.avatar_url} size="sm" animate={false} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-800 dark:text-white truncate">{name}</p>
+                    <div className="flex gap-3 text-[11px] mt-1">
+                      <span className="text-gray-400">{total} task{total !== 1 ? 's' : ''}</span>
+                      {done > 0    && <span className="text-green-500 font-semibold">✓ {done} done</span>}
+                      {inProg > 0  && <span className="text-blue-500 font-semibold">● {inProg} active</span>}
+                      {todo > 0    && <span className="text-gray-400">○ {todo} todo</span>}
+                    </div>
+                    {total > 0 && (
+                      <div className="mt-1.5 h-1.5 bg-gray-200 dark:bg-dark-600 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-green-400 to-emerald-500 rounded-full transition-all"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    )}
+                    {total === 0 && (
+                      <p className="text-[11px] text-gray-300 dark:text-dark-500 mt-1">No tasks assigned</p>
+                    )}
+                  </div>
+                  {total > 0 && (
+                    <span className="text-xs font-bold text-primary-500 flex-shrink-0">{pct}%</span>
+                  )}
+                </motion.div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Kanban columns — horizontal scroll on mobile, 3-col grid on sm+ */}
       {loading ? (
         <div className="flex justify-center py-16">
