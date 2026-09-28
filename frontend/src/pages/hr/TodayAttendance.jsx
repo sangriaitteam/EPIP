@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Clock, LogIn, LogOut, Users, CheckCircle, XCircle,
-  AlertCircle, Search, RefreshCw, ChevronLeft, ChevronRight, Calendar
+  AlertCircle, Search, RefreshCw, ChevronLeft, ChevronRight,
+  Calendar, ChevronDown, PauseCircle, Lock, X
 } from 'lucide-react'
 import StatCard from '../../components/common/StatCard'
 import Avatar from '../../components/common/Avatar'
@@ -155,6 +156,180 @@ const MiniCalendar = ({ selectedDate, onSelect, attendanceDates }) => {
   )
 }
 
+const fmtDuration = (mins) => {
+  if (!mins && mins !== 0) return '—'
+  const totalSecs = Math.round(Number(mins) * 60)
+  if (totalSecs <= 0) return '—'
+  if (totalSecs < 60) return `${totalSecs} sec`
+  const m = Math.floor(totalSecs / 60)
+  const s = totalSecs % 60
+  if (m < 60) return s > 0 ? `${m} min ${s} sec` : `${m} min`
+  const h = Math.floor(m / 60)
+  const rm = m % 60
+  return rm > 0 ? `${h}h ${rm}m` : `${h}h`
+}
+
+// ── Session Detail Panel ──────────────────────────────────────────────────────
+// Shown when admin clicks an employee row — lists all login/logout sessions
+const SessionPanel = ({ employeeId, employeeName, date, onClose }) => {
+  const [sessions, setSessions] = useState([])
+  const [loading,  setLoading]  = useState(true)
+
+  const loadSessions = useCallback(() => {
+    api.get(`/attendance/sessions/${employeeId}?date=${date}`)
+      .then(res => { if (res.success) setSessions(res.data || []) })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [employeeId, date])
+
+  useEffect(() => {
+    setLoading(true)
+    loadSessions()
+    // Auto-refresh every 5 seconds — shows screen-off, breaks immediately
+    const interval = setInterval(loadSessions, 5000)
+    return () => clearInterval(interval)
+  }, [loadSessions])
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: 'auto' }}
+      exit={{ opacity: 0, height: 0 }}
+      transition={{ duration: 0.22 }}
+      className="overflow-hidden"
+    >
+      <div className="mx-4 mb-3 p-4 rounded-2xl bg-gray-50 dark:bg-dark-700 border border-gray-100 dark:border-dark-600">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+            <Clock size={14} className="text-primary-500" />
+            Session Log — {employeeName}
+          </p>
+          <button onClick={onClose}
+            className="p-1 rounded-lg hover:bg-gray-200 dark:hover:bg-dark-600 text-gray-400">
+            <X size={13} />
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-4">
+            <motion.div animate={{ rotate: 360 }}
+              transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
+              className="w-5 h-5 border-2 border-primary-500/30 border-t-primary-500 rounded-full" />
+          </div>
+        ) : sessions.length === 0 ? (
+          <p className="text-xs text-gray-400 text-center py-3">
+            No sessions recorded yet for this day
+          </p>
+        ) : (
+          <div className="space-y-2.5">
+            {sessions.map((s, i) => {
+              const isActive = !s.logout_at
+              const manualM  = Number(s.manual_break_mins) || 0
+              const screenM  = Number(s.screen_off_mins)   || 0
+              const workMins = Number(s.duration_mins)     || 0
+              return (
+                <div key={s.id}
+                  className={`p-3 rounded-xl border ${
+                    isActive
+                      ? 'bg-green-500/5 border-green-500/20'
+                      : 'bg-white dark:bg-dark-800 border-gray-100 dark:border-dark-600'
+                  }`}
+                >
+                  {/* Session number + active badge */}
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">
+                      Session {i + 1}
+                    </span>
+                    {isActive && (
+                      <span className="text-[10px] font-semibold text-green-500 animate-pulse flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                        Active
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Login → Logout */}
+                  <div className="flex items-center gap-3 flex-wrap mb-2">
+                    <div className="flex items-center gap-1.5">
+                      <LogIn size={12} className="text-green-500 flex-shrink-0" />
+                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">Login</span>
+                      <span className="text-xs font-bold text-green-600 dark:text-green-400">
+                        {fmtTime(s.login_at)}
+                      </span>
+                    </div>
+                    <span className="text-gray-300 dark:text-dark-500 text-xs">→</span>
+                    <div className="flex items-center gap-1.5">
+                      <LogOut size={12} className="text-red-400 flex-shrink-0" />
+                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">Logout</span>
+                      <span className={`text-xs font-bold ${isActive ? 'text-green-500' : 'text-red-500'}`}>
+                        {isActive ? 'Still logged in' : fmtTime(s.logout_at)}
+                      </span>
+                    </div>
+                    {workMins > 0 && (
+                      <span className="ml-auto text-xs font-semibold text-primary-500 flex-shrink-0">
+                        {fmtDuration(workMins)} work
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Breaks row — Admin only */}
+                  {(manualM > 0 || screenM > 0) && (
+                    <div className="flex items-center gap-3 mt-1 pt-2 border-t border-gray-100 dark:border-dark-600 flex-wrap">
+                      {manualM > 0 && (
+                        <span className="flex items-center gap-1 text-[11px] text-orange-500 font-medium">
+                          <PauseCircle size={11} />
+                          Manual break: {fmtDuration(manualM)}
+                        </span>
+                      )}
+                      {screenM > 0 && (
+                        <span className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                          <Lock size={11} />
+                          Screen off: {fmtDuration(screenM)}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+
+            {/* Day total summary */}
+            {(() => {
+              const totalWork   = sessions.reduce((s, x) => s + (Number(x.duration_mins)     || 0), 0)
+              const totalManual = sessions.reduce((s, x) => s + (Number(x.manual_break_mins) || 0), 0)
+              const totalScreen = sessions.reduce((s, x) => s + (Number(x.screen_off_mins)   || 0), 0)
+              const otHrs       = Math.max(0, (totalWork / 60) - 9)
+              return (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-1">
+                  {[
+                    { label: 'Total Work',    val: fmtDuration(totalWork),   color: 'text-primary-600 dark:text-primary-400' },
+                    { label: 'Manual Breaks', val: fmtDuration(totalManual), color: 'text-orange-500' },
+                    { label: 'Screen Off',    val: fmtDuration(totalScreen), color: 'text-slate-500 dark:text-slate-400' },
+                    { label: 'OT Hours',      val: otHrs > 0 ? fmtDuration(otHrs * 60) : '—', color: 'text-blue-500' },
+                  ].map(s => (
+                    <div key={s.label} className="flex flex-col items-center py-2 rounded-xl bg-gray-100 dark:bg-dark-600">
+                      <span className={`text-xs font-bold ${s.color}`}>{s.val}</span>
+                      <span className="text-[10px] text-gray-400 mt-0.5">{s.label}</span>
+                    </div>
+                  ))}
+                </div>
+              )
+            })()}
+
+            <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-primary-500/5 border border-primary-500/10">
+              <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">Total sessions today</span>
+              <span className="text-xs font-bold text-primary-600 dark:text-primary-400">
+                {sessions.length} session{sessions.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  )
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 const HRTodayAttendance = () => {
   const todayStr = toISO(new Date())
@@ -168,6 +343,7 @@ const HRTodayAttendance = () => {
   const [refreshing,    setRefreshing]    = useState(false)
   const [attendanceDates, setAttendanceDates] = useState([]) // dates that have data
   const [showCalendar,  setShowCalendar]  = useState(true)
+  const [expandedRow,   setExpandedRow]   = useState(null) // employee_id of expanded row
 
   const load = useCallback(async (date, silent = false) => {
     if (!silent) setLoading(true)
@@ -189,9 +365,9 @@ const HRTodayAttendance = () => {
 
   useEffect(() => {
     load(selectedDate)
-    // Auto-refresh only for today
+    // Auto-refresh every 10s for today — real-time screen-off, login/logout updates
     if (selectedDate === todayStr) {
-      const interval = setInterval(() => load(selectedDate, true), 60000)
+      const interval = setInterval(() => load(selectedDate, true), 10000)
       return () => clearInterval(interval)
     }
   }, [selectedDate, load, todayStr])
@@ -344,7 +520,7 @@ const HRTodayAttendance = () => {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100 dark:border-dark-600 bg-gray-50 dark:bg-dark-700">
-                      {['Employee','Dept','Check In','Check Out','Hours','Status','Late'].map(h => (
+                      {['Employee','Dept','Check In','Check Out','Hours','Status','Late',''].map(h => (
                         <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                           {h}
                         </th>
@@ -356,11 +532,14 @@ const HRTodayAttendance = () => {
                       {filtered.map((row, i) => {
                         const name  = `${row.first_name} ${row.last_name}`
                         const badge = statusBadge(row)
+                        const isExpanded = expandedRow === row.employee_id
                         return (
+                          <>
                           <motion.tr key={row.employee_id}
                             initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: i * 0.02 }}
-                            className="hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors">
+                            onClick={() => setExpandedRow(isExpanded ? null : row.employee_id)}
+                            className="hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors cursor-pointer select-none">
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2.5">
                                 <Avatar name={name} src={row.avatar_url} size="sm" online={!!(row.check_in && !row.check_out)} animate={false} />
@@ -401,7 +580,28 @@ const HRTodayAttendance = () => {
                                 : <span className="text-xs text-gray-400">—</span>
                               }
                             </td>
+                            <td className="px-4 py-3">
+                              <motion.div animate={{ rotate: isExpanded ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                                <ChevronDown size={14} className="text-gray-400" />
+                              </motion.div>
+                            </td>
                           </motion.tr>
+                          {/* Session expand row */}
+                          {isExpanded && (
+                            <tr key={`session-${row.employee_id}`}>
+                              <td colSpan={8} className="p-0">
+                                <AnimatePresence>
+                                  <SessionPanel
+                                    employeeId={row.employee_id}
+                                    employeeName={name}
+                                    date={selectedDate}
+                                    onClose={() => setExpandedRow(null)}
+                                  />
+                                </AnimatePresence>
+                              </td>
+                            </tr>
+                          )}
+                          </>
                         )
                       })}
                     </AnimatePresence>

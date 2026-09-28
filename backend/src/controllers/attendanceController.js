@@ -9,8 +9,75 @@ const checkIn = async (req, res, next) => {
     const employee = await Employee.findByUserId(req.user.id)
     if (!employee) return fail(res, 'Employee profile not found', 404)
     const { work_mode } = req.body
-    const record = await Attendance.checkIn({ employee_id: employee.id, work_mode })
-    return created(res, record, 'Checked in successfully')
+    const today = new Date().toISOString().split('T')[0]
+
+    // Check if this day is locked due to too many login/logout cycles
+    const existing = await Attendance.findByDate(employee.id, today)
+    if (existing?.is_locked) {
+      return fail(res,
+        'Your attendance for today is locked due to repeated login/logout activity. Contact your admin.',
+        423
+      )
+    }
+
+    // Detect re-login (already has a session today that was logged out)
+    const { rows: prevSessions } = await query(
+      `SELECT COUNT(*) AS cnt FROM employee_sessions
+       WHERE employee_id = $1
+         AND DATE(login_at AT TIME ZONE 'Asia/Kolkata') = $2
+         AND logout_at IS NOT NULL`,
+      [employee.id, today]
+    )
+    const reLoginCount = parseInt(prevSessions[0]?.cnt || 0)
+    const isReLogin = reLoginCount > 0
+
+    // Check-in (upsert attendance row — allows re-login same day)
+    const record = await Attendance.checkIn({ employee_id: employee.id, work_mode, allowReLogin: true })
+
+    // Insert new session row for this login
+    await query(
+      `INSERT INTO employee_sessions (employee_id, attendance_id, login_at)
+       VALUES ($1, $2, NOW())`,
+      [employee.id, record.id]
+    )
+
+    // Warning logic — only on re-login
+    let warningCount = record.warning_count || 0
+    let warning = null
+
+    if (isReLogin) {
+      warningCount = warningCount + 1
+      const LOCK_THRESHOLD = 4   // lock after 4 warnings (4+ re-login cycles)
+
+      if (warningCount >= LOCK_THRESHOLD) {
+        // Lock the day
+        await query(
+          `UPDATE attendance
+           SET warning_count = $1, is_locked = true,
+               locked_reason = 'Excessive login/logout cycles'
+           WHERE employee_id = $2 AND date = $3`,
+          [warningCount, employee.id, today]
+        )
+        return fail(res,
+          `Your attendance for today has been locked after ${warningCount} repeated login/logout cycles. Contact your admin.`,
+          423
+        )
+      } else {
+        // Increment warning, not yet locked
+        await query(
+          `UPDATE attendance SET warning_count = $1 WHERE employee_id = $2 AND date = $3`,
+          [warningCount, employee.id, today]
+        )
+        const remaining = LOCK_THRESHOLD - warningCount
+        warning = {
+          count:     warningCount,
+          remaining,
+          message:   `⚠️ Warning ${warningCount}: Frequent login/logout detected. ${remaining} more time${remaining !== 1 ? 's' : ''} and your attendance will be locked.`,
+        }
+      }
+    }
+
+    return created(res, { ...record, warning_count: warningCount, warning }, 'Checked in successfully')
   } catch (err) {
     if (err.message.includes('Already checked in')) return fail(res, err.message, 409)
     next(err)
@@ -23,7 +90,91 @@ const checkOut = async (req, res, next) => {
     const employee = await Employee.findByUserId(req.user.id)
     if (!employee) return fail(res, 'Employee profile not found', 404)
     const record = await Attendance.checkOut(employee.id)
-    return ok(res, record, 'Checked out successfully')
+
+    // Compute break totals for this session (pauses since last login_at)
+    const { rows: lastSession } = await query(
+      `SELECT login_at FROM employee_sessions
+       WHERE employee_id = $1 AND logout_at IS NULL
+       ORDER BY login_at DESC LIMIT 1`,
+      [employee.id]
+    )
+    const sessionLoginAt = lastSession[0]?.login_at || record.check_in
+
+    const { rows: breakRows } = await query(
+      `SELECT reason, COALESCE(duration_mins, 0) AS duration_mins
+       FROM attendance_pauses
+       WHERE attendance_id = $1
+         AND pause_start >= $2
+         AND pause_end IS NOT NULL`,
+      [record.id, sessionLoginAt]
+    )
+    const manualMins = breakRows
+      .filter(p => p.reason !== 'screen_lock')
+      .reduce((s, p) => s + parseFloat(p.duration_mins), 0)
+    const screenMins = breakRows
+      .filter(p => p.reason === 'screen_lock')
+      .reduce((s, p) => s + parseFloat(p.duration_mins), 0)
+
+    // Close the latest open session
+    await query(
+      `UPDATE employee_sessions
+       SET logout_at         = NOW(),
+           manual_break_mins = $1,
+           screen_off_mins   = $2,
+           duration_mins     = GREATEST(0, ROUND(
+             EXTRACT(EPOCH FROM (NOW() - login_at)) / 60 - $1 - $2
+           , 2))
+       WHERE id = (
+         SELECT id FROM employee_sessions
+         WHERE employee_id = $3 AND logout_at IS NULL
+         ORDER BY login_at DESC LIMIT 1
+       )`,
+      [manualMins, screenMins, employee.id]
+    )
+
+    // Recalculate total work hours from ALL sessions today using live formula
+    // Work = (logout - login) - all pauses per session
+    const { rows: sessionTotals } = await query(
+      `SELECT COALESCE(SUM(
+         GREATEST(0,
+           EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
+           - COALESCE((
+               SELECT SUM(
+                 CASE
+                   WHEN ap.pause_end IS NOT NULL
+                     THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+                   ELSE 0
+                 END
+               )
+               FROM attendance_pauses ap
+               WHERE ap.attendance_id = s.attendance_id
+                 AND ap.pause_start >= s.login_at
+                 AND ap.pause_start <= COALESCE(s.logout_at, NOW())
+             ), 0)
+         )
+       ), 0) AS total_work_mins
+       FROM employee_sessions s
+       WHERE s.employee_id = $1
+         AND DATE(s.login_at AT TIME ZONE 'Asia/Kolkata') = $2
+         AND s.logout_at IS NOT NULL`,
+      [employee.id, new Date().toISOString().split('T')[0]]
+    )
+    const totalWorkMins = parseFloat(sessionTotals[0]?.total_work_mins || 0)
+    const totalWorkHrs  = Math.round((totalWorkMins / 60) * 100) / 100
+    const OT_THRESHOLD  = 9   // hours — OT starts after 9 hours
+    const otHrs         = Math.max(0, Math.round((totalWorkHrs - OT_THRESHOLD) * 100) / 100)
+
+    // Update attendance with corrected hours + OT
+    await query(
+      `UPDATE attendance
+       SET hours_worked = $1,
+           overtime     = $2,
+           updated_at   = NOW()
+       WHERE employee_id = $3 AND date = $4`,
+      [totalWorkHrs, otHrs, employee.id, new Date().toISOString().split('T')[0]]
+    )
+
+    return ok(res, { ...record, hours_worked: totalWorkHrs, overtime: otHrs }, 'Checked out successfully')
   } catch (err) {
     if (err.message.includes('No check-in')) return fail(res, err.message, 404)
     next(err)
@@ -47,7 +198,7 @@ const pauseWork = async (req, res, next) => {
     const existing = await Attendance.getActivePause(employee.id)
     if (existing) return fail(res, 'Already on a break — resume first', 409)
 
-    const VALID_REASONS = ['tea_break', 'lunch_break', 'meeting', 'personal', 'other']
+    const VALID_REASONS = ['tea_break', 'lunch_break', 'meeting', 'personal', 'other', 'screen_lock']
     const { reason = 'other', comment } = req.body
     const resolvedReason = VALID_REASONS.includes(reason) ? reason : 'other'
 
@@ -201,7 +352,113 @@ const getHolidays = async (req, res, next) => {
   } catch (err) { next(err) }
 }
 
-// GET /api/attendance/today-all  — HR/Admin all employees today
+// GET /api/attendance/sessions/:employeeId?date=YYYY-MM-DD
+const getSessionsByEmployee = async (req, res, next) => {
+  try {
+    const { employeeId } = req.params
+    const date = req.query.date || new Date().toISOString().split('T')[0]
+
+    const { rows } = await query(
+      `SELECT
+         s.id,
+         s.employee_id,
+         s.login_at,
+         s.logout_at,
+         -- Live work duration: (elapsed since login OR stored logout) minus all pauses
+         ROUND(
+           GREATEST(0,
+             -- Total elapsed for this session (minutes)
+             EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
+             -- Minus all pauses (manual + screen-off), including active ones
+             - COALESCE((
+                 SELECT SUM(
+                   CASE
+                     WHEN ap.pause_end IS NOT NULL
+                       THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+                     ELSE
+                       EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
+                   END
+                 )
+                 FROM attendance_pauses ap
+                 WHERE ap.attendance_id = s.attendance_id
+                   AND ap.pause_start >= s.login_at
+                   AND (s.logout_at IS NULL OR ap.pause_start <= s.logout_at)
+               ), 0)
+           )::numeric
+         , 4) AS duration_mins,
+         -- Manual break: sum of non-screen-lock pauses
+         ROUND(COALESCE((
+           SELECT SUM(
+             CASE
+               WHEN ap.pause_end IS NOT NULL
+                 THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+               ELSE
+                 EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
+             END
+           )
+           FROM attendance_pauses ap
+           WHERE ap.attendance_id = s.attendance_id
+             AND ap.reason != 'screen_lock'
+             AND ap.pause_start >= s.login_at
+             AND (s.logout_at IS NULL OR ap.pause_start <= s.logout_at)
+         ), 0)::numeric, 4) AS manual_break_mins,
+         -- Screen-off: sum of screen_lock pauses (including active)
+         ROUND(COALESCE((
+           SELECT SUM(
+             CASE
+               WHEN ap.pause_end IS NOT NULL
+                 THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+               ELSE
+                 EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
+             END
+           )
+           FROM attendance_pauses ap
+           WHERE ap.attendance_id = s.attendance_id
+             AND ap.reason = 'screen_lock'
+             AND ap.pause_start >= s.login_at
+             AND (s.logout_at IS NULL OR ap.pause_start <= s.logout_at)
+         ), 0)::numeric, 4) AS screen_off_mins
+       FROM employee_sessions s
+       WHERE s.employee_id = $1
+         AND DATE(s.login_at AT TIME ZONE 'Asia/Kolkata') = $2
+       ORDER BY s.login_at ASC`,
+      [employeeId, date]
+    )
+    return ok(res, rows)
+  } catch (err) { next(err) }
+}
+// Employee: get ALL their pauses grouped by attendance_id for a date range
+const getMyPausesRange = async (req, res, next) => {
+  try {
+    const employee = await Employee.findByUserId(req.user.id)
+    if (!employee) return fail(res, 'Employee profile not found', 404)
+
+    const { from, to } = req.query
+    const now = new Date()
+    const fromDate = from || `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`
+    const toDate   = to   || now.toISOString().split('T')[0]
+
+    const { rows } = await query(
+      `SELECT
+         ap.id,
+         ap.attendance_id,
+         ap.reason,
+         ap.comment,
+         ap.pause_start,
+         ap.pause_end,
+         ap.duration_mins,
+         a.date
+       FROM attendance_pauses ap
+       JOIN attendance a ON ap.attendance_id = a.id
+       WHERE a.employee_id = $1
+         AND a.date >= $2
+         AND a.date <= $3
+       ORDER BY ap.pause_start ASC`,
+      [employee.id, fromDate, toDate]
+    )
+    return ok(res, rows)
+  } catch (err) { next(err) }
+}
 const getTodayAll = async (req, res, next) => {
   try {
     // Allow ?date=YYYY-MM-DD — defaults to today
@@ -257,8 +514,9 @@ const getSummaryByEmployee = async (req, res, next) => {
 
 module.exports = {
   checkIn, checkOut,
-  pauseWork, resumeWork, getMyPauses, getPausesByAttendance,
+  pauseWork, resumeWork, getMyPauses, getMyPausesRange, getPausesByAttendance,
   getToday, getMy, getMySummary,
   getWeeklyBreakdown, getHolidays, getTodayAll,
   getByEmployee, getSummaryByEmployee,
+  getSessionsByEmployee,
 }

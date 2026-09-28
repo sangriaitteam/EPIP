@@ -1,0 +1,38 @@
+{
+  "name": "epip-timing-agent",
+  "version": "1.0.0",
+  "description": "EPIP Timing Capture Agent — Check-in / Check-out with auto screen-lock break detection",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev":   "electron . --dev",
+    "build": "electron-builder --win --x64"
+  },
+  "build": {
+    "appId":       "com.epip.timing-agent",
+    "productName": "EPIP Timing Agent",
+    "win": {
+      "target": "nsis",
+      "icon":   "assets/tray-icon.ico"
+    },
+    "nsis": {
+      "oneClick":         false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "files": [
+      "**/*",
+      "!node_modules/.cache"
+    ],
+    "extraResources": [
+      { "from": "epip-timing.config.json", "to": "epip-timing.config.json" }
+    ]
+  },
+  "dependencies": {
+    "axios":          "^1.6.8",
+    "electron-store": "^8.1.0"
+  },
+  "devDependencies": {
+    "electron":         "^29.1.0",
+    "electron-builder": "^24.9.1"
+  }
+}

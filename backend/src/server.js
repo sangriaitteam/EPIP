@@ -7,12 +7,16 @@ const { pool }  = require('./config/db')
 const scheduler = require('./jobs/screenshotScheduler')
 
 const PORT = parseInt(process.env.PORT) || 5000
+// Bind to 0.0.0.0 — accepts connections on ALL network interfaces
+// (Wi-Fi, Ethernet, IPv4, IPv6 — whatever is available)
+const HOST = '0.0.0.0'
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, HOST, () => {
   console.log('\n╔══════════════════════════════════════════╗')
   console.log('║    EPIP Backend API — Phase 1             ║')
   console.log('╚══════════════════════════════════════════╝')
   console.log(`▶  Server  : http://localhost:${PORT}`)
+  console.log(`▶  Network : http://0.0.0.0:${PORT} (all interfaces)`)
   console.log(`▶  Health  : http://localhost:${PORT}/health`)
   console.log(`▶  Env     : ${process.env.NODE_ENV || 'development'}`)
   console.log(`▶  DB      : ${process.env.DB_NAME}@${process.env.DB_HOST}:${process.env.DB_PORT}`)

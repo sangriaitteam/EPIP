@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { api } from '../services/api'
+import toast from 'react-hot-toast'
 
 const AuthContext = createContext(null)
 
@@ -29,7 +30,38 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('epip_user', JSON.stringify(userData))
   }
 
-  // ── Login — Real backend ONLY ─────────────────────────────────────────────
+  // ── Auto check-in (employee only) ────────────────────────────────────────
+  // Returns { locked, warning } so Login page can show appropriate message
+  const _autoCheckIn = async () => {
+    try {
+      const res = await api.post('/attendance/check-in', { work_mode: 'office' })
+      if (res.success && res.data?.warning) {
+        // Show warning toast — re-login detected
+        toast(`${res.data.warning.message}`, {
+          icon: '⚠️',
+          duration: 6000,
+          style: { background: '#fef3c7', color: '#92400e', fontWeight: 600 },
+        })
+      }
+      return { locked: false }
+    } catch (err) {
+      if (err?.response?.status === 423 || err?.message?.includes('423')) {
+        return { locked: true, message: err?.response?.data?.message || 'Attendance locked for today' }
+      }
+      // 409 = already checked in today — fine
+      return { locked: false }
+    }
+  }
+
+  // ── Auto check-out (employee only, silent) ────────────────────────────────
+  const _autoCheckOut = async () => {
+    try {
+      await api.post('/attendance/check-out', {})
+      console.log('[auth] Auto check-out done')
+    } catch {
+      // Not checked in, or already checked out — ignore silently
+    }
+  }  // ── Login ─────────────────────────────────────────────────────────────────
   const login = async (loginId, password, expectedRole) => {
     try {
       const body = loginId.includes('@')
@@ -50,6 +82,19 @@ export const AuthProvider = ({ children }) => {
           employee:     res.data.employee || null,
         }
         saveUser(userData)
+
+        // Auto check-in for employees only
+        if (userData.role === 'employee') {
+          const checkInResult = await _autoCheckIn()
+          if (checkInResult.locked) {
+            // Day is locked — still allow login to website but show prominent warning
+            toast.error(
+              checkInResult.message || 'Your attendance for today is locked. Contact admin.',
+              { duration: 8000, icon: '🔒' }
+            )
+          }
+        }
+
         return { success: true, user: userData }
       }
 
@@ -57,6 +102,21 @@ export const AuthProvider = ({ children }) => {
     } catch {
       return { success: false, message: 'Cannot connect to server. Is the backend running?', status: 0 }
     }
+  }
+
+  // ── Logout ────────────────────────────────────────────────────────────────
+  const logout = async () => {
+    // Auto check-out for employees before clearing session
+    const stored = localStorage.getItem('epip_user')
+    if (stored) {
+      try {
+        const userData = JSON.parse(stored)
+        if (userData?.role === 'employee') {
+          await _autoCheckOut()
+        }
+      } catch { /* ignore */ }
+    }
+    clearSession()
   }
 
   // ── Mark first login complete ────────────────────────────────────────────
@@ -76,8 +136,6 @@ export const AuthProvider = ({ children }) => {
     }
     saveUser(updated)
   }
-
-  const logout = () => clearSession()
 
   return (
     <AuthContext.Provider value={{

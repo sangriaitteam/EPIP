@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EPIP Timing Agent — Login</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f172a;
+      color: #f1f5f9;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+      -webkit-app-region: drag;
+    }
+
+    /* Title bar drag area */
+    .titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px 0;
+      -webkit-app-region: drag;
+    }
+    .titlebar .close-btn {
+      width: 12px; height: 12px;
+      background: #ef4444;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+      -webkit-app-region: no-drag;
+    }
+    .titlebar .close-btn:hover { background: #dc2626; }
+
+    .container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      -webkit-app-region: no-drag;
+    }
+
+    .logo {
+      width: 52px; height: 52px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 24px rgba(99,102,241,0.35);
+    }
+
+    h1 { font-size: 18px; font-weight: 700; color: #f1f5f9; margin-bottom: 4px; }
+    .subtitle { font-size: 12px; color: #64748b; margin-bottom: 28px; }
+
+    .form { width: 100%; display: flex; flex-direction: column; gap: 14px; }
+
+    label { font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; display: block; }
+
+    input {
+      width: 100%;
+      padding: 11px 14px;
+      background: #1e293b;
+      border: 1.5px solid #334155;
+      border-radius: 10px;
+      color: #f1f5f9;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus { border-color: #6366f1; }
+    input::placeholder { color: #475569; }
+
+    .btn {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border: none;
+      border-radius: 10px;
+      color: white;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+      margin-top: 4px;
+    }
+    .btn:hover   { opacity: 0.92; }
+    .btn:active  { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .error {
+      background: rgba(239,68,68,0.12);
+      border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 8px;
+      padding: 10px 13px;
+      font-size: 12px;
+      color: #fca5a5;
+      display: none;
+      line-height: 1.5;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .footer {
+      text-align: center;
+      font-size: 10px;
+      color: #334155;
+      padding: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="titlebar">
+    <span style="font-size:11px; color:#475569; font-weight:600;">⏱ EPIP Timing Agent</span>
+    <button class="close-btn" onclick="window.timingAgent.closeWindow()"></button>
+  </div>
+
+  <div class="container">
+    <div class="logo">⏱</div>
+    <h1>Timing Agent</h1>
+    <p class="subtitle">Sangria Edutainment · Employee Login</p>
+
+    <div class="form">
+      <div>
+        <label>Username</label>
+        <input id="username" type="text" placeholder="your.username" autocomplete="username" />
+      </div>
+      <div>
+        <label>Password</label>
+        <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" />
+      </div>
+
+      <div class="error" id="error"></div>
+
+      <button class="btn" id="loginBtn" onclick="doLogin()">Sign In</button>
+    </div>
+  </div>
+
+  <div class="footer">Employee accounts only · Auto check-in/out detection</div>
+
+  <script>
+    // Focus username on load
+    document.getElementById('username').focus()
+
+    // Enter key → login
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter') doLogin()
+    })
+
+    async function doLogin() {
+      const username = document.getElementById('username').value.trim()
+      const password = document.getElementById('password').value
+      const btn      = document.getElementById('loginBtn')
+      const errEl    = document.getElementById('error')
+
+      if (!username || !password) {
+        showError('Please enter your username and password.')
+        return
+      }
+
+      btn.disabled  = true
+      btn.innerHTML = '<span class="spinner"></span> Signing in…'
+      errEl.style.display = 'none'
+
+      try {
+        await window.timingAgent.login(username, password)
+        // Main process closes this window and opens status window
+      } catch (err) {
+        showError(err.message || 'Login failed. Check your credentials.')
+        btn.disabled  = false
+        btn.innerHTML = 'Sign In'
+      }
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('error')
+      el.textContent     = msg
+      el.style.display   = 'block'
+    }
+  </script>
+</body>
+</html>

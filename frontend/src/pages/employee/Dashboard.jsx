@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Clock, CheckSquare, TrendingUp, Calendar,
-  AlertCircle, Play, Square, LogIn, LogOut,
-  PauseCircle, PlayCircle, X, Coffee, Utensils, Users, User, MoreHorizontal
+  AlertCircle, LogIn, LogOut, PauseCircle, PlayCircle, X,
+  Coffee, Utensils, Users, User, MoreHorizontal
 } from 'lucide-react'
 import StatCard from '../../components/common/StatCard'
 import Card, { CardHeader, CardBody } from '../../components/common/Card'
@@ -127,7 +127,6 @@ const EmployeeDashboard = () => {
   const [summary,       setSummary]       = useState(null)
   const [weeklyData,    setWeeklyData]    = useState([])
   const [notifs,        setNotifs]        = useState([])
-  const [checkingIn,    setCheckingIn]    = useState(false)
   const [pausing,       setPausing]       = useState(false)
   const [showPauseModal,setShowPauseModal]= useState(false)
 
@@ -170,33 +169,12 @@ const EmployeeDashboard = () => {
     return () => clearInterval(t)
   }, [])
 
-  // ── Check In / Check Out ──────────────────────────────────────────────────
-  const handleCheckIn = async () => {
-    setCheckingIn(true)
-    try {
-      if (!checkedIn) {
-        const res = await api.post('/attendance/check-in', { work_mode: 'office' })
-        if (res.success) {
-          setTodayRecord(res.data)
-          setCheckedIn(true)
-          const time = new Date(res.data.check_in).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-          toast.success(`✅ Checked in at ${time}`)
-        } else { toast.error(res.message || 'Check-in failed') }
-      } else {
-        const res = await api.post('/attendance/check-out')
-        if (res.success) {
-          setTodayRecord(res.data)
-          setCheckedIn(false)
-          setPaused(false)
-          setActivePause(null)
-          const time  = new Date(res.data.check_out).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-          const hours = res.data.hours_worked
-          toast.success(`👋 Checked out at ${time} · ${hours}h worked`)
-        } else { toast.error(res.message || 'Check-out failed') }
-      }
-    } catch { toast.error('Cannot connect to server') }
-    setCheckingIn(false)
-  }
+  // ── Real-time attendance polling — every 10s ──────────────────────────────
+  // Picks up screen-off breaks, work hours, OT updates immediately
+  useEffect(() => {
+    const interval = setInterval(() => loadToday(), 10000)
+    return () => clearInterval(interval)
+  }, [])
 
   // ── Pause ─────────────────────────────────────────────────────────────────
   const handlePause = async (reason, comment) => {
@@ -276,7 +254,7 @@ const EmployeeDashboard = () => {
             <p className="text-xs text-gray-400">Live time</p>
           </div>
 
-          {/* Pause / Resume button — only visible when checked in & not checked out */}
+          {/* Pause / Resume button — only visible when checked in */}
           <AnimatePresence>
             {checkedIn && (
               <motion.button
@@ -302,27 +280,6 @@ const EmployeeDashboard = () => {
               </motion.button>
             )}
           </AnimatePresence>
-
-          {/* Check In / Check Out */}
-          <motion.button
-            onClick={handleCheckIn}
-            disabled={checkingIn}
-            whileHover={{ scale: 1.05, y: -2 }}
-            whileTap={{ scale: 0.96 }}
-            className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors shadow-lg whitespace-nowrap disabled:opacity-70 ${
-              checkedIn
-                ? 'bg-red-500 hover:bg-red-600 text-white shadow-red-500/30'
-                : 'bg-green-500 hover:bg-green-600 text-white shadow-green-500/30'
-            }`}
-          >
-            {checkingIn
-              ? <motion.div animate={{ rotate: 360 }} transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
-                  className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
-              : checkedIn
-              ? <><Square size={15} /> Check Out</>
-              : <><Play size={15} /> Check In</>
-            }
-          </motion.button>
         </div>
       </motion.div>
 

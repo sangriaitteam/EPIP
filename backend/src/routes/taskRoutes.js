@@ -17,6 +17,7 @@ router.patch('/:id/completion',  ctrl.updateCompletion)
 router.delete('/:id',          authorize('admin','hr','superadmin','project_manager'), ctrl.remove)
 router.post('/:id/comments',   ctrl.addComment)
 router.get('/:id/comments',    ctrl.getComments)
+router.patch('/:id/comments/read', ctrl.markCommentsRead)
 
 module.exports = router
 

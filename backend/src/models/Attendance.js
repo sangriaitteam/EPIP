@@ -1,17 +1,37 @@
 const db = require('../config/db')
 
 const Attendance = {
-  async checkIn({ employee_id, work_mode = 'office' }) {
+  async checkIn({ employee_id, work_mode = 'office', allowReLogin = false }) {
     const today = new Date().toISOString().split('T')[0]
-    // Prevent duplicate check-in
     const existing = await this.findByDate(employee_id, today)
-    if (existing && existing.check_in) throw new Error('Already checked in today')
 
+    if (existing?.is_locked) {
+      throw new Error('Attendance locked for today')
+    }
+
+    if (existing?.check_in && !allowReLogin) {
+      throw new Error('Already checked in today')
+    }
+
+    if (existing?.check_in && allowReLogin) {
+      // Re-login: clear check_out so they can work again, keep check_in as first login time
+      const { rows } = await db.query(
+        `UPDATE attendance
+         SET check_out = NULL, work_mode = $1, updated_at = NOW()
+         WHERE employee_id = $2 AND date = $3
+         RETURNING *`,
+        [work_mode, employee_id, today]
+      )
+      return rows[0]
+    }
+
+    // Fresh check-in
     const { rows } = await db.query(
       `INSERT INTO attendance (employee_id, date, check_in, work_mode, status)
        VALUES ($1, $2, NOW(), $3, 'present')
        ON CONFLICT (employee_id, date)
-       DO UPDATE SET check_in = NOW(), work_mode = $3, status = 'present'
+       DO UPDATE SET check_in = COALESCE(attendance.check_in, NOW()),
+                     work_mode = $3, status = 'present'
        RETURNING *`,
       [employee_id, today, work_mode]
     )

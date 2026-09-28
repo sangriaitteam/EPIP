@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, Users, Clock, CheckSquare,
   FileText, Settings, LogOut, ChevronRight, ChevronDown,
-  Camera, Shield, Building2, Calendar, FolderOpen, TrendingUp, IdCard
+  Camera, Shield, Building2, Calendar, FolderOpen, TrendingUp, IdCard, MessageSquare
 } from 'lucide-react'
 import { cn } from '../../utils/helpers'
 import { useAuth } from '../../context/AuthContext'
@@ -38,9 +38,10 @@ const navConfig = {
   ],
   project_manager: [
     { label: 'Home',            icon: LayoutDashboard, path: '/pm/dashboard' },
-    { label: 'Reports',         icon: FileText,        path: '/pm/reports'   },
+    { label: 'Tasks',           icon: CheckSquare,     path: '/pm/reports'   },
     { label: 'Projects',        icon: FolderOpen,      path: '/pm/projects'  },
     { label: 'Project Updates', icon: TrendingUp,      path: '/pm/updates'   },
+    { label: 'Chats',           icon: MessageSquare,   path: '/pm/chats'     },
   ],
 }
 
@@ -65,7 +66,7 @@ const Sidebar = ({ collapsed, onToggle, onClose }) => {
     )
   }
 
-  const handleLogout = () => { logout(); navigate('/login') }
+  const handleLogout = async () => { await logout(); navigate('/login') }
 
   // Recent Projects — only for project_manager role
   const [recentProjects, setRecentProjects] = React.useState(() => {

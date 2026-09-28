@@ -5,10 +5,13 @@ const { authorize }    = require('../middleware/roleMiddleware')
 
 router.use(authenticate)
 
-router.get('/my',    ctrl.getMy)    // employee — must be before /:id
-router.get('/',      ctrl.getAll)
-router.post('/',     ctrl.create)
-router.put('/:id',   ctrl.update)
-router.delete('/:id', authorize('admin','hr','superadmin','project_manager'), ctrl.remove)
+router.get('/my',        ctrl.getMy)
+router.get('/',          ctrl.getAll)
+router.get('/:id',       ctrl.getById)
+router.get('/:id/reports', ctrl.getReports)
+router.post('/:id/reports', ctrl.generateReport)
+router.post('/',         ctrl.create)
+router.put('/:id',       ctrl.update)
+router.delete('/:id',    authorize('admin','hr','superadmin','project_manager'), ctrl.remove)
 
 module.exports = router

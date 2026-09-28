@@ -38,29 +38,65 @@ app.use(helmet({
 // ── CORS ──────────────────────────────────────────────────────────────────
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow all localhost origins (any port) + configured CLIENT_URL + vercel deployments
-    const allowed = [
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'http://localhost:5175',
-      'http://localhost:5176',
-      'http://localhost:5177',
-      'http://127.0.0.1:5173',
-      process.env.CLIENT_URL,
-    ].filter(Boolean)
+    // No origin = same-origin / curl / mobile apps / Electron agents → allow
+    if (!origin) return callback(null, true)
 
-    // Allow any vercel.app subdomain (for preview deployments too)
-    const isVercel = origin && origin.endsWith('.vercel.app')
-    const isRailway = origin && origin.endsWith('.railway.app')
-
-    if (!origin || allowed.includes(origin) || isVercel || isRailway) {
-      callback(null, true)
-    } else {
-      callback(new Error(`CORS: ${origin} not allowed`))
+    // Always allow configured CLIENT_URL
+    if (process.env.CLIENT_URL && origin === process.env.CLIENT_URL) {
+      return callback(null, true)
     }
+
+    // Allow cloud deployments
+    if (origin.endsWith('.vercel.app') || origin.endsWith('.railway.app')) {
+      return callback(null, true)
+    }
+
+    // Parse the origin to check if it's a private/local network
+    try {
+      const url      = new URL(origin)
+      const hostname = url.hostname
+
+      // localhost / 127.x.x.x (IPv4 loopback)
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return callback(null, true)
+      }
+
+      // IPv6 loopback  ::1
+      if (hostname === '[::1]' || hostname === '::1') {
+        return callback(null, true)
+      }
+
+      // Private IPv4 ranges: 10.x.x.x, 172.16-31.x.x, 192.168.x.x
+      const ipv4Parts = hostname.split('.').map(Number)
+      if (ipv4Parts.length === 4) {
+        const [a, b] = ipv4Parts
+        if (a === 10) return callback(null, true)                          // 10.0.0.0/8
+        if (a === 172 && b >= 16 && b <= 31) return callback(null, true)  // 172.16.0.0/12
+        if (a === 192 && b === 168) return callback(null, true)           // 192.168.0.0/16
+      }
+
+      // IPv6 link-local fe80::/10 and private fc00::/7
+      const cleanIPv6 = hostname.replace(/^\[|\]$/g, '')
+      if (
+        cleanIPv6.toLowerCase().startsWith('fe80') ||
+        cleanIPv6.toLowerCase().startsWith('fc') ||
+        cleanIPv6.toLowerCase().startsWith('fd')
+      ) {
+        return callback(null, true)
+      }
+    } catch {
+      // URL parse failed — block unknown origins in production
+    }
+
+    // In development — allow everything for easy local testing
+    if (process.env.NODE_ENV !== 'production') {
+      return callback(null, true)
+    }
+
+    callback(new Error(`CORS: ${origin} not allowed`))
   },
-  credentials: true,
-  methods:      ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  credentials:    true,
+  methods:        ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization'],
 }))
 

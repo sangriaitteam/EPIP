@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Clock, Calendar, TrendingUp, ChevronLeft, ChevronRight,
   Plus, X, AlertCircle, CheckCircle, Trash2,
-  PauseCircle, Coffee, Utensils, Users, User, MoreHorizontal
+  PauseCircle, Coffee, Utensils, Users, User, MoreHorizontal, Lock
 } from 'lucide-react'
 import Card, { CardHeader, CardBody } from '../../components/common/Card'
 import StatCard from '../../components/common/StatCard'
@@ -32,11 +32,12 @@ const leaveStatusColor = (s) => {
 
 // ── Pause helpers ─────────────────────────────────────────────────────────────
 const PAUSE_REASON_MAP = {
-  tea_break:    { label: 'Tea Break',     icon: Coffee,        color: 'bg-orange-500/10 text-orange-600 dark:text-orange-400' },
-  lunch_break:  { label: 'Lunch Break',   icon: Utensils,      color: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400' },
-  meeting:      { label: 'Meeting',       icon: Users,         color: 'bg-blue-500/10 text-blue-600 dark:text-blue-400' },
-  personal:     { label: 'Personal Work', icon: User,          color: 'bg-purple-500/10 text-purple-600 dark:text-purple-400' },
-  other:        { label: 'Other',         icon: MoreHorizontal,color: 'bg-gray-500/10 text-gray-600 dark:text-gray-400' },
+  tea_break:    { label: 'Tea Break',       icon: Coffee,        color: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',  section: 'manual' },
+  lunch_break:  { label: 'Lunch Break',     icon: Utensils,      color: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400', section: 'manual' },
+  meeting:      { label: 'Meeting',         icon: Users,         color: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',        section: 'manual' },
+  personal:     { label: 'Personal Work',   icon: User,          color: 'bg-purple-500/10 text-purple-600 dark:text-purple-400', section: 'manual' },
+  other:        { label: 'Other',           icon: MoreHorizontal,color: 'bg-gray-500/10 text-gray-600 dark:text-gray-400',       section: 'manual' },
+  screen_lock:  { label: 'Screen Off',      icon: Lock,          color: 'bg-slate-500/10 text-slate-600 dark:text-slate-300',    section: 'screen' },
 }
 
 const fmtPauseTime = (ts) =>
@@ -78,8 +79,8 @@ const PauseHistoryPanel = ({ attendanceId, date }) => {
   return (
     <div className="space-y-2">
       {pauses.map((p, i) => {
-        const meta = PAUSE_REASON_MAP[p.reason] || PAUSE_REASON_MAP.other
-        const Icon = meta.icon
+        const meta   = PAUSE_REASON_MAP[p.reason] || PAUSE_REASON_MAP.other
+        const Icon   = meta.icon
         const isOpen = !p.pause_end
         return (
           <motion.div key={p.id}
@@ -143,45 +144,113 @@ const TodayBreaksPanel = () => {
         className="w-5 h-5 border-2 border-primary-500/30 border-t-primary-500 rounded-full" />
     </div>
   )
+
   if (!pauses.length) return (
-    <p className="text-xs text-gray-400 text-center py-4">No breaks recorded today</p>
+    <p className="text-xs text-gray-400 text-center py-6">No breaks recorded today</p>
   )
 
-  const totalMins = pauses.reduce((s, p) => s + (p.duration_mins || 0), 0)
+  // Split into manual vs screen-off breaks
+  const manualBreaks = pauses.filter(p => p.reason !== 'screen_lock')
+  const screenBreaks = pauses.filter(p => p.reason === 'screen_lock')
+  const totalMins    = pauses.reduce((s, p) => s + (p.duration_mins || 0), 0)
+  const manualMins   = manualBreaks.reduce((s, p) => s + (p.duration_mins || 0), 0)
+  const screenMins   = screenBreaks.reduce((s, p) => s + (p.duration_mins || 0), 0)
+
+  const BreakItem = ({ p }) => {
+    const meta   = PAUSE_REASON_MAP[p.reason] || PAUSE_REASON_MAP.other
+    const Icon   = meta.icon
+    const isOpen = !p.pause_end
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+        className={`flex items-center gap-3 p-3 rounded-xl border ${
+          isOpen
+            ? 'bg-yellow-500/5 border-yellow-500/25'
+            : 'bg-gray-50 dark:bg-dark-700 border-gray-100 dark:border-dark-600'
+        }`}
+      >
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${meta.color}`}>
+          <Icon size={14} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-gray-800 dark:text-gray-200">{meta.label}</span>
+            {isOpen && <span className="text-[10px] font-bold text-yellow-500 animate-pulse">● Active</span>}
+            {p.comment && <span className="text-[10px] text-gray-400 italic truncate">"{p.comment}"</span>}
+          </div>
+          <div className="flex items-center gap-3 text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+            <span>{fmtPauseTime(p.pause_start)} → {isOpen ? <span className="text-yellow-500">ongoing</span> : fmtPauseTime(p.pause_end)}</span>
+            <span className="font-bold text-primary-500">{isOpen ? '—' : fmtDuration(p.duration_mins)}</span>
+          </div>
+        </div>
+      </motion.div>
+    )
+  }
+
   return (
-    <div className="space-y-2">
-      {pauses.map((p, i) => {
-        const meta = PAUSE_REASON_MAP[p.reason] || PAUSE_REASON_MAP.other
-        const Icon = meta.icon
-        const isOpen = !p.pause_end
-        return (
-          <motion.div key={p.id}
-            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.06 }}
-            className={`flex items-center gap-3 p-3 rounded-xl border ${
-              isOpen ? 'bg-yellow-500/5 border-yellow-500/25' : 'bg-gray-50 dark:bg-dark-700 border-gray-100 dark:border-dark-600'
-            }`}>
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${meta.color}`}>
-              <Icon size={14} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-gray-800 dark:text-gray-200">{meta.label}</span>
-                {isOpen && <span className="text-[10px] font-bold text-yellow-500 animate-pulse">● Active</span>}
-                {p.comment && <span className="text-xs text-gray-400 italic truncate">"{p.comment}"</span>}
-              </div>
-              <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                <span>{fmtPauseTime(p.pause_start)} → {isOpen ? <span className="text-yellow-500">ongoing</span> : fmtPauseTime(p.pause_end)}</span>
-                <span className="font-semibold text-primary-500">{isOpen ? '—' : fmtDuration(p.duration_mins)}</span>
-              </div>
-            </div>
-          </motion.div>
-        )
-      })}
+    <div className="space-y-5">
+
+      {/* ── Section 1: Manual Breaks ── */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <PauseCircle size={14} className="text-primary-500" />
+            <span className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Manual Breaks</span>
+            <span className="text-[10px] text-gray-400">({manualBreaks.length})</span>
+          </div>
+          {manualMins > 0 && (
+            <span className="text-xs font-semibold text-primary-500">{fmtDuration(manualMins)}</span>
+          )}
+        </div>
+
+        {manualBreaks.length === 0 ? (
+          <p className="text-xs text-gray-400 text-center py-3 bg-gray-50 dark:bg-dark-700 rounded-xl border border-dashed border-gray-200 dark:border-dark-600">
+            No manual breaks today
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {manualBreaks.map((p, i) => <BreakItem key={p.id || i} p={p} />)}
+          </div>
+        )}
+      </div>
+
+      {/* ── Section 2: Screen-Off Breaks ── */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <Lock size={13} className="text-slate-500 dark:text-slate-400" />
+            <span className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Screen-Off Breaks</span>
+            <span className="text-[10px] text-gray-400">({screenBreaks.length})</span>
+          </div>
+          {screenMins > 0 && (
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">{fmtDuration(screenMins)}</span>
+          )}
+        </div>
+
+        {screenBreaks.length === 0 ? (
+          <p className="text-xs text-gray-400 text-center py-3 bg-gray-50 dark:bg-dark-700 rounded-xl border border-dashed border-gray-200 dark:border-dark-600">
+            No screen-off breaks today
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {screenBreaks.map((p, i) => <BreakItem key={p.id || i} p={p} />)}
+          </div>
+        )}
+      </div>
+
+      {/* ── Total summary ── */}
       {totalMins > 0 && (
-        <div className="flex justify-between items-center px-3 py-2 rounded-xl bg-primary-500/5 border border-primary-500/10">
-          <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">Total today</span>
-          <span className="text-xs font-bold text-primary-600 dark:text-primary-400">{fmtDuration(totalMins)}</span>
+        <div className="grid grid-cols-3 gap-3 pt-1">
+          {[
+            { label: 'Manual',    val: fmtDuration(manualMins), color: 'text-primary-500' },
+            { label: 'Screen Off',val: fmtDuration(screenMins), color: 'text-slate-500 dark:text-slate-400' },
+            { label: 'Total',     val: fmtDuration(totalMins),  color: 'text-gray-800 dark:text-white' },
+          ].map(s => (
+            <div key={s.label} className="flex flex-col items-center gap-0.5 py-2 rounded-xl bg-gray-50 dark:bg-dark-700 border border-gray-100 dark:border-dark-600">
+              <span className={`text-sm font-bold ${s.color}`}>{s.val}</span>
+              <span className="text-[10px] text-gray-400">{s.label}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -387,12 +456,12 @@ const EmployeeAttendance = () => {
 
   const loadAttendance = async (year, month) => {
     try {
-      // Load all records for selected month
       const from = `${year}-${String(month+1).padStart(2,'0')}-01`
       const last = new Date(year, month+1, 0).getDate()
       const to   = `${year}-${String(month+1).padStart(2,'0')}-${String(last).padStart(2,'0')}`
       const data = await attendanceService.getMy({ from, to, limit: 100 })
-      setAttendance(Array.isArray(data) ? data : [])
+      const rows = Array.isArray(data) ? data : []
+      setAttendance(rows)
     } catch {}
   }
 
@@ -564,48 +633,54 @@ const EmployeeAttendance = () => {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-gray-50 dark:bg-dark-700">
-                          {['Date','Check In','Check Out','Hours','Breaks','Mode','Status','Late','OT'].map(h => (
-                            <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{h}</th>
+                          {['Date','Login','Logout','Work Hours','Mode','Status','Late','OT Hours'].map(h => (
+                            <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-dark-600">
                         {attendance.map((r, i) => (
-                          <tr key={i} className="hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors">
-                            <td className="px-3 py-2.5 font-medium text-gray-700 dark:text-gray-300">{formatDate(r.date)}</td>
-                            <td className="px-3 py-2.5 text-green-600 dark:text-green-400 font-medium">
-                              {r.check_in ? new Date(r.check_in).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}) : '—'}
-                            </td>
-                            <td className="px-3 py-2.5 text-red-500 font-medium">
-                              {r.check_out ? new Date(r.check_out).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}) : '—'}
-                            </td>
-                            <td className="px-3 py-2.5">{r.hours_worked ? `${r.hours_worked}h` : '—'}</td>
-                            {/* Breaks cell */}
-                            <td className="px-3 py-2.5">
-                              {r.total_pause_mins > 0 ? (
-                                <button
-                                  onClick={() => setBreakRecord(breakRecord?.id === r.id ? null : r)}
-                                  className="flex items-center gap-1 text-xs font-semibold text-yellow-600 dark:text-yellow-400 hover:underline"
-                                >
-                                  <PauseCircle size={11} />
-                                  {Math.round(r.total_pause_mins)}m
-                                </button>
-                              ) : <span className="text-xs text-gray-400">—</span>}
-                            </td>
-                            <td className="px-3 py-2.5 capitalize">{r.work_mode || '—'}</td>
-                            <td className="px-3 py-2.5">
-                              {r.status ? <Badge label={r.status} color={getStatusColor(r.status)} dot /> : '—'}
-                            </td>
-                            <td className="px-3 py-2.5">
-                              {r.is_late
-                                ? <span className="text-orange-500 text-xs font-semibold">Late</span>
-                                : <span className="text-green-500 text-xs">On time</span>
-                              }
-                            </td>
-                            <td className="px-3 py-2.5">
-                              {r.overtime > 0 ? <span className="text-blue-500 text-xs font-semibold">+{r.overtime}h</span> : '—'}
-                            </td>
-                          </tr>
+                            <tr key={i} className="hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors">
+                              {/* Date */}
+                              <td className="px-3 py-2.5 font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                                {formatDate(r.date)}
+                              </td>
+                              {/* Login (first check-in) */}
+                              <td className="px-3 py-2.5 text-green-600 dark:text-green-400 font-medium whitespace-nowrap">
+                                {r.check_in ? new Date(r.check_in).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}) : '—'}
+                              </td>
+                              {/* Logout (last check-out) */}
+                              <td className="px-3 py-2.5 text-red-500 font-medium whitespace-nowrap">
+                                {r.check_out ? new Date(r.check_out).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}) : '—'}
+                              </td>
+                              {/* Work Hours */}
+                              <td className="px-3 py-2.5 whitespace-nowrap font-medium text-gray-700 dark:text-gray-300">
+                                {r.hours_worked ? `${r.hours_worked}h` : '—'}
+                              </td>
+                              {/* Mode */}
+                              <td className="px-3 py-2.5 whitespace-nowrap">
+                                {r.work_mode
+                                  ? <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-primary-500/10 text-primary-600 dark:text-primary-400 capitalize">{r.work_mode}</span>
+                                  : '—'}
+                              </td>
+                              {/* Status */}
+                              <td className="px-3 py-2.5 whitespace-nowrap">
+                                {r.status ? <Badge label={r.status} color={getStatusColor(r.status)} dot /> : '—'}
+                              </td>
+                              {/* Late */}
+                              <td className="px-3 py-2.5 whitespace-nowrap">
+                                {r.is_late
+                                  ? <span className="text-orange-500 text-xs font-semibold">Late</span>
+                                  : <span className="text-green-500 text-xs">On time</span>
+                                }
+                              </td>
+                              {/* OT Hours */}
+                              <td className="px-3 py-2.5 whitespace-nowrap">
+                                {r.overtime > 0
+                                  ? <span className="text-blue-500 text-xs font-semibold">+{r.overtime}h</span>
+                                  : '—'}
+                              </td>
+                            </tr>
                         ))}
                       </tbody>
                     </table>

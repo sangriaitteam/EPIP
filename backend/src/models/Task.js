@@ -28,10 +28,9 @@ const Task = {
   async findByEmployee(employee_id, { status, priority, month, year } = {}) {
     // Default to current month/year
     const now = new Date()
-    const m   = month ? parseInt(month) : now.getMonth() + 1   // 1-12
+    const m   = month ? parseInt(month) : now.getMonth() + 1
     const y   = year  ? parseInt(year)  : now.getFullYear()
 
-    // Month start (inclusive) and end (exclusive)
     const monthStart = `${y}-${String(m).padStart(2,'0')}-01`
     const monthEnd   = m === 12
       ? `${y + 1}-01-01`
@@ -42,7 +41,12 @@ const Task = {
              b.first_name || ' ' || b.last_name AS assigned_by_name,
              b.avatar_url                        AS assigned_by_avatar,
              t.project_name,
-             t.source
+             t.source,
+             -- Unread: messages NOT sent by this employee and not yet read
+             (SELECT COUNT(*) FROM task_comments tc
+              WHERE tc.task_id = t.id
+                AND (tc.author_id IS NULL OR tc.author_id != $1)
+                AND tc.is_read = false) AS unread_count
       FROM tasks t
       LEFT JOIN employees b ON t.assigned_by = b.id
       WHERE t.assigned_to = $1
@@ -106,26 +110,72 @@ const Task = {
     await db.query(`DELETE FROM tasks WHERE id = $1`, [id])
   },
 
-  async addComment(task_id, author_id, content) {
+  async addComment(task_id, author_id, content, author_name_override = null) {
     const { rows } = await db.query(
-      `INSERT INTO task_comments (task_id, author_id, content)
-       VALUES ($1, $2, $3) RETURNING *`,
-      [task_id, author_id, content]
+      `INSERT INTO task_comments (task_id, author_id, content, author_name_override, is_read, read_at)
+       VALUES ($1, $2, $3, $4, false, NULL) RETURNING *`,
+      [task_id, author_id ?? null, content, author_name_override]
     )
-    // bump comment count
     await db.query(`UPDATE tasks SET comments_count = comments_count + 1 WHERE id = $1`, [task_id])
     return rows[0]
   },
 
   async getComments(task_id) {
     const { rows } = await db.query(
-      `SELECT tc.*, e.first_name || ' ' || e.last_name AS author_name, e.avatar_url
+      `SELECT
+         tc.id,
+         tc.task_id,
+         tc.author_id,
+         tc.content,
+         tc.created_at,
+         tc.is_read,
+         tc.read_at,
+         COALESCE(
+           e.first_name || ' ' || e.last_name,
+           tc.author_name_override,
+           'Project Manager'
+         ) AS author_name,
+         e.avatar_url
        FROM task_comments tc
-       JOIN employees e ON tc.author_id = e.id
+       LEFT JOIN employees e ON tc.author_id = e.id
        WHERE tc.task_id = $1
-       ORDER BY tc.created_at ASC`, [task_id]
+       ORDER BY tc.created_at ASC`,
+      [task_id]
     )
     return rows
+  },
+
+  // Mark all messages NOT sent by the viewer as read
+  // employee_id = the person opening the chat (employee or PM's employee id)
+  // Marks all messages from the OTHER party as read
+  async markReadByViewer(task_id, viewer_employee_id) {
+    const params = [task_id]
+    let whereClause = ''
+
+    if (viewer_employee_id) {
+      // Viewer is an employee — mark messages NOT sent by them as read
+      params.push(viewer_employee_id)
+      whereClause = `AND (author_id IS NULL OR author_id != $2)`
+    } else {
+      // Viewer is PM with no employee record — mark messages sent by the assigned employee as read
+      whereClause = `AND author_id IS NOT NULL`
+    }
+
+    const { rows } = await db.query(
+      `UPDATE task_comments
+       SET is_read = true, read_at = NOW()
+       WHERE task_id = $1
+         ${whereClause}
+         AND is_read = false
+       RETURNING id`,
+      params
+    )
+    return rows.length
+  },
+
+  // Legacy alias kept for compatibility
+  async markReadByEmployee(task_id) {
+    return this.markReadByViewer(task_id, null)
   },
 
   async findByProject(project_id) {

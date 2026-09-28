@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EPIP Timing Agent</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #1e293b;
+      color: #f1f5f9;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* Drag region */
+    .titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: #0f172a;
+      border-bottom: 1px solid #334155;
+      -webkit-app-region: drag;
+      flex-shrink: 0;
+    }
+    .titlebar span { font-size: 12px; font-weight: 700; color: #94a3b8; }
+    .titlebar .close-btn {
+      width: 12px; height: 12px;
+      background: #ef4444;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+      -webkit-app-region: no-drag;
+    }
+    .titlebar .close-btn:hover { background: #dc2626; }
+
+    /* Status indicator */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px;
+      background: #0f172a;
+      border-bottom: 1px solid #1e293b;
+    }
+    .status-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+    .status-dot.working   { background: #22c55e; animation: pulse-green 2s infinite; }
+    .status-dot.break     { background: #f59e0b; animation: pulse-amber 2s infinite; }
+    .status-dot.idle      { background: #475569; }
+    .status-label { font-size: 13px; font-weight: 700; flex: 1; }
+    .status-label.working { color: #22c55e; }
+    .status-label.break   { color: #f59e0b; }
+    .status-label.idle    { color: #64748b; }
+
+    @keyframes pulse-green {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.4); }
+      50%       { box-shadow: 0 0 0 6px rgba(34,197,94,0); }
+    }
+    @keyframes pulse-amber {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0.4); }
+      50%       { box-shadow: 0 0 0 6px rgba(245,158,11,0); }
+    }
+
+    /* User info */
+    .user-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-bottom: 1px solid #334155;
+    }
+    .avatar {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 700;
+      flex-shrink: 0;
+    }
+    .user-name  { font-size: 13px; font-weight: 700; color: #f1f5f9; }
+    .user-role  { font-size: 11px; color: #64748b; margin-top: 1px; }
+
+    /* Time display */
+    .time-section {
+      padding: 14px 16px;
+      border-bottom: 1px solid #334155;
+    }
+    .time-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .time-row:last-child { margin-bottom: 0; }
+    .time-label { font-size: 11px; color: #64748b; font-weight: 500; }
+    .time-value { font-size: 13px; font-weight: 700; color: #f1f5f9; font-variant-numeric: tabular-nums; }
+    .time-value.accent { color: #6366f1; }
+    .time-value.green  { color: #22c55e; }
+    .time-value.amber  { color: #f59e0b; }
+
+    /* Auto-break notice */
+    .auto-break-notice {
+      margin: 0 16px;
+      padding: 8px 12px;
+      background: rgba(245,158,11,0.1);
+      border: 1px solid rgba(245,158,11,0.25);
+      border-radius: 8px;
+      font-size: 11px;
+      color: #fbbf24;
+      display: none;
+      line-height: 1.5;
+    }
+
+    /* Action buttons */
+    .actions {
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+      justify-content: flex-end;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 11px;
+      border: none;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .btn-checkin  { background: linear-gradient(135deg, #22c55e, #16a34a); color: white; }
+    .btn-checkout { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; }
+    .btn-break    { background: #334155; color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
+    .btn-resume   { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; }
+
+    .btn-row { display: flex; gap: 8px; }
+    .btn-row .btn { flex: 1; }
+
+    /* Break dropdown */
+    .break-dropdown {
+      position: relative;
+    }
+    .break-menu {
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 0; right: 0;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      overflow: hidden;
+      display: none;
+      z-index: 99;
+      box-shadow: 0 -8px 24px rgba(0,0,0,0.4);
+    }
+    .break-menu.open { display: block; }
+    .break-menu button {
+      display: flex; align-items: center; gap: 8px;
+      width: 100%;
+      padding: 10px 14px;
+      background: none;
+      border: none;
+      color: #cbd5e1;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.1s;
+    }
+    .break-menu button:hover { background: #1e293b; }
+    .break-menu button:not(:last-child) { border-bottom: 1px solid #1e293b; }
+
+    /* Error */
+    .error-toast {
+      position: absolute;
+      top: 56px;
+      left: 10px; right: 10px;
+      background: rgba(239,68,68,0.12);
+      border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 8px;
+      padding: 9px 13px;
+      font-size: 11px;
+      color: #fca5a5;
+      display: none;
+      z-index: 100;
+    }
+
+    .spinner {
+      width: 13px; height: 13px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <div class="titlebar" style="-webkit-app-region:drag">
+    <span>⏱ EPIP Timing Agent</span>
+    <button class="close-btn" onclick="window.timingAgent.closeWindow()"></button>
+  </div>
+
+  <div class="error-toast" id="errorToast"></div>
+
+  <!-- Status indicator -->
+  <div class="status-bar">
+    <div class="status-dot idle" id="statusDot"></div>
+    <span class="status-label idle" id="statusLabel">Not checked in</span>
+  </div>
+
+  <!-- User -->
+  <div class="user-row" id="userRow">
+    <div class="avatar" id="avatarEl">?</div>
+    <div>
+      <div class="user-name" id="userName">—</div>
+      <div class="user-role">Employee</div>
+    </div>
+  </div>
+
+  <!-- Times -->
+  <div class="time-section">
+    <div class="time-row">
+      <span class="time-label">Checked In</span>
+      <span class="time-value accent" id="checkInTime">—</span>
+    </div>
+    <div class="time-row">
+      <span class="time-label">Work Duration</span>
+      <span class="time-value green" id="workDuration">—</span>
+    </div>
+    <div class="time-row">
+      <span class="time-label">Current Break</span>
+      <span class="time-value amber" id="breakDuration">—</span>
+    </div>
+  </div>
+
+  <!-- Auto-break notice -->
+  <div class="auto-break-notice" id="autoBreakNotice">
+    🔒 Screen locked — break started automatically.<br>
+    Unlock your screen to resume.
+  </div>
+
+  <!-- Action buttons -->
+  <div class="actions">
+
+    <!-- Check-in -->
+    <button class="btn btn-checkin" id="btnCheckIn" onclick="doCheckIn()">
+      ✅ Check In
+    </button>
+
+    <!-- Check-out -->
+    <button class="btn btn-checkout" id="btnCheckOut" style="display:none" onclick="doCheckOut()">
+      🔴 Check Out
+    </button>
+
+    <!-- Break / Resume row -->
+    <div class="btn-row" id="breakRow" style="display:none">
+      <!-- Break dropdown -->
+      <div class="break-dropdown" style="flex:1">
+        <button class="btn btn-break" id="btnBreak" onclick="toggleBreakMenu()">
+          ⏸ Take Break
+        </button>
+        <div class="break-menu" id="breakMenu">
+          <button onclick="doBreak('tea_break')">   ☕ Tea Break</button>
+          <button onclick="doBreak('lunch_break')"> 🍽 Lunch Break</button>
+          <button onclick="doBreak('meeting')">     📅 Meeting</button>
+          <button onclick="doBreak('personal')">    👤 Personal</button>
+          <button onclick="doBreak('other')">       • Other</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resume button (shown when on break) -->
+    <button class="btn btn-resume" id="btnResume" style="display:none" onclick="doResume()">
+      ▶ Resume Work
+    </button>
+
+    <!-- Logout -->
+    <button class="btn" style="background:#1e293b; color:#64748b; font-size:12px; padding:8px"
+      onclick="doLogout()">
+      Sign Out
+    </button>
+  </div>
+
+  <script>
+    // ── State ────────────────────────────────────────────────────────────────
+    let _state = { isCheckedIn: false, isOnBreak: false, autoBreakOn: false, checkInTime: null, breakStartTime: null, user: null }
+    let _workTimer  = null
+    let _breakTimer = null
+
+    // ── Boot ─────────────────────────────────────────────────────────────────
+    window.addEventListener('DOMContentLoaded', async () => {
+      try {
+        const s = await window.timingAgent.getStatus()
+        applyState(s)
+      } catch (e) { showError(e.message) }
+    })
+
+    // ── Real-time updates from main process ───────────────────────────────────
+    window.timingAgent.onStatusUpdate(data => applyState(data))
+    window.timingAgent.onError(msg => showError(msg))
+
+    // ── Apply state to UI ─────────────────────────────────────────────────────
+    function applyState(s) {
+      _state = s || _state
+
+      const { isCheckedIn, isOnBreak, autoBreakOn, checkInTime, user } = _state
+
+      // User info
+      if (user) {
+        document.getElementById('userName').textContent = user.name || user.username || '—'
+        document.getElementById('avatarEl').textContent = (user.name || 'E')[0].toUpperCase()
+      }
+
+      // Status dot + label
+      const dot   = document.getElementById('statusDot')
+      const label = document.getElementById('statusLabel')
+      if (!isCheckedIn) {
+        dot.className   = 'status-dot idle'
+        label.className = 'status-label idle'
+        label.textContent = 'Not checked in'
+      } else if (isOnBreak) {
+        dot.className   = 'status-dot break'
+        label.className = 'status-label break'
+        label.textContent = autoBreakOn ? '⏸ On Break (screen locked)' : '⏸ On Break'
+      } else {
+        dot.className   = 'status-dot working'
+        label.className = 'status-label working'
+        label.textContent = '🟢 Working'
+      }
+
+      // Auto-break notice
+      document.getElementById('autoBreakNotice').style.display = (isOnBreak && autoBreakOn) ? 'block' : 'none'
+
+      // Check-in time
+      document.getElementById('checkInTime').textContent =
+        checkInTime ? formatTime(new Date(checkInTime)) : '—'
+
+      // Work duration live counter
+      clearInterval(_workTimer)
+      if (isCheckedIn && checkInTime && !isOnBreak) {
+        updateWorkDuration(checkInTime)
+        _workTimer = setInterval(() => updateWorkDuration(checkInTime), 1000)
+      } else if (!isCheckedIn) {
+        document.getElementById('workDuration').textContent = '—'
+      }
+
+      // Break duration live counter — use ACTUAL pause_start from backend
+      clearInterval(_breakTimer)
+      if (isOnBreak) {
+        // breakStartTime = ISO string from backend (actual pause start)
+        // fallback to now if not available (should not happen)
+        const breakStartISO = _state.breakStartTime || new Date().toISOString()
+        updateBreakDuration(breakStartISO)
+        _breakTimer = setInterval(() => updateBreakDuration(breakStartISO), 1000)
+      } else {
+        document.getElementById('breakDuration').textContent = '—'
+      }
+
+      // Buttons
+      document.getElementById('btnCheckIn').style.display    = !isCheckedIn ? 'flex' : 'none'
+      document.getElementById('btnCheckOut').style.display   = isCheckedIn && !isOnBreak ? 'flex' : 'none'
+      document.getElementById('breakRow').style.display      = isCheckedIn && !isOnBreak ? 'flex' : 'none'
+      document.getElementById('btnResume').style.display     = isOnBreak ? 'flex' : 'none'
+    }
+
+    // ── Actions ───────────────────────────────────────────────────────────────
+    async function doCheckIn() {
+      setLoading('btnCheckIn', true)
+      try { await window.timingAgent.checkIn('office') }
+      catch (e) { showError(e.message) }
+      setLoading('btnCheckIn', false)
+    }
+
+    async function doCheckOut() {
+      if (!confirm('Check out now?')) return
+      setLoading('btnCheckOut', true)
+      try { await window.timingAgent.checkOut() }
+      catch (e) { showError(e.message) }
+      setLoading('btnCheckOut', false)
+    }
+
+    async function doBreak(reason) {
+      closeBreakMenu()
+      try { await window.timingAgent.pause(reason) }
+      catch (e) { showError(e.message) }
+    }
+
+    async function doResume() {
+      setLoading('btnResume', true)
+      try { await window.timingAgent.resume() }
+      catch (e) { showError(e.message) }
+      setLoading('btnResume', false)
+    }
+
+    function doLogout() {
+      if (confirm('Sign out?')) window.timingAgent.logout()
+    }
+
+    // ── Break dropdown ────────────────────────────────────────────────────────
+    function toggleBreakMenu() {
+      document.getElementById('breakMenu').classList.toggle('open')
+    }
+    function closeBreakMenu() {
+      document.getElementById('breakMenu').classList.remove('open')
+    }
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.break-dropdown')) closeBreakMenu()
+    })
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    function formatTime(date) {
+      return date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }).toUpperCase()
+    }
+
+    function formatDuration(ms) {
+      if (ms < 0) ms = 0
+      const h = Math.floor(ms / 3600000)
+      const m = Math.floor((ms % 3600000) / 60000)
+      const s = Math.floor((ms % 60000) / 1000)
+      if (h > 0) return `${h}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`
+      return `${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`
+    }
+
+    function updateWorkDuration(checkInISO) {
+      const ms = Date.now() - new Date(checkInISO).getTime()
+      document.getElementById('workDuration').textContent = formatDuration(ms)
+    }
+
+    function updateBreakDuration(breakStartISO) {
+      const ms = Date.now() - new Date(breakStartISO).getTime()
+      document.getElementById('breakDuration').textContent = formatDuration(ms)
+    }
+
+    function setLoading(id, on) {
+      const btn = document.getElementById(id)
+      if (!btn) return
+      btn.disabled = on
+      if (on) {
+        btn._origHTML   = btn.innerHTML
+        btn.innerHTML   = '<span class="spinner"></span>'
+      } else if (btn._origHTML) {
+        btn.innerHTML = btn._origHTML
+      }
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('errorToast')
+      el.textContent   = msg
+      el.style.display = 'block'
+      setTimeout(() => { el.style.display = 'none' }, 4000)
+    }
+  </script>
+
+</body>
+</html>

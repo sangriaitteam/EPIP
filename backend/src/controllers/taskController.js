@@ -55,13 +55,42 @@ const getMy = async (req, res, next) => {
   } catch (err) { next(err) }
 }
 
-// GET /api/tasks/team  — tasks assigned by this PM/HR
+// GET /api/tasks/team  — all tasks visible to this PM (assigned by them OR from project_manager source)
 const getTeamTasks = async (req, res, next) => {
   try {
     const employee = await Employee.findByUserId(req.user.id)
-    if (!employee) return fail(res, 'Employee profile not found', 404)
-    const tasks = await Task.findByManager(employee.id, req.query)
-    return ok(res, tasks)
+    const { limit = 500, status, priority } = req.query
+
+    let q = `
+      SELECT t.*,
+             a.first_name || ' ' || a.last_name AS assigned_to_name,
+             a.avatar_url                        AS assigned_to_avatar,
+             -- Unread for PM: messages sent by the assigned employee (author_id = assigned_to) not yet read
+             (SELECT COUNT(*) FROM task_comments tc
+              WHERE tc.task_id = t.id
+                AND tc.author_id = t.assigned_to
+                AND tc.is_read = false) AS unread_count
+      FROM tasks t
+      LEFT JOIN employees a ON t.assigned_to = a.id
+      WHERE (t.source = 'project_manager'`
+
+    const params = []
+
+    if (employee) {
+      params.push(employee.id)
+      q += ` OR t.assigned_by = $${params.length}`
+    }
+
+    q += `)`
+
+    if (status)   { params.push(status);   q += ` AND t.status = $${params.length}` }
+    if (priority) { params.push(priority); q += ` AND t.priority = $${params.length}` }
+
+    params.push(parseInt(limit))
+    q += ` ORDER BY t.created_at DESC LIMIT $${params.length}`
+
+    const { rows } = await query(q, params)
+    return ok(res, rows)
   } catch (err) { next(err) }
 }
 
@@ -193,11 +222,20 @@ const remove = async (req, res, next) => {
 // POST /api/tasks/:id/comments
 const addComment = async (req, res, next) => {
   try {
-    const employee = await Employee.findByUserId(req.user.id)
-    if (!employee) return fail(res, 'Employee not found', 404)
     const { content } = req.body
     if (!content) return fail(res, 'Comment content is required', 400)
-    const comment = await Task.addComment(req.params.id, employee.id, content)
+
+    // Try to find employee record — PM / HR may not have one, that's OK
+    const employee = await Employee.findByUserId(req.user.id)
+
+    // Use employee.id if available, otherwise NULL (allowed after migration 025)
+    const authorId   = employee?.id ?? null
+    // Fallback display name for non-employee users (PM, HR, Admin)
+    const authorName = employee
+      ? `${employee.first_name} ${employee.last_name}`
+      : (req.user.name || req.user.email || 'Project Manager')
+
+    const comment = await Task.addComment(req.params.id, authorId, content, authorName)
     return created(res, comment, 'Comment added')
   } catch (err) { next(err) }
 }
@@ -218,9 +256,20 @@ const getByProject = async (req, res, next) => {
   } catch (err) { next(err) }
 }
 
+// PATCH /api/tasks/:id/comments/read
+// Called when someone opens a task chat — marks all messages from the OTHER party as read
+const markCommentsRead = async (req, res, next) => {
+  try {
+    const employee = await Employee.findByUserId(req.user.id)
+    const viewerEmployeeId = employee?.id ?? null
+    const count = await Task.markReadByViewer(req.params.id, viewerEmployeeId)
+    return ok(res, { marked: count }, 'Messages marked as read')
+  } catch (err) { next(err) }
+}
+
 module.exports = {
   create, getMy, getTeamTasks, getTeamUpdates,
   getByProject, getById, update,
   updateStatus, updateCompletion,
-  remove, addComment, getComments,
+  remove, addComment, getComments, markCommentsRead,
 }

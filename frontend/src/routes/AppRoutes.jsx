@@ -21,6 +21,8 @@ import PMDashboard     from '../pages/project-manager/Dashboard'
 import PMReports       from '../pages/project-manager/Reports'
 import PMProjects      from '../pages/project-manager/Projects'
 import PMProjectUpdates from '../pages/project-manager/ProjectUpdates'
+import PMProjectDetail from '../pages/project-manager/ProjectDetail'
+import PMChats         from '../pages/project-manager/Chats'
 
 // HR (Admin) pages
 import HRDashboard from '../pages/hr/Dashboard'
@@ -106,7 +108,9 @@ const AppRoutes = () => (
         <Route path="/pm/dashboard" element={<PMDashboard />} />
         <Route path="/pm/reports"   element={<PMReports />} />
         <Route path="/pm/projects"  element={<PMProjects />} />
+        <Route path="/pm/projects/:id" element={<PMProjectDetail />} />
         <Route path="/pm/updates"   element={<PMProjectUpdates />} />
+        <Route path="/pm/chats"     element={<PMChats />} />
       </Route>
     </Route>
 

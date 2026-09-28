@@ -92,6 +92,29 @@ const Login = () => {
       setLocked(false)
       setAttemptsLeft(null)
       toast.success(`Welcome back, ${result.user.name}! ✅`)
+
+      // ── Launch Timing Agent for employees ──────────────────────────────
+      // Fires epip-timing://launch?token=<jwt>&user=<base64-json>
+      // Agent receives this, stores token, skips its own login screen
+      if (result.user.role === 'employee') {
+        try {
+          const token   = localStorage.getItem('epip_token')
+          const userB64 = btoa(JSON.stringify(result.user))
+          const deepLink = `epip-timing://launch?token=${encodeURIComponent(token)}&user=${encodeURIComponent(userB64)}`
+          // Use a hidden <a> click so browser fires the custom protocol
+          const a = document.createElement('a')
+          a.href = deepLink
+          a.style.display = 'none'
+          document.body.appendChild(a)
+          a.click()
+          document.body.removeChild(a)
+          console.log('[login] Timing Agent launch triggered')
+        } catch (e) {
+          console.warn('[login] Could not launch Timing Agent:', e.message)
+          // Non-fatal — employee can still use the website normally
+        }
+      }
+
       if (result.user.isFirstLogin &&
           (result.user.role === 'employee' || result.user.role === 'hr')) {
         navigate('/employee/verify-documents')

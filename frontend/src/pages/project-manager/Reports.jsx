@@ -116,9 +116,8 @@ const DayPopup = ({ employee, day, dayTasks, onAddTask, onClose }) => {
 }
 
 // ── Assign Task Drawer ────────────────────────────────────────────────────────
-const AssignTaskDrawer = ({ employee, day, employees, projects, onClose, onTaskAdded }) => {
+const AssignTaskDrawer = ({ employee, day, employees, onClose, onTaskAdded }) => {
   const [form, setForm] = useState({
-    project_id:  '',
     title:       '',
     assigned_to: employee?.id || '',
     description: '',
@@ -140,10 +139,6 @@ const AssignTaskDrawer = ({ employee, day, employees, projects, onClose, onTaskA
         assigned_to:  parseInt(form.assigned_to),
         priority:     form.priority,
         due_date:     form.due_date || null,
-        project_id:   form.project_id ? parseInt(form.project_id) : null,
-        project_name: form.project_id
-          ? projects.find(p => String(p.id) === String(form.project_id))?.name || ''
-          : null,
         source: 'project_manager',
       }
       const res = await api.post('/tasks', payload)
@@ -191,20 +186,7 @@ const AssignTaskDrawer = ({ employee, day, employees, projects, onClose, onTaskA
         {/* Form */}
         <div className="p-5 space-y-4 flex-1">
 
-          {/* Project */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">
-              Project
-            </label>
-            <select value={form.project_id} onChange={e => setF('project_id', e.target.value)} className={inputCls}>
-              <option value="">Select Project (optional)</option>
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>{p.name || p.title}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Task Name */}
+        {/* Task Name */}
           <div>
             <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">
               Task Name <span className="text-red-500">*</span>
@@ -308,7 +290,6 @@ const PMReports = () => {
   const [year,       setYear]       = useState(today.getFullYear())
   const [month,      setMonth]      = useState(today.getMonth())
   const [employees,  setEmployees]  = useState([])
-  const [projects,   setProjects]   = useState([])
   const [tasks,      setTasks]      = useState([])
   const [loading,    setLoading]    = useState(true)
   const [hoveredCell,setHoveredCell]= useState(null)  // { empId, dayIdx }
@@ -320,13 +301,11 @@ const PMReports = () => {
   const load = async () => {
     setLoading(true)
     try {
-      const [empRes, projRes, taskRes] = await Promise.all([
+      const [empRes, taskRes] = await Promise.all([
         api.get('/employees?limit=200'),
-        api.get('/projects?limit=100'),
         api.get('/tasks/team?limit=500'),
       ])
       if (empRes.success)  setEmployees(empRes.data || [])
-      if (projRes.success) setProjects(projRes.data?.projects || projRes.data || [])
       if (taskRes.success) setTasks(taskRes.data || [])
     } catch {}
     setLoading(false)
@@ -513,7 +492,7 @@ const PMReports = () => {
                             onMouseEnter={() => !weekend && handleCellMouseEnter(emp.id, dayIdx)}
                             onMouseLeave={handleCellMouseLeave}
                           >
-                            {/* Workload bar */}
+                            {/* Workload bar (weekdays only) */}
                             {!weekend && dayTasks.length > 0 && (
                               <div className="mx-1 h-5 rounded-md overflow-hidden relative"
                                 style={{ background: dayPct > 80 ? '#fee2e2' : dayPct > 50 ? '#fef9c3' : '#dcfce7' }}>
@@ -522,7 +501,7 @@ const PMReports = () => {
                               </div>
                             )}
 
-                            {/* + hover button */}
+                            {/* + button — weekday empty cell */}
                             {!weekend && dayTasks.length === 0 && (
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleAddTask(emp, day) }}
@@ -532,7 +511,7 @@ const PMReports = () => {
                               </button>
                             )}
 
-                            {/* + on cells with tasks too */}
+                            {/* + button — weekday cell with tasks */}
                             {!weekend && dayTasks.length > 0 && (
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleAddTask(emp, day) }}
@@ -542,7 +521,17 @@ const PMReports = () => {
                               </button>
                             )}
 
-                            {/* Hover popup */}
+                            {/* + button — weekend cell (always visible on hover) */}
+                            {weekend && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleAddTask(emp, day) }}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-full bg-primary-500/20 hover:bg-primary-500 text-primary-600 hover:text-white flex items-center justify-center mx-auto"
+                              >
+                                <Plus size={10} />
+                              </button>
+                            )}
+
+                            {/* Hover popup (weekdays only) */}
                             <AnimatePresence>
                               {isHovered && !weekend && (
                                 <DayPopup
@@ -589,7 +578,6 @@ const PMReports = () => {
             employee={assignPanel.employee}
             day={assignPanel.day}
             employees={employees}
-            projects={projects}
             onClose={() => setAssignPanel(null)}
             onTaskAdded={handleTaskAdded}
           />

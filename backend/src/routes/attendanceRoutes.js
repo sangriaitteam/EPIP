@@ -27,6 +27,7 @@ router.post('/pause',                       ctrl.pauseWork)
 router.post('/resume',                      ctrl.resumeWork)
 router.get('/pauses',                       ctrl.getMyPauses)
 router.get('/pauses/:attendanceId', authorize('admin','hr','superadmin'), ctrl.getPausesByAttendance)
+router.get('/my-pauses',                    ctrl.getMyPausesRange)  // employee: all pauses in a date range
 router.get('/today',                        ctrl.getToday)
 router.get('/my',                           ctrl.getMy)
 router.get('/summary',                      ctrl.getMySummary)
@@ -35,6 +36,7 @@ router.get('/weekly',                       ctrl.getWeeklyBreakdown)
 router.get('/employee/:id', authorize('admin','hr','superadmin'), ctrl.getByEmployee)
 router.get('/employee/:id/summary', authorize('admin','hr','superadmin'), ctrl.getSummaryByEmployee)
 router.get('/today-all',   authorize('admin','hr','superadmin'), ctrl.getTodayAll)
+router.get('/sessions/:employeeId', authorize('admin','hr','superadmin'), ctrl.getSessionsByEmployee)
 
 module.exports = router
 

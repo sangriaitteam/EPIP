@@ -8,12 +8,13 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    strictPort: true,
-    host: 'localhost',
+    strictPort: false,       // allow fallback port if 5173 is busy
+    host: true,              // 0.0.0.0 — listen on all interfaces (Wi-Fi, Ethernet, IPv4, IPv6)
   },
   preview: {
     port: 5173,
-    strictPort: true,
+    strictPort: false,
+    host: true,              // same for preview server
   },
   build: {
     chunkSizeWarningLimit: 600,
