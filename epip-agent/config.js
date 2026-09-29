@@ -33,9 +33,10 @@ function loadExternalConfig() {
       try {
         const raw = fs.readFileSync(loc, 'utf8')
         const cfg = JSON.parse(raw)
-        if (cfg.serverUrl && cfg.serverUrl !== store.get('serverUrl')) {
-          console.log(`[config] Server URL loaded from config file: ${cfg.serverUrl}`)
+        if (cfg.serverUrl) {
+          // Always update — overwrite any cached old URL
           store.set('serverUrl', cfg.serverUrl)
+          console.log(`[config] Server URL set to: ${cfg.serverUrl}`)
         }
         if (cfg.intervalMinutes && typeof cfg.intervalMinutes === 'number') {
           store.set('intervalMinutes', cfg.intervalMinutes)
