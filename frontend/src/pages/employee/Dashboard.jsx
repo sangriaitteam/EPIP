@@ -228,17 +228,20 @@ const EmployeeDashboard = () => {
   const dateStr      = currentTime.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
   // Net working duration — live calculation every second from check_in minus pauses
-  // Uses currentTime (ticks every 1s) so it updates without page refresh
+  // Uses currentTime (ticks every 1s). STOPS when check_out is set (logout).
   const calcLiveWorkSecs = () => {
     if (!todayRecord?.check_in) return null
     const checkInMs  = new Date(todayRecord.check_in).getTime()
-    const checkOutMs = todayRecord.check_out ? new Date(todayRecord.check_out).getTime() : currentTime.getTime()
+    // Use check_out as end if logged out — timer frozen at that point
+    const checkOutMs = todayRecord.check_out
+      ? new Date(todayRecord.check_out).getTime()
+      : currentTime.getTime()
     const elapsed    = Math.max(0, Math.floor((checkOutMs - checkInMs) / 1000))
-    // Subtract active pause duration
-    const activePauseSecs = (paused && activePause?.pause_start)
+    // Subtract active pause duration (only if still checked in, not after logout)
+    const activePauseSecs = (!todayRecord.check_out && paused && activePause?.pause_start)
       ? Math.max(0, Math.floor((currentTime.getTime() - new Date(activePause.pause_start).getTime()) / 1000))
       : 0
-    // Subtract completed pauses (total_pause_mins from DB, excluding current active)
+    // Subtract completed pauses (total_pause_mins from DB)
     const completedPauseSecs = Math.round((todayRecord.total_pause_mins || 0) * 60)
     const workSecs = Math.max(0, elapsed - completedPauseSecs - activePauseSecs)
     const h  = Math.floor(workSecs / 3600)
@@ -248,9 +251,8 @@ const EmployeeDashboard = () => {
     return `${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`
   }
 
-  const liveWorkStr = checkedIn ? calcLiveWorkSecs() : null
-
-  const workDuration = liveWorkStr
+  // Always show live value when check_in exists (shows frozen value after logout)
+  const liveWorkStr = todayRecord?.check_in ? calcLiveWorkSecs() : null
 
   // How long the current break has been
   const pauseDuration = (paused && activePause?.pause_start)
@@ -388,11 +390,15 @@ const EmployeeDashboard = () => {
                 <div className="flex justify-between items-center text-gray-500 dark:text-gray-400">
                   <span className="flex items-center gap-1.5"><Clock size={13} className="text-blue-500" /> Hours</span>
                   <span className="font-semibold text-gray-800 dark:text-white">
-                    {todayRecord?.check_out
-                      ? `${todayRecord.hours_worked ?? '—'}h`
-                      : liveWorkStr
-                      ? <span className="font-mono text-green-600 dark:text-green-400 flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse inline-block flex-shrink-0" />
+                    {liveWorkStr
+                      ? <span className={`font-mono flex items-center gap-1 ${
+                          checkedIn
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-gray-700 dark:text-gray-300'
+                        }`}>
+                          {checkedIn && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse inline-block flex-shrink-0" />
+                          )}
                           {liveWorkStr}
                         </span>
                       : '—'

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Clock, Calendar, TrendingUp, ChevronLeft, ChevronRight,
@@ -829,6 +829,12 @@ const EmployeeAttendance = () => {
   const [breakRecord,   setBreakRecord]   = useState(null)
   // Session panel — which date is expanded (employee clicks date row)
   const [sessionDate,   setSessionDate]   = useState(null)
+  // Tick every second so today's live hours updates in the table
+  const [tick, setTick] = useState(0)
+  useEffect(() => {
+    const iv = setInterval(() => setTick(t => t + 1), 1000)
+    return () => clearInterval(iv)
+  }, [])
 
   const loadAttendance = async (year, month) => {
     try {
@@ -876,6 +882,15 @@ const EmployeeAttendance = () => {
   useEffect(() => {
     loadAttendance(selectedYear, selectedMonth)
   }, [selectedMonth, selectedYear])
+
+  // Auto-reload current month every 30s to refresh today's hours_worked + check_out
+  useEffect(() => {
+    const iv = setInterval(() => {
+      loadAttendance(now.getFullYear(), now.getMonth())
+    }, 30000)
+    return () => clearInterval(iv)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleCancelLeave = async (id) => {
     setCancelling(id)
@@ -926,11 +941,6 @@ const EmployeeAttendance = () => {
         <StatCard title="Days Present"    value={summary?.present ?? '—'}  subtitle="This month" icon={Clock}     color="blue"   delay={0.2} />
         <StatCard title="Late Logins"     value={summary?.late    ?? '—'}  subtitle="This month" icon={Clock}     color="yellow" delay={0.3} />
         <StatCard title="Leave Taken"     value={leaves.filter(l => l.status === 'approved').length} subtitle="Approved" icon={Calendar} color="purple" delay={0.4} />
-      </motion.div>
-
-      {/* Live Work Timer — visible only when checked in today */}
-      <motion.div variants={fadeUp}>
-        <LiveWorkTimer />
       </motion.div>
 
       {/* Calendar + Chart */}
@@ -1014,39 +1024,72 @@ const EmployeeAttendance = () => {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-gray-50 dark:bg-dark-700">
-                          {['Date','Login','Logout','Work Hours','Mode','Status','Late','OT Hours'].map(h => (
+                          {['Date','Check-In','Check-Out','Hours','Mode','Status','OT Hours'].map(h => (
                             <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-dark-600">
                         {attendance.map((r, i) => {
-                          const dateKey = typeof r.date === 'string' ? r.date.split('T')[0] : r.date
+                          const dateKey  = typeof r.date === 'string' ? r.date.split('T')[0] : r.date
+                          const isToday  = dateKey === new Date().toISOString().split('T')[0]
                           const isExpanded = sessionDate === dateKey
+                          const isActive = r.check_in && !r.check_out  // currently logged in
+
+                          // Live hours: tick-based for today's active session
+                          const liveHoursStr = (() => {
+                            if (!r.check_in) return '—'
+                            // Past day with stored value — just show it
+                            if (!isToday && r.hours_worked) return `${r.hours_worked}h`
+                            // Completed today — show stored
+                            if (r.check_out && r.hours_worked) return `${r.hours_worked}h`
+                            // Live — calc from check_in to now minus pauses
+                            const endMs      = r.check_out ? new Date(r.check_out).getTime() : Date.now()
+                            const elapsedSec = Math.max(0, Math.floor((endMs - new Date(r.check_in).getTime()) / 1000))
+                            const pauseSec   = Math.round((r.total_pause_mins || 0) * 60)
+                            const workSec    = Math.max(0, elapsedSec - pauseSec)
+                            const h = Math.floor(workSec / 3600)
+                            const m = Math.floor((workSec % 3600) / 60)
+                            const s = workSec % 60
+                            if (isActive) return `${h > 0 ? h + 'h ' : ''}${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`
+                            return `${h > 0 ? h + 'h ' : ''}${String(m).padStart(2,'0')}m`
+                          })()
+
                           return (
-                            <>
-                            <tr key={i}
+                            <React.Fragment key={i}>
+                            <tr
                               onClick={() => setSessionDate(isExpanded ? null : dateKey)}
                               className="hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors cursor-pointer select-none">
                               {/* Date */}
                               <td className="px-3 py-2.5 font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                                <span className="flex items-center gap-1.5">
+                                <span className="flex items-center gap-1">
                                   {formatDate(r.date)}
                                   <motion.span animate={{ rotate: isExpanded ? 90 : 0 }} transition={{ duration: 0.15 }}
                                     className="text-gray-400 text-xs">›</motion.span>
                                 </span>
                               </td>
-                              {/* Login (first check-in) */}
-                              <td className="px-3 py-2.5 text-green-600 dark:text-green-400 font-medium whitespace-nowrap">
+                              {/* Check-In */}
+                              <td className="px-3 py-2.5 text-green-600 dark:text-green-400 font-medium whitespace-nowrap font-mono">
                                 {r.check_in ? new Date(r.check_in).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}) : '—'}
                               </td>
-                              {/* Logout (last check-out) */}
-                              <td className="px-3 py-2.5 text-red-500 font-medium whitespace-nowrap">
-                                {r.check_out ? new Date(r.check_out).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}) : '—'}
+                              {/* Check-Out */}
+                              <td className="px-3 py-2.5 font-medium whitespace-nowrap font-mono">
+                                {r.check_out
+                                  ? <span className="text-red-500">{new Date(r.check_out).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</span>
+                                  : r.check_in
+                                  ? <span className="text-xs text-green-500 animate-pulse">In office</span>
+                                  : '—'}
                               </td>
-                              {/* Work Hours */}
-                              <td className="px-3 py-2.5 whitespace-nowrap font-medium text-gray-700 dark:text-gray-300">
-                                {r.hours_worked ? `${r.hours_worked}h` : '—'}
+                              {/* Hours — live for active, stored for past */}
+                              <td className="px-3 py-2.5 whitespace-nowrap">
+                                <span className={`font-mono font-semibold flex items-center gap-1 ${
+                                  isActive && isToday ? 'text-green-600 dark:text-green-400' : 'text-gray-700 dark:text-gray-300'
+                                }`}>
+                                  {isActive && isToday && (
+                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
+                                  )}
+                                  {liveHoursStr}
+                                </span>
                               </td>
                               {/* Mode */}
                               <td className="px-3 py-2.5 whitespace-nowrap">
@@ -1058,13 +1101,6 @@ const EmployeeAttendance = () => {
                               <td className="px-3 py-2.5 whitespace-nowrap">
                                 {r.status ? <Badge label={r.status} color={getStatusColor(r.status)} dot /> : '—'}
                               </td>
-                              {/* Late */}
-                              <td className="px-3 py-2.5 whitespace-nowrap">
-                                {r.is_late
-                                  ? <span className="text-orange-500 text-xs font-semibold">Late</span>
-                                  : <span className="text-green-500 text-xs">On time</span>
-                                }
-                              </td>
                               {/* OT Hours */}
                               <td className="px-3 py-2.5 whitespace-nowrap">
                                 {r.overtime > 0
@@ -1075,7 +1111,7 @@ const EmployeeAttendance = () => {
                             {/* Session expand row */}
                             {isExpanded && (
                               <tr key={`session-${dateKey}`}>
-                                <td colSpan={8} className="p-0">
+                                <td colSpan={7} className="p-0">
                                   <AnimatePresence>
                                     <MySessionPanel
                                       date={dateKey}
@@ -1085,7 +1121,7 @@ const EmployeeAttendance = () => {
                                 </td>
                               </tr>
                             )}
-                            </>
+                            </React.Fragment>
                           )
                         })}
                       </tbody>
