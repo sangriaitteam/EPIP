@@ -1,8 +1,14 @@
 const Screenshot = require('../models/Screenshot')
 const Employee   = require('../models/Employee')
 const { ok, created, fail } = require('../utils/response')
-const { getFileUrl } = require('../config/storage')
+const { getFileUrl, USE_CLOUDINARY } = require('../config/storage')
 const auditLog   = require('../utils/auditLog')
+
+// Helper: get file URL from multer req.file (works for both local + Cloudinary)
+const resolveFileUrl = (file, subDir) => {
+  if (USE_CLOUDINARY) return file.path  // Cloudinary returns full URL in file.path
+  return getFileUrl(subDir, file.filename)
+}
 
 // POST /api/screenshots/my  (employee uploads their own screenshot)
 const uploadMy = async (req, res, next) => {
@@ -11,7 +17,7 @@ const uploadMy = async (req, res, next) => {
     const employee = await Employee.findByUserId(req.user.id)
     if (!employee) return fail(res, 'Employee profile not found', 404)
 
-    const file_url = getFileUrl('screenshots', req.file.filename)
+    const file_url = resolveFileUrl(req.file, 'screenshots')
     const screenshot = await Screenshot.create({
       employee_id:          employee.id,
       file_path:            req.file.path,
@@ -31,7 +37,7 @@ const upload = async (req, res, next) => {
     const employee_id = req.body.employee_id || req.query.employee_id
     if (!employee_id) return fail(res, 'employee_id required', 400)
 
-    const file_url  = getFileUrl('screenshots', req.file.filename)
+    const file_url  = resolveFileUrl(req.file, 'screenshots')
     const screenshot = await Screenshot.create({
       employee_id,
       file_path:           req.file.path,

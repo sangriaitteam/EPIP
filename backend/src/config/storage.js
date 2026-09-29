@@ -1,17 +1,56 @@
-const multer = require('multer')
-const path   = require('path')
-const fs     = require('fs')
+const multer    = require('multer')
+const path      = require('path')
+const fs        = require('fs')
 
+const USE_CLOUDINARY = process.env.STORAGE_PROVIDER === 'cloudinary'
+  && process.env.CLOUDINARY_CLOUD_NAME
+  && process.env.CLOUDINARY_API_KEY
+  && process.env.CLOUDINARY_API_SECRET
+
+// ── Cloudinary setup ──────────────────────────────────────────────────────────
+let cloudinaryStorage = null
+
+if (USE_CLOUDINARY) {
+  const cloudinary                   = require('cloudinary').v2
+  const { CloudinaryStorage }        = require('multer-storage-cloudinary')
+
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key:    process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+  })
+
+  cloudinaryStorage = new CloudinaryStorage({
+    cloudinary,
+    params: (req, file) => {
+      let folder = 'epip/documents'
+      if (file.fieldname === 'screenshot') folder = 'epip/screenshots'
+      if (file.fieldname === 'avatar')     folder = 'epip/avatars'
+      if (file.fieldname === 'evidence')   folder = 'epip/evidence'
+      return {
+        folder,
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf'],
+        public_id: `${Date.now()}-${Math.round(Math.random() * 1e9)}`,
+      }
+    },
+  })
+
+  console.log('[STORAGE] Using Cloudinary storage ✅')
+} else {
+  console.log('[STORAGE] Using local disk storage')
+}
+
+// ── Local disk storage (fallback) ─────────────────────────────────────────────
 const UPLOAD_DIR = path.join(__dirname, '../../', process.env.UPLOAD_DIR || 'uploads')
 
-// Ensure upload directories exist
-;['screenshots', 'documents', 'avatars', 'evidence'].forEach(dir => {
-  const p = path.join(UPLOAD_DIR, dir)
-  if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true })
-})
+if (!USE_CLOUDINARY) {
+  ;['screenshots', 'documents', 'avatars', 'evidence'].forEach(dir => {
+    const p = path.join(UPLOAD_DIR, dir)
+    if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true })
+  })
+}
 
-// Multer disk storage
-const storage = multer.diskStorage({
+const diskStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     let subDir = 'documents'
     if (file.fieldname === 'screenshot') subDir = 'screenshots'
@@ -25,6 +64,7 @@ const storage = multer.diskStorage({
   },
 })
 
+// ── File filter ───────────────────────────────────────────────────────────────
 const fileFilter = (req, file, cb) => {
   const allowed = [
     'image/jpeg', 'image/png', 'image/webp', 'image/gif',
@@ -41,15 +81,20 @@ const fileFilter = (req, file, cb) => {
   }
 }
 
+// ── Multer instance ───────────────────────────────────────────────────────────
 const upload = multer({
-  storage,
+  storage: USE_CLOUDINARY ? cloudinaryStorage : diskStorage,
   fileFilter,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
 })
 
+// ── File URL helper ───────────────────────────────────────────────────────────
+// Cloudinary returns full URL in req.file.path
+// Local returns filename only → build URL from BACKEND_URL
 const getFileUrl = (subDir, filename) => {
+  if (USE_CLOUDINARY) return filename // already full URL from Cloudinary
   const backendUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 5000}`
   return `${backendUrl}/uploads/${subDir}/${filename}`
 }
 
-module.exports = { upload, getFileUrl, UPLOAD_DIR }
+module.exports = { upload, getFileUrl, UPLOAD_DIR, USE_CLOUDINARY }

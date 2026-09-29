@@ -1,7 +1,13 @@
 const Employee     = require('../models/Employee')
 const User         = require('../models/User')
 const { ok, created, fail } = require('../utils/response')
-const { getFileUrl } = require('../config/storage')
+const { getFileUrl, USE_CLOUDINARY } = require('../config/storage')
+
+// Helper: resolve URL from multer file (local or Cloudinary)
+const resolveFileUrl = (file, subDir) => {
+  if (USE_CLOUDINARY) return file.path
+  return getFileUrl(subDir, file.filename)
+}
 const auditLog     = require('../utils/auditLog')
 const { query }    = require('../config/db')
 
@@ -102,7 +108,7 @@ const uploadMissingDoc = async (req, res, next) => {
     }
 
     const column  = ALLOWED_DOC_TYPES[doc_type]
-    const fileUrl = getFileUrl('documents', req.file.filename)
+    const fileUrl = resolveFileUrl(req.file, 'documents')
 
     // Upsert into employee_verifications
     await query(
@@ -262,7 +268,7 @@ const verifyDocuments = async (req, res, next) => {
     const fileUrl = (fieldName) => {
       const files = req.files?.[fieldName]
       if (!files || !files.length) return null
-      return getFileUrl('documents', files[0].filename)
+      return getFileUrl ? resolveFileUrl(files[0], 'documents') : null
     }
 
     // ── File URLs from uploaded documents ─────────────────────────────────
@@ -400,7 +406,7 @@ const update = async (req, res, next) => {
 const uploadAvatar = async (req, res, next) => {
   try {
     if (!req.file) return fail(res, 'No file uploaded', 400)
-    const url = getFileUrl('avatars', req.file.filename)
+    const url = resolveFileUrl(req.file, 'avatars')
     const emp = await Employee.update(req.params.id, { avatar_url: url })
     await Employee.updateProfileCompletion(emp.id)
     return ok(res, { avatar_url: url }, 'Avatar uploaded')
