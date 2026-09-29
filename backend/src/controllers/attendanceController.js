@@ -29,7 +29,10 @@ const checkIn = async (req, res, next) => {
       [employee.id, today]
     )
     const reLoginCount = parseInt(prevSessions[0]?.cnt || 0)
-    const isReLogin = reLoginCount > 0
+    // Only count as re-login warning if NOT triggered by tab-close auto-checkout
+    // tab_close flag sent by frontend sendBeacon — those are legitimate closures
+    const isTabClose  = req.body?.tab_close === true
+    const isReLogin   = reLoginCount > 0 && !isTabClose
 
     // Check-in (upsert attendance row — allows re-login same day)
     const record = await Attendance.checkIn({ employee_id: employee.id, work_mode, allowReLogin: true })
@@ -83,7 +86,7 @@ const checkIn = async (req, res, next) => {
 
     if (isReLogin) {
       warningCount = warningCount + 1
-      const LOCK_THRESHOLD = 4   // lock after 4 warnings (4+ re-login cycles)
+      const LOCK_THRESHOLD = 10   // lock after 10 warnings (10+ manual re-login cycles)
 
       if (warningCount >= LOCK_THRESHOLD) {
         // Lock the day

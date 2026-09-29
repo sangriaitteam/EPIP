@@ -45,9 +45,10 @@ export const AuthProvider = ({ children }) => {
             (import.meta.env.PROD ? '/api' : `${window.location.protocol}//${window.location.hostname}:5000/api`)
           // sendBeacon — guaranteed to fire even on tab close
           // Token sent in body as _token (sendBeacon can't set headers)
+          // tab_close flag tells backend not to count this as warning re-login
           navigator.sendBeacon(
             `${API}/attendance/check-out`,
-            new Blob([JSON.stringify({ _token: token })], { type: 'application/json' })
+            new Blob([JSON.stringify({ _token: token, tab_close: true })], { type: 'application/json' })
           )
         }
       } catch { /* silent */ }
