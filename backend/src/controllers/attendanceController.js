@@ -37,6 +37,29 @@ const checkIn = async (req, res, next) => {
     // Check-in (upsert attendance row — allows re-login same day)
     const record = await Attendance.checkIn({ employee_id: employee.id, work_mode, allowReLogin: true })
 
+    // ── Close ALL stale open pauses (from any previous session/day) ──────────
+    // Prevents old unclosed screen-lock pauses from leaking into new sessions
+    await query(
+      `UPDATE attendance_pauses
+       SET pause_end     = NOW(),
+           duration_mins = ROUND(EXTRACT(EPOCH FROM (NOW() - pause_start)) / 60, 2)
+       WHERE employee_id = $1
+         AND pause_end IS NULL
+         AND attendance_id != $2`,
+      [employee.id, record.id]
+    )
+    // Also close any open pauses on today's attendance from before this login
+    await query(
+      `UPDATE attendance_pauses
+       SET pause_end     = NOW(),
+           duration_mins = ROUND(EXTRACT(EPOCH FROM (NOW() - pause_start)) / 60, 2)
+       WHERE employee_id = $1
+         AND attendance_id = $2
+         AND pause_end IS NULL
+         AND pause_start < NOW() - INTERVAL '1 minute'`,
+      [employee.id, record.id]
+    )
+
     // Close any open sessions from today before creating a new one
     // Skip sessions < 30 seconds (micro sessions from tab close/open)
     const { rows: openSessions } = await query(
