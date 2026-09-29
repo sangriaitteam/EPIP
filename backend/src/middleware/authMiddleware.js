@@ -3,11 +3,17 @@ const User = require('../models/User')
 
 const authenticate = async (req, res, next) => {
   try {
+    // Accept token from Authorization header OR request body (for sendBeacon on tab close)
     const header = req.headers.authorization
-    if (!header || !header.startsWith('Bearer '))
-      return res.status(401).json({ success: false, message: 'No token provided' })
+    let token = null
+    if (header && header.startsWith('Bearer ')) {
+      token = header.split(' ')[1]
+    } else if (req.body?._token) {
+      token = req.body._token
+    }
 
-    const token = header.split(' ')[1]
+    if (!token)
+      return res.status(401).json({ success: false, message: 'No token provided' })
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
 
     const user = await User.findById(decoded.id)

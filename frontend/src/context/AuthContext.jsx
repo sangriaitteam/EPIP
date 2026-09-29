@@ -30,7 +30,31 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('epip_user', JSON.stringify(userData))
   }
 
-  // ── Auto check-in (employee only) ────────────────────────────────────────
+  // ── Auto check-out on browser/tab close (employee only) ─────────────────
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const stored = localStorage.getItem('epip_user')
+      if (!stored) return
+      try {
+        const userData = JSON.parse(stored)
+        if (userData?.role === 'employee') {
+          // Use sendBeacon for reliable fire-and-forget on tab close
+          const token = localStorage.getItem('epip_token')
+          if (!token) return
+          const API = import.meta.env.VITE_API_URL ||
+            (import.meta.env.PROD ? '/api' : `${window.location.protocol}//${window.location.hostname}:5000/api`)
+          // sendBeacon — guaranteed to fire even on tab close
+          // Token sent in body as _token (sendBeacon can't set headers)
+          navigator.sendBeacon(
+            `${API}/attendance/check-out`,
+            new Blob([JSON.stringify({ _token: token })], { type: 'application/json' })
+          )
+        }
+      } catch { /* silent */ }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [])
   // Returns { locked, warning } so Login page can show appropriate message
   const _autoCheckIn = async () => {
     try {
