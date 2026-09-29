@@ -176,6 +176,13 @@ const EmployeeDashboard = () => {
     return () => clearInterval(interval)
   }, [])
 
+  // Reload on window focus — ensures fresh data when employee returns to tab
+  useEffect(() => {
+    const handleFocus = () => loadToday()
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
+  }, [])
+
   // ── Pause ─────────────────────────────────────────────────────────────────
   const handlePause = async (reason, comment) => {
     setPausing(true)
