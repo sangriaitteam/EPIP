@@ -5,22 +5,25 @@ const path  = require('path')
 const fs    = require('fs')
 
 const store = new Store({
-  name: 'epip-agent-config',
+  name: 'sangria-agent-config',
   defaults: {
     serverUrl:       'http://localhost:5000',
     intervalMinutes: 10,
     autoStart:       true,
   },
-  encryptionKey: 'epip-agent-v1',
+  encryptionKey: 'sangria-agent-v1',
 })
 
-// ── Load server URL from epip-agent.config.json if present ───────────────────
+// ── Load server URL from sangria-agent.config.json if present ────────────────
 // IT team deploys this file alongside the .exe with the production URL.
 // This runs once at startup and writes the URL into the encrypted store.
 function loadExternalConfig() {
   // Look for config file next to the executable (production)
   // or in the project root (development)
   const locations = [
+    path.join(process.execPath, '..', 'sangria-agent.config.json'),
+    path.join(__dirname, 'sangria-agent.config.json'),
+    // backward compat — old config name still works
     path.join(process.execPath, '..', 'epip-agent.config.json'),
     path.join(__dirname, 'epip-agent.config.json'),
   ]

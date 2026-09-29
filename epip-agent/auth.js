@@ -5,8 +5,8 @@ const config  = require('./config')
 
 // Separate encrypted store for credentials
 const authStore = new Store({
-  name: 'epip-agent-auth',
-  encryptionKey: 'epip-auth-secure-v1',
+  name: 'sangria-agent-auth',
+  encryptionKey: 'sangria-auth-secure-v1',
 })
 
 const auth = {

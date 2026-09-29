@@ -1,7 +1,7 @@
 {
-  "name": "epip-agent",
+  "name": "sangria-agent",
   "version": "1.0.0",
-  "description": "EPIP Desktop Screenshot Agent — captures full Windows screen and uploads to EPIP backend",
+  "description": "Sangria Agent — Screen monitoring and attendance tracking for Sangria Edutainment",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -11,9 +11,9 @@
     "build:dir": "electron-builder --win --x64 --dir"
   },
   "build": {
-    "appId": "com.epip.agent",
-    "productName": "EPIP Agent",
-    "copyright": "Copyright © 2026 EPIP",
+    "appId": "com.sangria.agent",
+    "productName": "Sangria Agent",
+    "copyright": "Copyright © 2026 Sangria Edutainment Pvt Ltd",
     "directories": {
       "output": "dist"
     },
@@ -26,6 +26,7 @@
       "config.js",
       "renderer/**/*",
       "assets/**/*",
+      "sangria-agent.config.json",
       "epip-agent.config.json",
       "node_modules/**/*"
     ],
@@ -36,7 +37,7 @@
       "requestedExecutionLevel": "asInvoker"
     },
     "portable": {
-      "artifactName": "EPIP-Agent-${version}.exe"
+      "artifactName": "Sangria-Agent-${version}.exe"
     }
   },
   "dependencies": {
@@ -48,6 +49,6 @@
     "electron": "32.2.7",
     "electron-builder": "24.13.3"
   },
-  "author": "EPIP",
+  "author": "Sangria Edutainment Pvt Ltd",
   "license": "MIT"
 }

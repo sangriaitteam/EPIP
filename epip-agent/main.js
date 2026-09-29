@@ -1,4 +1,4 @@
-// main.js — EPIP Desktop Agent
+// main.js — Sangria Agent
 // 1. Employee-only login
 // 2. Check-in  → screenshot capture starts automatically
 // 3. Check-out → capture stops automatically
@@ -23,6 +23,8 @@ let statusWin        = null
 let _activeWindow    = 'Unknown'
 let _pollTimer       = null
 let _isCheckedIn     = false
+let _isOnScreenBreak = false   // true when screen is locked/off
+let _screenOffStart  = null    // timestamp when screen went off
 
 const isDev    = process.argv.includes('--dev')
 const ICON_DIR = path.join(__dirname, 'assets')
@@ -38,7 +40,7 @@ app.on('second-instance', () => {
 
 // ── App ready ─────────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
-  app.setAppUserModelId('com.epip.agent')
+  app.setAppUserModelId('com.sangria.agent')
 
   // Windows auto-start
   if (process.platform === 'win32') {
@@ -52,11 +54,25 @@ app.whenReady().then(async () => {
   setActiveWindowTitleFn(() => _activeWindow)
   setInterval(updateActiveWindow, 3000)
 
-  // Pause capture on system sleep / screen lock
-  powerMonitor.on('suspend',       () => scheduler.isRunning() && scheduler.pause())
-  powerMonitor.on('resume',        () => scheduler.isPaused()  && scheduler.resume())
-  powerMonitor.on('lock-screen',   () => scheduler.isRunning() && scheduler.pause())
-  powerMonitor.on('unlock-screen', () => scheduler.isPaused()  && scheduler.resume())
+  // ── Screen lock / sleep → pause screenshot capture + record screen-off ──
+  powerMonitor.on('lock-screen', () => {
+    if (scheduler.isRunning()) scheduler.pause()
+    _onScreenOff('lock-screen')
+  })
+  powerMonitor.on('suspend', () => {
+    if (scheduler.isRunning()) scheduler.pause()
+    _onScreenOff('suspend')
+  })
+
+  // ── Screen unlock / resume → resume screenshot capture + end screen-off ─
+  powerMonitor.on('unlock-screen', () => {
+    if (scheduler.isPaused()) scheduler.resume()
+    _onScreenOn()
+  })
+  powerMonitor.on('resume', () => {
+    if (scheduler.isPaused()) scheduler.resume()
+    _onScreenOn()
+  })
 
   // When scheduler fires a capture, push status to tray + popup
   scheduler.setStatusCallback((status) => {
@@ -102,7 +118,9 @@ async function _poll() {
 
     if (checkedIn && !_isCheckedIn) {
       // Just checked in → start capturing
-      _isCheckedIn = true
+      _isCheckedIn     = true
+      _isOnScreenBreak = false
+      _screenOffStart  = null
       console.log('[agent] ✅ Checked in — starting capture')
       scheduler.updateInterval(intervalData.minutes)
       scheduler.start()
@@ -111,7 +129,9 @@ async function _poll() {
 
     } else if (!checkedIn && _isCheckedIn) {
       // Just checked out → stop capturing then quit agent
-      _isCheckedIn = false
+      _isCheckedIn     = false
+      _isOnScreenBreak = false
+      _screenOffStart  = null
       console.log('[agent] 🔴 Checked out — stopping capture, quitting in 5s')
       scheduler.stop()
       _buildTrayMenu()
@@ -150,11 +170,53 @@ function _stopPoller() {
   _isCheckedIn = false
 }
 
+// ── Screen-Off helpers ────────────────────────────────────────────────────────
+async function _onScreenOff(event) {
+  if (!auth.isLoggedIn() || !_isCheckedIn || _isOnScreenBreak) return
+  _isOnScreenBreak = true
+  _screenOffStart  = Date.now()
+  console.log(`[agent] 🔒 Screen off (${event}) — recording pause`)
+  try {
+    await axios.post(
+      `${config.getServerUrl()}/api/attendance/pause`,
+      { reason: 'screen_lock', comment: `Auto-detected: ${event}` },
+      { headers: auth.getHeaders(), timeout: 8000 }
+    )
+    console.log('[agent] ✅ Screen-off pause recorded')
+  } catch (err) {
+    // 409 = already on break — fine
+    console.warn('[agent] Screen-off pause skipped:', err.response?.data?.message || err.message)
+  }
+  _buildTrayMenu()
+  _pushStatus({ ...scheduler.getStatus(), checkedIn: _isCheckedIn, screenOff: true })
+}
+
+async function _onScreenOn() {
+  if (!auth.isLoggedIn() || !_isCheckedIn || !_isOnScreenBreak) return
+  _isOnScreenBreak = false
+  const offSecs = _screenOffStart ? Math.round((Date.now() - _screenOffStart) / 1000) : 0
+  _screenOffStart  = null
+  console.log(`[agent] 🔓 Screen on — resuming after ${offSecs}s off`)
+  try {
+    await axios.post(
+      `${config.getServerUrl()}/api/attendance/resume`,
+      {},
+      { headers: auth.getHeaders(), timeout: 8000 }
+    )
+    console.log('[agent] ✅ Screen-on resume recorded')
+  } catch (err) {
+    // 404 = no active break — fine (e.g. agent restarted mid-break)
+    console.warn('[agent] Screen-on resume skipped:', err.response?.data?.message || err.message)
+  }
+  _buildTrayMenu()
+  _pushStatus({ ...scheduler.getStatus(), checkedIn: _isCheckedIn, screenOff: false })
+}
+
 // ── Tray ──────────────────────────────────────────────────────────────────────
 function createTray() {
   const icon = nativeImage.createFromPath(path.join(ICON_DIR, 'tray-icon.png'))
   tray       = new Tray(icon)
-  tray.setToolTip('EPIP Agent')
+  tray.setToolTip('Sangria Agent')
   tray.on('click', () => auth.isLoggedIn() ? showStatusWindow() : showLoginWindow())
   _buildTrayMenu()
 }
@@ -167,10 +229,18 @@ function _buildTrayMenu() {
   const user     = auth.getUser()
   const interval = config.getIntervalMinutes()
 
+  const statusLabel = !loggedIn
+    ? '⚪  Not logged in'
+    : !_isCheckedIn
+    ? '⚪  Waiting for check-in'
+    : _isOnScreenBreak
+    ? '🔒  Screen Off — paused'
+    : '🟢  Checked in — capturing'
+
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: loggedIn ? `👤  ${user?.name || 'Employee'}` : '❌  Not logged in', enabled: false },
-    { label: _isCheckedIn ? '🟢  Checked in — capturing' : '⚪  Waiting for check-in', enabled: false },
-    { label: running && !paused ? `📸  Every ${interval} min` : paused ? '⏸  Paused' : '⏹  Stopped', enabled: false },
+    { label: statusLabel, enabled: false },
+    { label: running && !paused ? `📸  Every ${interval} min` : paused ? '⏸  Paused (screen off)' : '⏹  Stopped', enabled: false },
     { type: 'separator' },
     { label: 'Open Status', click: () => auth.isLoggedIn() ? showStatusWindow() : showLoginWindow() },
     { type: 'separator' },
@@ -181,12 +251,12 @@ function _buildTrayMenu() {
     },
     {
       label:   '📸  Capture Now',
-      enabled: loggedIn && _isCheckedIn,
+      enabled: loggedIn && _isCheckedIn && !_isOnScreenBreak,
       click:   () => captureAndUpload(),
     },
     { type: 'separator' },
     {
-      label: '🌐  Open EPIP Dashboard',
+      label: '🌐  Open Sangria Dashboard',
       click: () => shell.openExternal(config.getServerUrl().replace(':5000', ':5173')),
     },
     { type: 'separator' },
@@ -200,20 +270,24 @@ function _updateTray(status) {
   const last  = status.lastCapture
     ? new Date(status.lastCapture).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : 'Never'
-  const state = status.paused ? 'Paused' : status.running ? 'Active' : 'Waiting'
-  tray.setToolTip(`EPIP Agent — ${state} | Last: ${last} | Today: ${status.captureCount}`)
+  const state = _isOnScreenBreak ? 'Screen Off' : status.paused ? 'Paused' : status.running ? 'Active' : 'Waiting'
+  tray.setToolTip(`Sangria Agent — ${state} | Last: ${last} | Today: ${status.captureCount}`)
   _buildTrayMenu()
 }
 
 // ── Status window helpers ──────────────────────────────────────────────────────
 function _pushStatus(data) {
   if (statusWin && !statusWin.isDestroyed()) {
-    statusWin.webContents.send('status:update', { ...data, checkedIn: _isCheckedIn })
+    statusWin.webContents.send('status:update', {
+      ...data,
+      checkedIn: _isCheckedIn,
+      screenOff: _isOnScreenBreak,
+    })
   }
 }
 function _pushToStatus(data) {
   if (statusWin && !statusWin.isDestroyed()) {
-    statusWin.webContents.send('checkin:update', data)
+    statusWin.webContents.send('checkin:update', { ...data, screenOff: _isOnScreenBreak })
   }
 }
 
@@ -285,7 +359,9 @@ function _doLogout() {
   _stopPoller()
   scheduler.stop()
   auth.logout()
-  _isCheckedIn = false
+  _isCheckedIn     = false
+  _isOnScreenBreak = false
+  _screenOffStart  = null
   _buildTrayMenu()
   if (statusWin && !statusWin.isDestroyed()) statusWin.close()
   showLoginWindow()

@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Clock, Calendar, TrendingUp, ChevronLeft, ChevronRight,
   Plus, X, AlertCircle, CheckCircle, Trash2,
-  PauseCircle, Coffee, Utensils, Users, User, MoreHorizontal, Lock
+  PauseCircle, Coffee, Utensils, Users, User, MoreHorizontal, Lock,
+  Monitor, MonitorOff
 } from 'lucide-react'
 import Card, { CardHeader, CardBody } from '../../components/common/Card'
 import StatCard from '../../components/common/StatCard'
@@ -254,6 +255,230 @@ const TodayBreaksPanel = () => {
         </div>
       )}
     </div>
+  )
+}
+
+// ── Live Work Timer ───────────────────────────────────────────────────────────
+// Ticks every second. Working hours = elapsed since check_in minus ALL pause time.
+// Screen-off pauses (reason=screen_lock) shown separately in red.
+// While an active pause is open, the working timer is FROZEN — only screen/break timer ticks.
+const LiveWorkTimer = () => {
+  const [record,       setRecord]       = useState(null)  // today's attendance
+  const [pauses,       setPauses]       = useState([])    // today's pauses
+  const [tick,         setTick]         = useState(0)     // increments every second
+  const [lastFetch,    setLastFetch]    = useState(null)
+  const tickRef = useRef(null)
+
+  // ── Fetch today's attendance + pauses ──────────────────────────────────────
+  const fetchToday = useCallback(async () => {
+    try {
+      const [attRes, pauseRes] = await Promise.all([
+        api.get('/attendance/today'),
+        api.get('/attendance/pauses'),
+      ])
+      if (attRes.success) setRecord(attRes.data?.check_in ? attRes.data : null)
+      if (pauseRes.success) setPauses(pauseRes.data || [])
+      setLastFetch(Date.now())
+    } catch { /* silent */ }
+  }, [])
+
+  // Poll every 30s for fresh data
+  useEffect(() => {
+    fetchToday()
+    const poll = setInterval(fetchToday, 30_000)
+    return () => clearInterval(poll)
+  }, [fetchToday])
+
+  // Tick every second for live display
+  useEffect(() => {
+    tickRef.current = setInterval(() => setTick(t => t + 1), 1000)
+    return () => clearInterval(tickRef.current)
+  }, [])
+
+  // ── Derive live values from record + pauses ────────────────────────────────
+  if (!record?.check_in) return null   // not checked in today — hide widget
+
+  const checkInMs   = new Date(record.check_in).getTime()
+  const checkOutMs  = record.check_out ? new Date(record.check_out).getTime() : Date.now()
+  const totalElapsedSec = Math.max(0, Math.floor((checkOutMs - checkInMs) / 1000))
+
+  // Sum all completed pauses
+  let completedPauseSec = 0
+  let screenOffCompletedSec = 0
+  let manualBreakCompletedSec = 0
+  pauses.forEach(p => {
+    if (p.pause_end) {
+      const d = Math.max(0, Math.floor((new Date(p.pause_end) - new Date(p.pause_start)) / 1000))
+      completedPauseSec += d
+      if (p.reason === 'screen_lock') screenOffCompletedSec += d
+      else manualBreakCompletedSec += d
+    }
+  })
+
+  // Active (open) pause — timer frozen here, its own timer ticks
+  const activePause = pauses.find(p => !p.pause_end)
+  let activePauseSec = 0
+  if (activePause) {
+    activePauseSec = Math.max(0, Math.floor((Date.now() - new Date(activePause.pause_start).getTime()) / 1000))
+  }
+
+  const totalPauseSec     = completedPauseSec + activePauseSec
+  const workingSec        = Math.max(0, totalElapsedSec - totalPauseSec)
+  const screenOffTotalSec = screenOffCompletedSec + (activePause?.reason === 'screen_lock' ? activePauseSec : 0)
+  const manualBreakSec    = manualBreakCompletedSec + (activePause && activePause.reason !== 'screen_lock' ? activePauseSec : 0)
+  const isCheckedOut      = !!record.check_out
+  const isScreenOff       = activePause?.reason === 'screen_lock'
+  const isOnManualBreak   = activePause && activePause.reason !== 'screen_lock'
+
+  const fmtSec = (s) => {
+    if (s < 0) s = 0
+    const h  = Math.floor(s / 3600)
+    const m  = Math.floor((s % 3600) / 60)
+    const sc = s % 60
+    if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(sc).padStart(2,'0')}`
+    return `${String(m).padStart(2,'0')}:${String(sc).padStart(2,'0')}`
+  }
+
+  const fmtTime = (ts) => ts
+    ? new Date(ts).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    : '—'
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`rounded-2xl border p-4 sm:p-5 ${
+        isScreenOff
+          ? 'bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-700'
+          : isOnManualBreak
+          ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800/40'
+          : isCheckedOut
+          ? 'bg-gray-50 dark:bg-dark-800 border-gray-100 dark:border-dark-600'
+          : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800/40'
+      }`}
+    >
+      {/* Header row */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          {isScreenOff ? (
+            <MonitorOff size={16} className="text-slate-500 dark:text-slate-400" />
+          ) : isOnManualBreak ? (
+            <PauseCircle size={16} className="text-orange-500" />
+          ) : isCheckedOut ? (
+            <Clock size={16} className="text-gray-400" />
+          ) : (
+            <Monitor size={16} className="text-green-500" />
+          )}
+          <span className={`text-sm font-semibold ${
+            isScreenOff      ? 'text-slate-600 dark:text-slate-300' :
+            isOnManualBreak  ? 'text-orange-600 dark:text-orange-400' :
+            isCheckedOut     ? 'text-gray-500 dark:text-gray-400' :
+                               'text-green-700 dark:text-green-400'
+          }`}>
+            {isScreenOff     ? '🔒 Screen Off — Timer Paused' :
+             isOnManualBreak ? `⏸ On Break — ${PAUSE_REASON_MAP[activePause.reason]?.label || 'Break'}` :
+             isCheckedOut    ? '✅ Work Day Completed' :
+                               '🟢 Live Working Hours'}
+          </span>
+        </div>
+        <span className="text-[10px] text-gray-400">
+          Updated {lastFetch ? new Date(lastFetch).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}
+        </span>
+      </div>
+
+      {/* Main timer grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+
+        {/* Working Hours — FROZEN when screen-off or on break */}
+        <div className={`flex flex-col items-center py-3 px-2 rounded-xl border ${
+          isScreenOff || isOnManualBreak
+            ? 'bg-gray-100 dark:bg-dark-700 border-gray-200 dark:border-dark-600'
+            : 'bg-green-500/10 border-green-500/20'
+        }`}>
+          <span className={`text-xl sm:text-2xl font-mono font-bold tabular-nums ${
+            isScreenOff || isOnManualBreak ? 'text-gray-400 dark:text-gray-500' : 'text-green-600 dark:text-green-400'
+          }`}>
+            {fmtSec(workingSec)}
+          </span>
+          <span className="text-[10px] text-gray-400 mt-1 font-medium">Working Time</span>
+          {(isScreenOff || isOnManualBreak) && (
+            <span className="text-[9px] text-gray-400 mt-0.5">⏸ Paused</span>
+          )}
+        </div>
+
+        {/* Screen-Off time */}
+        <div className={`flex flex-col items-center py-3 px-2 rounded-xl border ${
+          isScreenOff
+            ? 'bg-slate-500/15 border-slate-400/30'
+            : 'bg-slate-50 dark:bg-dark-700 border-slate-100 dark:border-dark-600'
+        }`}>
+          <span className={`text-xl sm:text-2xl font-mono font-bold tabular-nums ${
+            isScreenOff ? 'text-slate-600 dark:text-slate-300' : 'text-slate-400 dark:text-slate-500'
+          }`}>
+            {fmtSec(screenOffTotalSec)}
+          </span>
+          <span className="text-[10px] text-gray-400 mt-1 font-medium">Screen Off</span>
+          {isScreenOff && (
+            <span className="text-[9px] text-slate-500 dark:text-slate-400 mt-0.5 animate-pulse">● Counting</span>
+          )}
+        </div>
+
+        {/* Manual break time */}
+        <div className={`flex flex-col items-center py-3 px-2 rounded-xl border ${
+          isOnManualBreak
+            ? 'bg-orange-500/15 border-orange-400/30'
+            : 'bg-orange-50 dark:bg-dark-700 border-orange-100 dark:border-dark-600'
+        }`}>
+          <span className={`text-xl sm:text-2xl font-mono font-bold tabular-nums ${
+            isOnManualBreak ? 'text-orange-600 dark:text-orange-400' : 'text-orange-400 dark:text-orange-500'
+          }`}>
+            {fmtSec(manualBreakSec)}
+          </span>
+          <span className="text-[10px] text-gray-400 mt-1 font-medium">Break Time</span>
+          {isOnManualBreak && (
+            <span className="text-[9px] text-orange-500 mt-0.5 animate-pulse">● Counting</span>
+          )}
+        </div>
+
+        {/* Total elapsed */}
+        <div className="flex flex-col items-center py-3 px-2 rounded-xl border bg-primary-500/5 border-primary-500/15">
+          <span className="text-xl sm:text-2xl font-mono font-bold tabular-nums text-primary-600 dark:text-primary-400">
+            {fmtSec(totalElapsedSec)}
+          </span>
+          <span className="text-[10px] text-gray-400 mt-1 font-medium">Total Elapsed</span>
+        </div>
+      </div>
+
+      {/* Check-in / Check-out time row */}
+      <div className="flex items-center gap-4 flex-wrap text-xs text-gray-500 dark:text-gray-400">
+        <span className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+          Login: <strong className="text-green-600 dark:text-green-400 font-mono">{fmtTime(record.check_in)}</strong>
+        </span>
+        {record.check_out ? (
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
+            Logout: <strong className="text-red-500 font-mono">{fmtTime(record.check_out)}</strong>
+          </span>
+        ) : (
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse inline-block" />
+            <span className="text-green-600 dark:text-green-400 font-medium">Still working</span>
+          </span>
+        )}
+        {activePause && (
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse inline-block" />
+            {isScreenOff ? 'Screen locked' : 'Break started'}: <strong className="text-yellow-600 dark:text-yellow-400 font-mono">{fmtPauseTime(activePause.pause_start)}</strong>
+          </span>
+        )}
+      </div>
+
+      {/* Info note */}
+      <p className="text-[10px] text-gray-400 mt-3">
+        💡 Working Time = Total Elapsed − Screen Off − Manual Breaks. Timer updates every second.
+      </p>
+    </motion.div>
   )
 }
 
@@ -550,6 +775,11 @@ const EmployeeAttendance = () => {
         <StatCard title="Days Present"    value={summary?.present ?? '—'}  subtitle="This month" icon={Clock}     color="blue"   delay={0.2} />
         <StatCard title="Late Logins"     value={summary?.late    ?? '—'}  subtitle="This month" icon={Clock}     color="yellow" delay={0.3} />
         <StatCard title="Leave Taken"     value={leaves.filter(l => l.status === 'approved').length} subtitle="Approved" icon={Calendar} color="purple" delay={0.4} />
+      </motion.div>
+
+      {/* Live Work Timer — visible only when checked in today */}
+      <motion.div variants={fadeUp}>
+        <LiveWorkTimer />
       </motion.div>
 
       {/* Calendar + Chart */}
