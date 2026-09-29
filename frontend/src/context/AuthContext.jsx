@@ -31,30 +31,37 @@ export const AuthProvider = ({ children }) => {
   }
 
   // ── Auto check-out on browser/tab close (employee only) ─────────────────
+  // Uses pagehide + visibilitychange for more reliable detection
+  // Does NOT fire on SPA navigation (React Router pushState)
   useEffect(() => {
-    const handleBeforeUnload = () => {
+    const sendCheckout = () => {
       const stored = localStorage.getItem('epip_user')
       if (!stored) return
       try {
         const userData = JSON.parse(stored)
-        if (userData?.role === 'employee') {
-          // Use sendBeacon for reliable fire-and-forget on tab close
-          const token = localStorage.getItem('epip_token')
-          if (!token) return
-          const API = import.meta.env.VITE_API_URL ||
-            (import.meta.env.PROD ? '/api' : `${window.location.protocol}//${window.location.hostname}:5000/api`)
-          // sendBeacon — guaranteed to fire even on tab close
-          // Token sent in body as _token (sendBeacon can't set headers)
-          // tab_close flag tells backend not to count this as warning re-login
-          navigator.sendBeacon(
-            `${API}/attendance/check-out`,
-            new Blob([JSON.stringify({ _token: token, tab_close: true })], { type: 'application/json' })
-          )
-        }
+        if (userData?.role !== 'employee') return
+        const token = localStorage.getItem('epip_token')
+        if (!token) return
+        const API = import.meta.env.VITE_API_URL ||
+          (import.meta.env.PROD ? '/api' : `${window.location.protocol}//${window.location.hostname}:5000/api`)
+        navigator.sendBeacon(
+          `${API}/attendance/check-out`,
+          new Blob([JSON.stringify({ _token: token, tab_close: true })], { type: 'application/json' })
+        )
       } catch { /* silent */ }
     }
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+
+    // pagehide fires when tab closes or browser closes
+    // It does NOT fire on SPA navigation (pushState)
+    const handlePageHide = (event) => {
+      // event.persisted = true means page is being cached (bfcache), not closing
+      if (!event.persisted) {
+        sendCheckout()
+      }
+    }
+
+    window.addEventListener('pagehide', handlePageHide)
+    return () => window.removeEventListener('pagehide', handlePageHide)
   }, [])
   // Returns { locked, warning } so Login page can show appropriate message
   const _autoCheckIn = async () => {
