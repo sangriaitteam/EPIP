@@ -337,10 +337,7 @@ function _buildTrayMenu() {
     { label: '📋  Open Status', click: () => auth.isLoggedIn() ? showStatusWindow() : null },
     { type: 'separator' },
 
-    { label: '✅  Check In',  enabled: loggedIn && !_isCheckedIn, click: () => _doCheckIn() },
-    { label: '🔴  Check Out', enabled: loggedIn && _isCheckedIn,  click: () => _doCheckOut() },
-    { type: 'separator' },
-
+    // Check-In/Check-Out removed — handled automatically by website login/logout
     {
       label:   _isOnBreak ? '▶  Resume Work' : '⏸  Take Break',
       enabled: loggedIn && _isCheckedIn,

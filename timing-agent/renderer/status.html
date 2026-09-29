@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>EPIP Timing Agent</title>
+  <title>ScreenLock Agent</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -219,7 +219,7 @@
 <body>
 
   <div class="titlebar" style="-webkit-app-region:drag">
-    <span>⏱ EPIP Timing Agent</span>
+    <span>🔒 ScreenLock Agent</span>
     <button class="close-btn" onclick="window.timingAgent.closeWindow()"></button>
   </div>
 
@@ -265,15 +265,15 @@
   <!-- Action buttons -->
   <div class="actions">
 
-    <!-- Check-in -->
-    <button class="btn btn-checkin" id="btnCheckIn" onclick="doCheckIn()">
-      ✅ Check In
-    </button>
+    <!-- Check-In/Check-Out removed — handled by website login/logout automatically -->
 
-    <!-- Check-out -->
-    <button class="btn btn-checkout" id="btnCheckOut" style="display:none" onclick="doCheckOut()">
-      🔴 Check Out
-    </button>
+    <!-- Status info when not checked in -->
+    <div id="notCheckedInMsg" style="display:none; text-align:center; padding:12px; background:rgba(100,116,139,0.1); border-radius:10px; border:1px solid #334155;">
+      <p style="font-size:12px; color:#64748b; line-height:1.6;">
+        🌐 Login via website to start tracking<br>
+        <span style="font-size:11px; color:#475569;">Check-in happens automatically on login</span>
+      </p>
+    </div>
 
     <!-- Break / Resume row -->
     <div class="btn-row" id="breakRow" style="display:none">
@@ -297,7 +297,7 @@
       ▶ Resume Work
     </button>
 
-    <!-- Logout -->
+    <!-- Sign Out -->
     <button class="btn" style="background:#1e293b; color:#64748b; font-size:12px; padding:8px"
       onclick="doLogout()">
       Sign Out
@@ -379,9 +379,9 @@
         document.getElementById('breakDuration').textContent = '—'
       }
 
-      // Buttons
-      document.getElementById('btnCheckIn').style.display    = !isCheckedIn ? 'flex' : 'none'
-      document.getElementById('btnCheckOut').style.display   = isCheckedIn && !isOnBreak ? 'flex' : 'none'
+      // Buttons — no Check-In/Check-Out (handled by website)
+      const notCheckedInMsg = document.getElementById('notCheckedInMsg')
+      if (notCheckedInMsg) notCheckedInMsg.style.display = !isCheckedIn ? 'block' : 'none'
       document.getElementById('breakRow').style.display      = isCheckedIn && !isOnBreak ? 'flex' : 'none'
       document.getElementById('btnResume').style.display     = isOnBreak ? 'flex' : 'none'
     }
