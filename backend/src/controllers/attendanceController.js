@@ -32,46 +32,63 @@ const checkIn = async (req, res, next) => {
     // Only count as re-login warning if NOT triggered by tab-close auto-checkout
     // tab_close flag sent by frontend sendBeacon — those are legitimate closures
     const isTabClose  = req.body?.tab_close === true
-    const isReLogin   = reLoginCount > 0 && !isTabClose
+    let isReLogin     = reLoginCount > 0 && !isTabClose
 
     // Check-in (upsert attendance row — allows re-login same day)
     const record = await Attendance.checkIn({ employee_id: employee.id, work_mode, allowReLogin: true })
 
     // Close any open sessions from today before creating a new one
-    // (prevents duplicate active sessions if employee re-logs in without proper logout)
-    await query(
-      `UPDATE employee_sessions
-       SET logout_at = NOW(),
-           duration_mins = GREATEST(0, ROUND(
-             EXTRACT(EPOCH FROM (NOW() - login_at)) / 60
-           , 2)),
-           manual_break_mins = COALESCE((
-             SELECT ROUND(SUM(
-               CASE WHEN ap.pause_end IS NOT NULL
-                 THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
-               ELSE 0 END
-             )::numeric, 2)
-             FROM attendance_pauses ap
-             WHERE ap.attendance_id = $2
-               AND ap.reason != 'screen_lock'
-               AND ap.pause_start >= employee_sessions.login_at
-           ), 0),
-           screen_off_mins = COALESCE((
-             SELECT ROUND(SUM(
-               CASE WHEN ap.pause_end IS NOT NULL
-                 THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
-               ELSE 0 END
-             )::numeric, 2)
-             FROM attendance_pauses ap
-             WHERE ap.attendance_id = $2
-               AND ap.reason = 'screen_lock'
-               AND ap.pause_start >= employee_sessions.login_at
-           ), 0)
-       WHERE employee_id = $1
-         AND logout_at IS NULL
-         AND attendance_id = $2`,
+    // Skip sessions < 30 seconds (micro sessions from tab close/open)
+    const { rows: openSessions } = await query(
+      `SELECT id, login_at, attendance_id FROM employee_sessions
+       WHERE employee_id = $1 AND logout_at IS NULL AND attendance_id = $2`,
       [employee.id, record.id]
     )
+
+    for (const sess of openSessions) {
+      const elapsedSecs = Math.floor((Date.now() - new Date(sess.login_at).getTime()) / 1000)
+
+      if (elapsedSecs < 30) {
+        // Micro session (< 30 sec) — delete it, don't count as re-login
+        await query(`DELETE FROM employee_sessions WHERE id = $1`, [sess.id])
+        // Also don't count as re-login warning
+        isReLogin = false
+        console.log(`[attendance] Skipped micro session ${sess.id} (${elapsedSecs}s)`)
+      } else {
+        // Real session — close it properly
+        await query(
+          `UPDATE employee_sessions
+           SET logout_at = NOW(),
+               duration_mins = GREATEST(0, ROUND(
+                 EXTRACT(EPOCH FROM (NOW() - login_at)) / 60
+               , 2)),
+               manual_break_mins = COALESCE((
+                 SELECT ROUND(SUM(
+                   CASE WHEN ap.pause_end IS NOT NULL
+                     THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+                   ELSE 0 END
+                 )::numeric, 2)
+                 FROM attendance_pauses ap
+                 WHERE ap.attendance_id = $2
+                   AND ap.reason != 'screen_lock'
+                   AND ap.pause_start >= employee_sessions.login_at
+               ), 0),
+               screen_off_mins = COALESCE((
+                 SELECT ROUND(SUM(
+                   CASE WHEN ap.pause_end IS NOT NULL
+                     THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+                   ELSE 0 END
+                 )::numeric, 2)
+                 FROM attendance_pauses ap
+                 WHERE ap.attendance_id = $2
+                   AND ap.reason = 'screen_lock'
+                   AND ap.pause_start >= employee_sessions.login_at
+               ), 0)
+           WHERE id = $1`,
+          [sess.id, record.id]
+        )
+      }
+    }
 
     // Insert new session row for this login
     await query(

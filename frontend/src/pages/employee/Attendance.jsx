@@ -453,12 +453,12 @@ const LiveWorkTimer = () => {
       <div className="flex items-center gap-4 flex-wrap text-xs text-gray-500 dark:text-gray-400">
         <span className="flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
-          Login: <strong className="text-green-600 dark:text-green-400 font-mono">{fmtTime(record.check_in)}</strong>
+          Check In: <strong className="text-green-600 dark:text-green-400 font-mono">{fmtTime(record.check_in)}</strong>
         </span>
         {record.check_out ? (
           <span className="flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
-            Logout: <strong className="text-red-500 font-mono">{fmtTime(record.check_out)}</strong>
+            Check Out: <strong className="text-red-500 font-mono">{fmtTime(record.check_out)}</strong>
           </span>
         ) : (
           <span className="flex items-center gap-1.5">
@@ -574,15 +574,15 @@ const MySessionPanel = ({ date, onClose }) => {
                   <div className="flex items-center gap-3 flex-wrap mb-2">
                     <div className="flex items-center gap-1.5">
                       <LogIn size={12} className="text-green-500" />
-                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">Login</span>
+                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">Check In</span>
                       <span className="text-xs font-bold text-green-600 dark:text-green-400 font-mono">{fmtTime(s.login_at)}</span>
                     </div>
                     <span className="text-gray-300 dark:text-dark-500 text-xs">→</span>
                     <div className="flex items-center gap-1.5">
                       <LogOut size={12} className="text-red-400" />
-                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">Logout</span>
+                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">Check Out</span>
                       <span className={`text-xs font-bold font-mono ${isActive ? 'text-green-500 animate-pulse' : 'text-red-500'}`}>
-                        {isActive ? 'Still active' : fmtTime(s.logout_at)}
+                        {isActive ? 'Still working' : fmtTime(s.logout_at)}
                       </span>
                     </div>
                     {workMins > 0 && (
@@ -622,7 +622,7 @@ const MySessionPanel = ({ date, onClose }) => {
               )
             })()}
             <p className="text-[10px] text-gray-400 text-center">
-              {sessions.length} session{sessions.length !== 1 ? 's' : ''} · Screen-off details available to admin
+              {sessions.length} session{sessions.length !== 1 ? 's' : ''} today
             </p>
           </div>
         )}
