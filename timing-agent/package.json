@@ -1,16 +1,16 @@
 {
-  "name": "epip-timing-agent",
+  "name": "screenlock-agent",
   "version": "1.0.0",
-  "description": "EPIP Timing Capture Agent — Check-in / Check-out with auto screen-lock break detection",
+  "description": "ScreenLock — Screen-off detection and attendance tracking agent for Sangria Edutainment",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "dev":   "electron . --dev",
-    "build": "electron-builder --win --x64"
+    "build": "electron-builder --win portable --x64"
   },
   "build": {
-    "appId":       "com.epip.timing-agent",
-    "productName": "EPIP Timing Agent",
+    "appId":       "com.sangria.screenlock",
+    "productName": "ScreenLock",
     "win": {
       "target": "nsis",
       "icon":   "assets/tray-icon.ico"
@@ -25,7 +25,10 @@
     ],
     "extraResources": [
       { "from": "epip-timing.config.json", "to": "epip-timing.config.json" }
-    ]
+    ],
+    "portable": {
+      "artifactName": "ScreenLock-${version}.exe"
+    }
   },
   "dependencies": {
     "axios":          "^1.6.8",
@@ -34,5 +37,7 @@
   "devDependencies": {
     "electron":         "^29.1.0",
     "electron-builder": "^24.9.1"
-  }
+  },
+  "author": "Sangria Edutainment Pvt Ltd",
+  "license": "MIT"
 }

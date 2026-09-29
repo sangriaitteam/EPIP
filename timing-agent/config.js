@@ -5,9 +5,9 @@ const path  = require('path')
 const fs    = require('fs')
 
 const store = new Store({
-  name: 'epip-timing-config',
+  name: 'screenlock-config',
   defaults: { serverUrl: 'http://localhost:5000', autoStart: true },
-  encryptionKey: 'epip-timing-v1',
+  encryptionKey: 'screenlock-v1',
 })
 
 // Load external config file (next to .exe or project root)

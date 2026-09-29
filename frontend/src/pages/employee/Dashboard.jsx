@@ -169,10 +169,10 @@ const EmployeeDashboard = () => {
     return () => clearInterval(t)
   }, [])
 
-  // ── Real-time attendance polling — every 10s ──────────────────────────────
+  // ── Real-time attendance polling — every 30s ─────────────────────────────
   // Picks up screen-off breaks, work hours, OT updates immediately
   useEffect(() => {
-    const interval = setInterval(() => loadToday(), 10000)
+    const interval = setInterval(() => loadToday(), 30000)
     return () => clearInterval(interval)
   }, [])
 
@@ -227,10 +227,30 @@ const EmployeeDashboard = () => {
   const timeStr      = currentTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
   const dateStr      = currentTime.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
-  // Net working duration (excludes pause time)
-  const workDuration = (checkedIn && !paused && todayRecord?.check_in)
-    ? calcDuration(todayRecord.check_in)
-    : null
+  // Net working duration — live calculation every second from check_in minus pauses
+  // Uses currentTime (ticks every 1s) so it updates without page refresh
+  const calcLiveWorkSecs = () => {
+    if (!todayRecord?.check_in) return null
+    const checkInMs  = new Date(todayRecord.check_in).getTime()
+    const checkOutMs = todayRecord.check_out ? new Date(todayRecord.check_out).getTime() : currentTime.getTime()
+    const elapsed    = Math.max(0, Math.floor((checkOutMs - checkInMs) / 1000))
+    // Subtract active pause duration
+    const activePauseSecs = (paused && activePause?.pause_start)
+      ? Math.max(0, Math.floor((currentTime.getTime() - new Date(activePause.pause_start).getTime()) / 1000))
+      : 0
+    // Subtract completed pauses (total_pause_mins from DB, excluding current active)
+    const completedPauseSecs = Math.round((todayRecord.total_pause_mins || 0) * 60)
+    const workSecs = Math.max(0, elapsed - completedPauseSecs - activePauseSecs)
+    const h  = Math.floor(workSecs / 3600)
+    const m  = Math.floor((workSecs % 3600) / 60)
+    const s  = workSecs % 60
+    if (h > 0) return `${h}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`
+    return `${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`
+  }
+
+  const liveWorkStr = checkedIn ? calcLiveWorkSecs() : null
+
+  const workDuration = liveWorkStr
 
   // How long the current break has been
   const pauseDuration = (paused && activePause?.pause_start)
@@ -368,10 +388,13 @@ const EmployeeDashboard = () => {
                 <div className="flex justify-between items-center text-gray-500 dark:text-gray-400">
                   <span className="flex items-center gap-1.5"><Clock size={13} className="text-blue-500" /> Hours</span>
                   <span className="font-semibold text-gray-800 dark:text-white">
-                    {todayRecord?.hours_worked
-                      ? `${todayRecord.hours_worked}h`
-                      : workDuration
-                      ? <span className="text-green-600 dark:text-green-400">{workDuration}</span>
+                    {todayRecord?.check_out
+                      ? `${todayRecord.hours_worked ?? '—'}h`
+                      : liveWorkStr
+                      ? <span className="font-mono text-green-600 dark:text-green-400 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse inline-block flex-shrink-0" />
+                          {liveWorkStr}
+                        </span>
                       : '—'
                     }
                   </span>

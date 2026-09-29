@@ -5,8 +5,8 @@ const axios  = require('axios')
 const config = require('./config')
 
 const authStore = new Store({
-  name:          'epip-timing-auth',
-  encryptionKey: 'epip-timing-secure-v1',
+  name:          'screenlock-auth',
+  encryptionKey: 'screenlock-secure-v1',
 })
 
 const auth = {

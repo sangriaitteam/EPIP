@@ -1,4 +1,4 @@
-// main.js — EPIP Timing Capture Agent
+// main.js — ScreenLock Agent
 // Flow: Website login → fires epip-timing://launch?token=<jwt>&user=<json>
 //       Agent receives deep-link → stores token → opens status window directly (NO login screen)
 //       Screen lock  → auto break start
@@ -63,7 +63,7 @@ app.on('second-instance', (_event, argv) => {
 
 // ── App ready ──────────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
-  app.setAppUserModelId('com.epip.timing-agent')
+  app.setAppUserModelId('com.sangria.screenlock')
 
   if (process.platform === 'win32') {
     app.setLoginItemSettings({
@@ -311,7 +311,7 @@ function createTray() {
   const iconPath = path.join(ICON_DIR, 'tray-icon.png')
   const icon     = nativeImage.createFromPath(iconPath)
   tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon)
-  tray.setToolTip('EPIP Timing Agent')
+  tray.setToolTip('ScreenLock')
   tray.on('click', () => auth.isLoggedIn() ? showStatusWindow() : null)
   _buildTrayMenu()
 }
@@ -366,11 +366,11 @@ function _buildTrayMenu() {
   ]))
 
   tray.setToolTip(
-    !loggedIn          ? 'EPIP Timing — Waiting for website login' :
+    !loggedIn          ? 'ScreenLock — Waiting for website login' :
     _isCheckedIn
-      ? _isOnBreak     ? 'EPIP Timing — On Break'
-                       : 'EPIP Timing — Working'
-      : 'EPIP Timing — Not checked in'
+      ? _isOnBreak     ? 'ScreenLock — On Break'
+                       : 'ScreenLock — Working'
+      : 'ScreenLock — Not checked in'
   )
 }
 

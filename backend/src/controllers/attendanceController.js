@@ -512,11 +512,69 @@ const getSummaryByEmployee = async (req, res, next) => {
   } catch (err) { next(err) }
 }
 
+// GET /api/attendance/my-sessions?date=YYYY-MM-DD
+// Employee: own sessions — login/logout/duration only. Screen-off HIDDEN.
+const getMySessions = async (req, res, next) => {
+  try {
+    const employee = await Employee.findByUserId(req.user.id)
+    if (!employee) return fail(res, 'Employee profile not found', 404)
+    const date = req.query.date || new Date().toISOString().split('T')[0]
+
+    const { rows } = await query(
+      `SELECT
+         s.id,
+         s.login_at,
+         s.logout_at,
+         -- Live work duration: elapsed minus ALL pauses (screen+manual)
+         ROUND(
+           GREATEST(0,
+             EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
+             - COALESCE((
+                 SELECT SUM(
+                   CASE
+                     WHEN ap.pause_end IS NOT NULL
+                       THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+                     ELSE EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
+                   END
+                 )
+                 FROM attendance_pauses ap
+                 WHERE ap.attendance_id = s.attendance_id
+                   AND ap.pause_start >= s.login_at
+                   AND (s.logout_at IS NULL OR ap.pause_start <= s.logout_at)
+               ), 0)
+           )::numeric
+         , 2) AS duration_mins,
+         -- Manual breaks only (employee can see these)
+         ROUND(COALESCE((
+           SELECT SUM(
+             CASE
+               WHEN ap.pause_end IS NOT NULL
+                 THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+               ELSE EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
+             END
+           )
+           FROM attendance_pauses ap
+           WHERE ap.attendance_id = s.attendance_id
+             AND ap.reason != 'screen_lock'
+             AND ap.pause_start >= s.login_at
+             AND (s.logout_at IS NULL OR ap.pause_start <= s.logout_at)
+         ), 0)::numeric, 2) AS manual_break_mins
+         -- NOTE: screen_off_mins intentionally omitted for employee privacy
+       FROM employee_sessions s
+       WHERE s.employee_id = $1
+         AND DATE(s.login_at AT TIME ZONE 'Asia/Kolkata') = $2
+       ORDER BY s.login_at ASC`,
+      [employee.id, date]
+    )
+    return ok(res, rows)
+  } catch (err) { next(err) }
+}
+
 module.exports = {
   checkIn, checkOut,
   pauseWork, resumeWork, getMyPauses, getMyPausesRange, getPausesByAttendance,
   getToday, getMy, getMySummary,
   getWeeklyBreakdown, getHolidays, getTodayAll,
   getByEmployee, getSummaryByEmployee,
-  getSessionsByEmployee,
+  getSessionsByEmployee, getMySessions,
 }
