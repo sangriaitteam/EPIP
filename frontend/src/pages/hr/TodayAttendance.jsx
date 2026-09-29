@@ -249,11 +249,11 @@ const SessionPanel = ({ employeeId, employeeName, date, onClose }) => {
                     )}
                   </div>
 
-                  {/* Login → Logout */}
+                  {/* Check In → Check Out */}
                   <div className="flex items-center gap-3 flex-wrap mb-2">
                     <div className="flex items-center gap-1.5">
                       <LogIn size={12} className="text-green-500 flex-shrink-0" />
-                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">Login</span>
+                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">Check In</span>
                       <span className="text-xs font-bold text-green-600 dark:text-green-400">
                         {fmtTime(s.login_at)}
                       </span>
@@ -261,9 +261,9 @@ const SessionPanel = ({ employeeId, employeeName, date, onClose }) => {
                     <span className="text-gray-300 dark:text-dark-500 text-xs">→</span>
                     <div className="flex items-center gap-1.5">
                       <LogOut size={12} className="text-red-400 flex-shrink-0" />
-                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">Logout</span>
+                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">Check Out</span>
                       <span className={`text-xs font-bold ${isActive ? 'text-green-500' : 'text-red-500'}`}>
-                        {isActive ? 'Still logged in' : fmtTime(s.logout_at)}
+                        {isActive ? 'Still working' : fmtTime(s.logout_at)}
                       </span>
                     </div>
                     {workMins > 0 && (
