@@ -299,14 +299,16 @@ const SessionPanel = ({ employeeId, employeeName, date, onClose }) => {
               const totalWork   = sessions.reduce((s, x) => s + (Number(x.duration_mins)     || 0), 0)
               const totalManual = sessions.reduce((s, x) => s + (Number(x.manual_break_mins) || 0), 0)
               const totalScreen = sessions.reduce((s, x) => s + (Number(x.screen_off_mins)   || 0), 0)
-              const otHrs       = Math.max(0, (totalWork / 60) - 9)
+              // OT only shown when ALL sessions are closed (employee fully checked out)
+              const hasActiveSessions = sessions.some(s => !s.logout_at)
+              const otHrs       = !hasActiveSessions ? Math.max(0, (totalWork / 60) - 9) : 0
               return (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-1">
                   {[
                     { label: 'Total Work',    val: fmtDuration(totalWork),   color: 'text-primary-600 dark:text-primary-400' },
                     { label: 'Manual Breaks', val: fmtDuration(totalManual), color: 'text-orange-500' },
                     { label: 'Screen Off',    val: fmtDuration(totalScreen), color: 'text-slate-500 dark:text-slate-400' },
-                    { label: 'OT Hours',      val: otHrs > 0 ? fmtDuration(otHrs * 60) : '—', color: 'text-blue-500' },
+                    { label: 'OT Hours',      val: hasActiveSessions ? '—' : otHrs > 0 ? fmtDuration(otHrs * 60) : '—', color: 'text-blue-500' },
                   ].map(s => (
                     <div key={s.label} className="flex flex-col items-center py-2 rounded-xl bg-gray-100 dark:bg-dark-600">
                       <span className={`text-xs font-bold ${s.color}`}>{s.val}</span>
