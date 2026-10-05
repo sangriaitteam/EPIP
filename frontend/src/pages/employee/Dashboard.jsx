@@ -290,18 +290,22 @@ const EmployeeDashboard = () => {
                 key="pause-btn"
                 initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
                 onClick={paused ? handleResume : () => setShowPauseModal(true)}
-                disabled={pausing}
+                disabled={pausing || (paused && activePause?.reason === 'screen_lock')}
                 whileHover={{ scale: 1.05, y: -2 }}
                 whileTap={{ scale: 0.96 }}
                 className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors shadow-lg whitespace-nowrap disabled:opacity-70 ${
-                  paused
+                  paused && activePause?.reason !== 'screen_lock'
                     ? 'bg-green-500 hover:bg-green-600 text-white shadow-green-500/30'
+                    : paused && activePause?.reason === 'screen_lock'
+                    ? 'bg-slate-500 text-white shadow-slate-500/20 cursor-not-allowed'
                     : 'bg-yellow-500 hover:bg-yellow-600 text-white shadow-yellow-500/30'
                 }`}
               >
                 {pausing
                   ? <motion.div animate={{ rotate: 360 }} transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
                       className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+                  : paused && activePause?.reason === 'screen_lock'
+                  ? <><span>🔒</span> Screen Locked</>
                   : paused
                   ? <><PlayCircle size={15} /> Resume</>
                   : <><PauseCircle size={15} /> Break</>
@@ -317,29 +321,52 @@ const EmployeeDashboard = () => {
         {paused && (
           <motion.div
             initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-            className="flex items-center justify-between gap-3 px-4 py-3 rounded-2xl
-              bg-yellow-500/10 border border-yellow-500/30"
+            className={`flex items-center justify-between gap-3 px-4 py-3 rounded-2xl ${
+              activePause?.reason === 'screen_lock'
+                ? 'bg-slate-500/10 border border-slate-500/30'
+                : 'bg-yellow-500/10 border border-yellow-500/30'
+            }`}
           >
             <div className="flex items-center gap-3">
               <motion.div animate={{ scale: [1, 1.15, 1] }} transition={{ repeat: Infinity, duration: 1.5 }}>
-                <PauseCircle size={20} className="text-yellow-500" />
+                {activePause?.reason === 'screen_lock'
+                  ? <span className="text-xl">🔒</span>
+                  : <PauseCircle size={20} className="text-yellow-500" />
+                }
               </motion.div>
               <div>
-                <p className="text-sm font-semibold text-yellow-700 dark:text-yellow-400">
-                  On Break — {PAUSE_REASONS.find(r => r.value === activePause?.reason)?.label || 'Break'}
-                </p>
-                <p className="text-xs text-yellow-600/70 dark:text-yellow-500/70">
-                  Work timer paused · {pauseDuration ? `${pauseDuration} elapsed` : 'Just started'}
-                  {activePause?.comment ? ` · ${activePause.comment}` : ''}
-                </p>
+                {activePause?.reason === 'screen_lock' ? (
+                  <>
+                    <p className="text-sm font-semibold text-slate-300">
+                      Screen Locked — Auto Pause
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      Screen off · {pauseDuration ? `${pauseDuration} elapsed` : 'Just locked'}
+                      {' · Work timer paused automatically'}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-semibold text-yellow-700 dark:text-yellow-400">
+                      On Break — {PAUSE_REASONS.find(r => r.value === activePause?.reason)?.label || 'Break'}
+                    </p>
+                    <p className="text-xs text-yellow-600/70 dark:text-yellow-500/70">
+                      Work timer paused · {pauseDuration ? `${pauseDuration} elapsed` : 'Just started'}
+                      {activePause?.comment ? ` · ${activePause.comment}` : ''}
+                    </p>
+                  </>
+                )}
               </div>
             </div>
-            <motion.button onClick={handleResume} disabled={pausing}
-              whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold
-                text-white bg-green-500 hover:bg-green-600 disabled:opacity-60 transition-colors">
-              <PlayCircle size={13} /> Resume
-            </motion.button>
+            {/* Resume button — only for manual breaks, NOT screen lock */}
+            {activePause?.reason !== 'screen_lock' && (
+              <motion.button onClick={handleResume} disabled={pausing}
+                whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold
+                  text-white bg-green-500 hover:bg-green-600 disabled:opacity-60 transition-colors">
+                <PlayCircle size={13} /> Resume
+              </motion.button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
