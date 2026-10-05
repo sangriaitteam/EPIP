@@ -1,5 +1,5 @@
 {
-  "serverUrl": "http://localhost:5000",
+  "serverUrl": "https://epip-production-1b98.up.railway.app",
   "autoStart": true,
-  "autoDiscover": true
+  "autoDiscover": false
 }
