@@ -500,21 +500,26 @@ const getSessionsByEmployee = async (req, res, next) => {
              AND ap.pause_start >= s.login_at
              AND (s.logout_at IS NULL OR ap.pause_start <= s.logout_at)
          ), 0)::numeric, 4) AS manual_break_mins,
-         -- Screen-off: sum of screen_lock pauses (including active)
+         -- Screen-off: sum of screen_lock pauses — capped at session end to prevent bleed-over
          ROUND(COALESCE((
            SELECT SUM(
              CASE
                WHEN ap.pause_end IS NOT NULL
-                 THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
-               ELSE
-                 EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
+                 THEN EXTRACT(EPOCH FROM (
+                   LEAST(ap.pause_end, COALESCE(s.logout_at, NOW()))
+                   - ap.pause_start
+                 )) / 60
+               ELSE EXTRACT(EPOCH FROM (
+                 LEAST(NOW(), COALESCE(s.logout_at, NOW()))
+                 - ap.pause_start
+               )) / 60
              END
            )
            FROM attendance_pauses ap
            WHERE ap.attendance_id = s.attendance_id
              AND ap.reason = 'screen_lock'
              AND ap.pause_start >= s.login_at
-             AND (s.logout_at IS NULL OR ap.pause_start <= s.logout_at)
+             AND ap.pause_start <= COALESCE(s.logout_at, NOW())
          ), 0)::numeric, 4) AS screen_off_mins
        FROM employee_sessions s
        WHERE s.employee_id = $1
@@ -595,6 +600,7 @@ const getTodayAll = async (req, res, next) => {
          ), 0) AS live_pause_mins,
          -- live_hours_mins: sum of all session work durations (matches session panel "Total Work")
          -- Each session: elapsed_in_session - pauses_in_session
+         -- Pauses capped at session logout_at to prevent bleed-over from old unclosed pauses
          COALESCE((
            SELECT ROUND(SUM(
              GREATEST(0,
@@ -603,14 +609,20 @@ const getTodayAll = async (req, res, next) => {
                    SELECT SUM(
                      CASE
                        WHEN ap.pause_end IS NOT NULL
-                         THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
-                       ELSE EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
+                         THEN EXTRACT(EPOCH FROM (
+                           LEAST(ap.pause_end, COALESCE(s.logout_at, NOW()))
+                           - ap.pause_start
+                         )) / 60
+                       ELSE EXTRACT(EPOCH FROM (
+                         LEAST(NOW(), COALESCE(s.logout_at, NOW()))
+                         - ap.pause_start
+                       )) / 60
                      END
                    )
                    FROM attendance_pauses ap
                    WHERE ap.attendance_id = s.attendance_id
                      AND ap.pause_start >= s.login_at
-                     AND (s.logout_at IS NULL OR ap.pause_start <= s.logout_at)
+                     AND ap.pause_start <= COALESCE(s.logout_at, NOW())
                  ), 0)
              )
            )::numeric, 2)
