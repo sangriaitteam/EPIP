@@ -343,7 +343,7 @@ const resumeWork = async (req, res, next) => {
 
     if (closedPauses.length === 0) return fail(res, 'No active break found', 404)
 
-    // Update running total on attendance rows
+    // Update running total on attendance rows — MANUAL breaks only (not screen_lock)
     const attendanceIds = [...new Set(closedPauses.map(p => p.attendance_id))]
     for (const attId of attendanceIds) {
       await query(
@@ -351,7 +351,9 @@ const resumeWork = async (req, res, next) => {
          SET total_pause_mins = COALESCE((
            SELECT ROUND(SUM(duration_mins)::numeric, 2)
            FROM attendance_pauses
-           WHERE attendance_id = $1 AND pause_end IS NOT NULL
+           WHERE attendance_id = $1
+             AND pause_end IS NOT NULL
+             AND reason != 'screen_lock'
          ), 0),
          updated_at = NOW()
          WHERE id = $1`,
@@ -617,13 +619,11 @@ const getTodayAll = async (req, res, next) => {
            FROM attendance_pauses ap
            WHERE ap.attendance_id = a.id
          ), 0) AS live_pause_mins,
-         -- live_hours_mins: SIMPLE formula = total elapsed - ALL screen-off pause time
-         -- This is the most accurate: what employee actually worked = time logged in - screen off
+         -- live_hours_mins: SIMPLE formula = total elapsed - MANUAL breaks only
+         -- Screen-lock is tracked separately and does NOT reduce working hours
          GREATEST(0, COALESCE((
            SELECT ROUND(
-             -- Total elapsed across all sessions
              SUM(EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60)
-             -- Minus ALL screen_lock pauses (capped at their session boundary)
              - COALESCE((
                  SELECT SUM(
                    LEAST(
@@ -633,17 +633,12 @@ const getTodayAll = async (req, res, next) => {
                        ELSE
                          EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
                      END,
-                     -- Cap pause duration at the session duration it belongs to
-                     (SELECT EXTRACT(EPOCH FROM (COALESCE(s2.logout_at, NOW()) - s2.login_at)) / 60
-                      FROM employee_sessions s2
-                      WHERE s2.attendance_id = ap.attendance_id
-                        AND s2.login_at <= ap.pause_start
-                      ORDER BY s2.login_at DESC LIMIT 1)
+                     EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
                    )
                  )
                  FROM attendance_pauses ap
                  WHERE ap.attendance_id = a.id
-                   AND ap.reason = 'screen_lock'
+                   AND ap.reason != 'screen_lock'
                ), 0)
            ::numeric, 2)
            FROM employee_sessions s

@@ -234,21 +234,24 @@ const EmployeeDashboard = () => {
   const timeStr      = currentTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
   const dateStr      = currentTime.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
-  // Net working duration — live calculation every second from check_in minus pauses
-  // Uses currentTime (ticks every 1s). STOPS when check_out is set (logout).
+  // Net working duration — live calculation every second
+  // Working hours = total elapsed - manual breaks only
+  // Screen lock is tracked separately, does NOT affect working hours
   const calcLiveWorkSecs = () => {
     if (!todayRecord?.check_in) return null
     const checkInMs  = new Date(todayRecord.check_in).getTime()
-    // Use check_out as end if logged out — timer frozen at that point
     const checkOutMs = todayRecord.check_out
       ? new Date(todayRecord.check_out).getTime()
       : currentTime.getTime()
-    const elapsed    = Math.max(0, Math.floor((checkOutMs - checkInMs) / 1000))
-    // Subtract active pause duration (only if still checked in, not after logout)
-    const activePauseSecs = (!todayRecord.check_out && paused && activePause?.pause_start)
+    const elapsed = Math.max(0, Math.floor((checkOutMs - checkInMs) / 1000))
+
+    // Subtract MANUAL break only (not screen_lock)
+    const isManualBreak = paused && activePause?.reason !== 'screen_lock'
+    const activePauseSecs = (!todayRecord.check_out && isManualBreak && activePause?.pause_start)
       ? Math.max(0, Math.floor((currentTime.getTime() - new Date(activePause.pause_start).getTime()) / 1000))
       : 0
-    // Subtract completed pauses (total_pause_mins from DB)
+
+    // Subtract completed manual breaks only (total_pause_mins = manual only from backend)
     const completedPauseSecs = Math.round((todayRecord.total_pause_mins || 0) * 60)
     const workSecs = Math.max(0, elapsed - completedPauseSecs - activePauseSecs)
     const h  = Math.floor(workSecs / 3600)
