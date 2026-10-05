@@ -314,34 +314,52 @@ const resumeWork = async (req, res, next) => {
     const employee = await Employee.findByUserId(req.user.id)
     if (!employee) return fail(res, 'Employee profile not found', 404)
 
-    const activePause = await Attendance.getActivePause(employee.id)
-    if (!activePause) return fail(res, 'No active break found', 404)
-
-    // Close the pause and compute duration
-    const { rows } = await query(
-      `UPDATE attendance_pauses
+    // Close ALL open pauses for this employee (not just one)
+    // This handles cases where multiple pauses are stuck open from previous sessions
+    const { rows: closedPauses } = await query(
+      `UPDATE attendance_pauses ap
        SET pause_end     = NOW(),
-           duration_mins = ROUND(EXTRACT(EPOCH FROM (NOW() - pause_start)) / 60, 2)
-       WHERE id = $1
-       RETURNING *`,
-      [activePause.id]
+           duration_mins = ROUND(
+             LEAST(
+               EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60,
+               -- Cap at session elapsed time to prevent inflated values
+               COALESCE((
+                 SELECT EXTRACT(EPOCH FROM (
+                   COALESCE(s.logout_at, NOW()) - s.login_at
+                 )) / 60
+                 FROM employee_sessions s
+                 WHERE s.attendance_id = ap.attendance_id
+                   AND s.login_at <= ap.pause_start
+                 ORDER BY s.login_at DESC LIMIT 1
+               ), EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60)
+             )::numeric, 2)
+       FROM attendance a
+       WHERE ap.attendance_id = a.id
+         AND a.employee_id = $1
+         AND ap.pause_end IS NULL
+       RETURNING ap.*`,
+      [employee.id]
     )
-    const closed = rows[0]
 
-    // Update running total on the attendance row
-    await query(
-      `UPDATE attendance
-       SET total_pause_mins = COALESCE((
-         SELECT ROUND(SUM(duration_mins)::numeric, 2)
-         FROM attendance_pauses
-         WHERE attendance_id = $1 AND pause_end IS NOT NULL
-       ), 0),
-       updated_at = NOW()
-       WHERE id = $1`,
-      [activePause.attendance_id]
-    )
+    if (closedPauses.length === 0) return fail(res, 'No active break found', 404)
 
-    return ok(res, closed, 'Break ended — resumed work')
+    // Update running total on attendance rows
+    const attendanceIds = [...new Set(closedPauses.map(p => p.attendance_id))]
+    for (const attId of attendanceIds) {
+      await query(
+        `UPDATE attendance
+         SET total_pause_mins = COALESCE((
+           SELECT ROUND(SUM(duration_mins)::numeric, 2)
+           FROM attendance_pauses
+           WHERE attendance_id = $1 AND pause_end IS NOT NULL
+         ), 0),
+         updated_at = NOW()
+         WHERE id = $1`,
+        [attId]
+      )
+    }
+
+    return ok(res, closedPauses[0], 'Break ended — resumed work')
   } catch (err) { next(err) }
 }
 
