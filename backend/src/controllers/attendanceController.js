@@ -52,6 +52,35 @@ const checkIn = async (req, res, next) => {
          AND DATE(login_at AT TIME ZONE 'Asia/Kolkata') < $2`,
       [employee.id, today]
     )
+    // Close ALL stuck open screen_lock pauses — cap duration at actual pause time
+    await query(
+      `UPDATE attendance_pauses ap
+       SET pause_end = COALESCE(
+             (SELECT LEAST(s.logout_at, NOW())
+              FROM employee_sessions s
+              WHERE s.attendance_id = ap.attendance_id
+                AND s.login_at <= ap.pause_start
+              ORDER BY s.login_at DESC LIMIT 1),
+             NOW()
+           ),
+           duration_mins = ROUND(
+             EXTRACT(EPOCH FROM (
+               COALESCE(
+                 (SELECT LEAST(s.logout_at, NOW())
+                  FROM employee_sessions s
+                  WHERE s.attendance_id = ap.attendance_id
+                    AND s.login_at <= ap.pause_start
+                  ORDER BY s.login_at DESC LIMIT 1),
+                 NOW()
+               ) - ap.pause_start
+             )) / 60, 2)
+       FROM attendance a
+       WHERE ap.attendance_id = a.id
+         AND a.employee_id = $1
+         AND ap.pause_end IS NULL
+         AND ap.reason = 'screen_lock'`,
+      [employee.id]
+    )
     await query(
       `UPDATE attendance_pauses
        SET pause_end     = NOW(),
@@ -524,23 +553,21 @@ const getSessionsByEmployee = async (req, res, next) => {
              AND ap.pause_start >= s.login_at
              AND (s.logout_at IS NULL OR ap.pause_start <= s.logout_at)
          ), 0)::numeric, 4) AS manual_break_mins,
-         -- Screen-off: sum of screen_lock pauses — strictly within THIS session's time window
+         -- Screen-off: CLOSED screen_lock pauses only, strictly within session window
+         -- Active (open) pauses excluded — only count completed screen-off periods
          ROUND(COALESCE((
            SELECT SUM(
              LEAST(
-               CASE
-                 WHEN ap.pause_end IS NOT NULL
-                   THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
-                 ELSE EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
-               END,
+               EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60,
                EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
              )
            )
            FROM attendance_pauses ap
            WHERE ap.attendance_id = s.attendance_id
              AND ap.reason = 'screen_lock'
+             AND ap.pause_end IS NOT NULL
              AND ap.pause_start >= s.login_at
-             AND (s.logout_at IS NULL OR ap.pause_start < s.logout_at)
+             AND ap.pause_start < COALESCE(s.logout_at, NOW())
          ), 0)::numeric, 4) AS screen_off_mins
        FROM employee_sessions s
        WHERE s.employee_id = $1
@@ -645,26 +672,19 @@ const getTodayAll = async (req, res, next) => {
            WHERE s.employee_id = e.id
              AND s.attendance_id = a.id
          ), 0)) AS live_hours_mins,
-         -- live_screen_off_mins: screen-lock pause time (live count for active pauses)
+         -- live_screen_off_mins: CLOSED screen_lock pauses only (no open/stuck pauses)
+         -- Active screen lock shown separately via active_screen_lock_start
          COALESCE((
            SELECT ROUND(SUM(
-             LEAST(
-               CASE
-                 WHEN ap.pause_end IS NOT NULL
-                   THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
-                 ELSE
-                   EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
-               END,
-               -- Cap at session duration it belongs to
-               EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
-             )
+             EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
            )::numeric, 2)
            FROM attendance_pauses ap
            JOIN employee_sessions s ON s.attendance_id = ap.attendance_id
              AND ap.pause_start >= s.login_at
-             AND (s.logout_at IS NULL OR ap.pause_start < s.logout_at)
+             AND ap.pause_start < COALESCE(s.logout_at, NOW())
            WHERE ap.attendance_id = a.id
              AND ap.reason = 'screen_lock'
+             AND ap.pause_end IS NOT NULL
          ), 0) AS live_screen_off_mins,
          -- active_screen_lock_start: timestamp when current screen lock started (NULL = not locked)
          (SELECT ap.pause_start
