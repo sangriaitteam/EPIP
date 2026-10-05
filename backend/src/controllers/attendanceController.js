@@ -677,7 +677,7 @@ const getTodayAll = async (req, res, next) => {
            WHERE s.employee_id = e.id
              AND s.attendance_id = a.id
          ), 0) AS live_hours_mins,
-         -- live_screen_off_mins: total screen-lock pause time (closed only, no bleed)
+         -- live_screen_off_mins: screen-lock pause time (live count for active pauses)
          COALESCE((
            SELECT ROUND(SUM(
              CASE
@@ -695,7 +695,15 @@ const getTodayAll = async (req, res, next) => {
            WHERE ap.attendance_id = a.id
              AND ap.reason = 'screen_lock'
              AND ap.pause_start <= COALESCE(s.logout_at, NOW())
-         ), 0) AS live_screen_off_mins
+         ), 0) AS live_screen_off_mins,
+         -- active_screen_lock_start: timestamp when current screen lock started (NULL = not locked)
+         (SELECT ap.pause_start
+          FROM attendance_pauses ap
+          WHERE ap.attendance_id = a.id
+            AND ap.reason = 'screen_lock'
+            AND ap.pause_end IS NULL
+          ORDER BY ap.pause_start DESC LIMIT 1
+         ) AS active_screen_lock_start
        FROM employees e
        LEFT JOIN departments d ON e.department_id = d.id
        LEFT JOIN attendance  a ON a.employee_id = e.id AND a.date = $1

@@ -48,14 +48,23 @@ const getLiveHours = (row) => {
   return `${h}h ${m}m`
 }
 
-const getLiveScreenOff = (row) => {
+const getLiveScreenOff = (row, nowMs) => {
   if (!row.check_in) return null
-  const mins = Number(row.live_screen_off_mins || row.live_pause_mins || 0)
-  if (!mins) return null
-  const h = Math.floor(mins / 60)
-  const m = Math.floor(mins % 60)
-  if (h === 0 && m === 0) return null
-  if (h === 0) return `${m}m`
+  let totalMins = Number(row.live_screen_off_mins || 0)
+
+  // If currently screen-locked, add live seconds since lock started
+  if (row.active_screen_lock_start && !row.check_out) {
+    const lockStart = new Date(row.active_screen_lock_start).getTime()
+    const elapsed = (nowMs - lockStart) / 60000 // minutes
+    if (elapsed > 0) totalMins = Math.max(totalMins, elapsed)
+  }
+
+  if (totalMins <= 0) return null
+  const h = Math.floor(totalMins / 60)
+  const m = Math.floor(totalMins % 60)
+  const s = Math.floor((totalMins * 60) % 60)
+  if (h === 0 && m === 0) return `${s}s`
+  if (h === 0) return `${m}m ${s}s`
   if (m === 0) return `${h}h`
   return `${h}h ${m}m`
 }
@@ -397,9 +406,16 @@ const HRTodayAttendance = () => {
   const [selectedDate,  setSelectedDate]  = useState(todayStr)
   const [lastUpdated,   setLastUpdated]   = useState(null)
   const [refreshing,    setRefreshing]    = useState(false)
-  const [attendanceDates, setAttendanceDates] = useState([]) // dates that have data
+  const [attendanceDates, setAttendanceDates] = useState([])
   const [showCalendar,  setShowCalendar]  = useState(true)
-  const [expandedRow,   setExpandedRow]   = useState(null) // employee_id of expanded row
+  const [expandedRow,   setExpandedRow]   = useState(null)
+  const [nowMs,         setNowMs]         = useState(Date.now())
+
+  // ── 1-second tick for live screen-off timer ────────────────────────────────
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [])
 
   const load = useCallback(async (date, silent = false) => {
     if (!silent) setLoading(true)
@@ -622,16 +638,21 @@ const HRTodayAttendance = () => {
                             <td className="px-4 py-3 text-xs font-medium text-gray-700 dark:text-gray-300">
                               {(() => {
                                 const live = getLiveHours(row)
-                                const screenOff = getLiveScreenOff(row)
+                                const screenOff = getLiveScreenOff(row, nowMs)
                                 const isActive = row.check_in && !row.check_out
-                                const isOnBreak = isActive && Number(row.live_hours_mins) === Number(row.live_hours_mins) && row.live_screen_off_mins > 0
+                                const isLocked = isActive && !!row.active_screen_lock_start
                                 if (live !== null) {
                                   return (
                                     <div className="flex flex-col gap-0.5">
-                                      <span className={isActive ? 'text-green-600 dark:text-green-400 font-semibold' : ''}>{live}</span>
+                                      <span className={
+                                        isLocked ? 'text-slate-400 font-semibold' :
+                                        isActive ? 'text-green-600 dark:text-green-400 font-semibold' : ''
+                                      }>
+                                        {isLocked ? '⏸ ' : ''}{live}
+                                      </span>
                                       {screenOff && (
-                                        <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                                          🔒 {screenOff} off
+                                        <span className="text-[10px] text-orange-400 flex items-center gap-1 font-semibold">
+                                          🔒 {screenOff} screen off
                                         </span>
                                       )}
                                     </div>
