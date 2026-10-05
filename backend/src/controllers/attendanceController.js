@@ -485,7 +485,7 @@ const getSessionsByEmployee = async (req, res, next) => {
            GREATEST(0,
              -- Total elapsed for this session
              EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
-             -- Minus screen-lock pauses only, each capped at session elapsed
+             -- Minus screen-lock pauses only, strictly within THIS session's time window
              - COALESCE((
                  SELECT SUM(
                    LEAST(
@@ -502,7 +502,7 @@ const getSessionsByEmployee = async (req, res, next) => {
                  FROM attendance_pauses ap
                  WHERE ap.attendance_id = s.attendance_id
                    AND ap.pause_start >= s.login_at
-                   AND (s.logout_at IS NULL OR ap.pause_start <= s.logout_at)
+                   AND (s.logout_at IS NULL OR ap.pause_start < s.logout_at)
                ), 0)
            )::numeric
          , 4) AS duration_mins,
@@ -522,7 +522,7 @@ const getSessionsByEmployee = async (req, res, next) => {
              AND ap.pause_start >= s.login_at
              AND (s.logout_at IS NULL OR ap.pause_start <= s.logout_at)
          ), 0)::numeric, 4) AS manual_break_mins,
-         -- Screen-off: sum of screen_lock pauses — capped at session elapsed to prevent > session duration
+         -- Screen-off: sum of screen_lock pauses — strictly within THIS session's time window
          ROUND(COALESCE((
            SELECT SUM(
              LEAST(
@@ -531,7 +531,6 @@ const getSessionsByEmployee = async (req, res, next) => {
                    THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
                  ELSE EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
                END,
-               -- Cap: screen off cannot exceed session elapsed
                EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
              )
            )
@@ -539,7 +538,7 @@ const getSessionsByEmployee = async (req, res, next) => {
            WHERE ap.attendance_id = s.attendance_id
              AND ap.reason = 'screen_lock'
              AND ap.pause_start >= s.login_at
-             AND ap.pause_start <= COALESCE(s.logout_at, NOW())
+             AND (s.logout_at IS NULL OR ap.pause_start < s.logout_at)
          ), 0)::numeric, 4) AS screen_off_mins
        FROM employee_sessions s
        WHERE s.employee_id = $1
@@ -654,21 +653,23 @@ const getTodayAll = async (req, res, next) => {
          -- live_screen_off_mins: screen-lock pause time (live count for active pauses)
          COALESCE((
            SELECT ROUND(SUM(
-             CASE
-               WHEN ap.pause_end IS NOT NULL
-                 THEN EXTRACT(EPOCH FROM (
-                   LEAST(ap.pause_end, COALESCE(s.logout_at, NOW())) - ap.pause_start
-                 )) / 60
-               ELSE
-                 EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
-             END
+             LEAST(
+               CASE
+                 WHEN ap.pause_end IS NOT NULL
+                   THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+                 ELSE
+                   EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
+               END,
+               -- Cap at session duration it belongs to
+               EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
+             )
            )::numeric, 2)
            FROM attendance_pauses ap
            JOIN employee_sessions s ON s.attendance_id = ap.attendance_id
              AND ap.pause_start >= s.login_at
+             AND (s.logout_at IS NULL OR ap.pause_start < s.logout_at)
            WHERE ap.attendance_id = a.id
              AND ap.reason = 'screen_lock'
-             AND ap.pause_start <= COALESCE(s.logout_at, NOW())
          ), 0) AS live_screen_off_mins,
          -- active_screen_lock_start: timestamp when current screen lock started (NULL = not locked)
          (SELECT ap.pause_start
