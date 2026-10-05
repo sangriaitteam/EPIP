@@ -35,10 +35,26 @@ const fmtHours = (h) => {
 // Live hours — uses backend session-sum formula (matches session panel "Total Work" exactly)
 const getLiveHours = (row) => {
   if (!row.check_in) return null
+  // If employee is on screen lock / break, work time should be frozen
+  // live_hours_mins already accounts for active pauses in backend
   const mins = Number(row.live_hours_mins)
   if (!mins && mins !== 0) return null
   const h = Math.floor(mins / 60)
   const m = Math.floor(mins % 60)
+  const s = Math.floor((mins * 60) % 60)
+  if (h === 0 && m === 0) return `${s}s`
+  if (h === 0) return `${m}m`
+  if (m === 0) return `${h}h`
+  return `${h}h ${m}m`
+}
+
+const getLiveScreenOff = (row) => {
+  if (!row.check_in) return null
+  const mins = Number(row.live_screen_off_mins || row.live_pause_mins || 0)
+  if (!mins) return null
+  const h = Math.floor(mins / 60)
+  const m = Math.floor(mins % 60)
+  if (h === 0 && m === 0) return null
   if (h === 0) return `${m}m`
   if (m === 0) return `${h}h`
   return `${h}h ${m}m`
@@ -606,9 +622,20 @@ const HRTodayAttendance = () => {
                             <td className="px-4 py-3 text-xs font-medium text-gray-700 dark:text-gray-300">
                               {(() => {
                                 const live = getLiveHours(row)
+                                const screenOff = getLiveScreenOff(row)
+                                const isActive = row.check_in && !row.check_out
+                                const isOnBreak = isActive && Number(row.live_hours_mins) === Number(row.live_hours_mins) && row.live_screen_off_mins > 0
                                 if (live !== null) {
-                                  const isActive = row.check_in && !row.check_out
-                                  return <span className={isActive ? 'text-green-600 dark:text-green-400 font-semibold' : ''}>{live}</span>
+                                  return (
+                                    <div className="flex flex-col gap-0.5">
+                                      <span className={isActive ? 'text-green-600 dark:text-green-400 font-semibold' : ''}>{live}</span>
+                                      {screenOff && (
+                                        <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                                          🔒 {screenOff} off
+                                        </span>
+                                      )}
+                                    </div>
+                                  )
                                 }
                                 return fmtHours(row.hours_worked)
                               })()}
