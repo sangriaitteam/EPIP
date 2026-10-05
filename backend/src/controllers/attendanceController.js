@@ -616,67 +616,39 @@ const getTodayAll = async (req, res, next) => {
            FROM attendance_pauses ap
            WHERE ap.attendance_id = a.id
          ), 0) AS live_pause_mins,
-         -- live_hours_mins: sum of all session work durations (matches session panel "Total Work")
-         -- Each session: elapsed_in_session - pauses_in_session
-         -- Pauses capped at session logout_at to prevent bleed-over from old unclosed pauses
-         COALESCE((
-           SELECT ROUND(SUM(
-             GREATEST(0,
-               -- If session is active AND there's an open pause, freeze at pause_start
-               CASE
-                 WHEN s.logout_at IS NULL AND EXISTS(
-                   SELECT 1 FROM attendance_pauses ap2
-                   WHERE ap2.attendance_id = s.attendance_id
-                     AND ap2.pause_start >= s.login_at
-                     AND ap2.pause_end IS NULL
-                 )
-                 THEN (
-                   -- Use time up to when pause started
-                   SELECT GREATEST(0,
-                     EXTRACT(EPOCH FROM (ap3.pause_start - s.login_at)) / 60
-                     - COALESCE((
-                         SELECT SUM(EXTRACT(EPOCH FROM (ap4.pause_end - ap4.pause_start)) / 60)
-                         FROM attendance_pauses ap4
-                         WHERE ap4.attendance_id = s.attendance_id
-                           AND ap4.pause_start >= s.login_at
-                           AND ap4.pause_end IS NOT NULL
-                           AND ap4.pause_start < ap3.pause_start
-                       ), 0)
+         -- live_hours_mins: SIMPLE formula = total elapsed - ALL screen-off pause time
+         -- This is the most accurate: what employee actually worked = time logged in - screen off
+         GREATEST(0, COALESCE((
+           SELECT ROUND(
+             -- Total elapsed across all sessions
+             SUM(EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60)
+             -- Minus ALL screen_lock pauses (capped at their session boundary)
+             - COALESCE((
+                 SELECT SUM(
+                   LEAST(
+                     CASE
+                       WHEN ap.pause_end IS NOT NULL
+                         THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+                       ELSE
+                         EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
+                     END,
+                     -- Cap pause duration at the session duration it belongs to
+                     (SELECT EXTRACT(EPOCH FROM (COALESCE(s2.logout_at, NOW()) - s2.login_at)) / 60
+                      FROM employee_sessions s2
+                      WHERE s2.attendance_id = ap.attendance_id
+                        AND s2.login_at <= ap.pause_start
+                      ORDER BY s2.login_at DESC LIMIT 1)
                    )
-                   FROM attendance_pauses ap3
-                   WHERE ap3.attendance_id = s.attendance_id
-                     AND ap3.pause_start >= s.login_at
-                     AND ap3.pause_end IS NULL
-                   ORDER BY ap3.pause_start DESC LIMIT 1
                  )
-                 ELSE
-                   EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
-                   - COALESCE((
-                       SELECT SUM(
-                         CASE
-                           WHEN ap.pause_end IS NOT NULL
-                             THEN EXTRACT(EPOCH FROM (
-                               LEAST(ap.pause_end, COALESCE(s.logout_at, NOW()))
-                               - ap.pause_start
-                             )) / 60
-                           ELSE EXTRACT(EPOCH FROM (
-                             LEAST(NOW(), COALESCE(s.logout_at, NOW()))
-                             - ap.pause_start
-                           )) / 60
-                         END
-                       )
-                       FROM attendance_pauses ap
-                       WHERE ap.attendance_id = s.attendance_id
-                         AND ap.pause_start >= s.login_at
-                         AND ap.pause_start <= COALESCE(s.logout_at, NOW())
-                     ), 0)
-               END
-             )
-           )::numeric, 2)
+                 FROM attendance_pauses ap
+                 WHERE ap.attendance_id = a.id
+                   AND ap.reason = 'screen_lock'
+               ), 0)
+           ::numeric, 2)
            FROM employee_sessions s
            WHERE s.employee_id = e.id
              AND s.attendance_id = a.id
-         ), 0) AS live_hours_mins,
+         ), 0)) AS live_hours_mins,
          -- live_screen_off_mins: screen-lock pause time (live count for active pauses)
          COALESCE((
            SELECT ROUND(SUM(
