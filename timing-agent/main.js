@@ -1,8 +1,10 @@
-// main.js — ScreenLock Agent
-// Flow: Website login → fires epip-timing://launch?token=<jwt>&user=<json>
-//       Agent receives deep-link → stores token → opens status window directly (NO login screen)
-//       Screen lock  → auto break start
-//       Screen unlock → auto break resume
+// main.js — EPIP Timing Agent v2
+// Flow:
+//   Website employee login → fires epip-timing://launch?token=<jwt>&user=<b64>
+//   Agent receives deep-link → stores token → opens status popup
+//   Screen lock / sleep  → auto pause attendance
+//   Screen unlock/resume → auto resume attendance
+//   Works on localhost, LAN (WiFi/Ethernet/Mobile hotspot) via auto-discovery
 'use strict'
 
 const {
@@ -14,10 +16,8 @@ const auth       = require('./auth')
 const config     = require('./config')
 const attendance = require('./attendance')
 
-// ── Register custom protocol BEFORE app is ready ──────────────────────────────
-// This makes epip-timing:// URLs open this app on Windows
+// ── Register epip-timing:// protocol BEFORE app.ready ────────────────────────
 if (process.defaultApp) {
-  // Dev mode: register with full path
   if (process.argv.length >= 2) {
     app.setAsDefaultProtocolClient('epip-timing', process.execPath, [path.resolve(process.argv[1])])
   }
@@ -25,46 +25,44 @@ if (process.defaultApp) {
   app.setAsDefaultProtocolClient('epip-timing')
 }
 
-// ── State ──────────────────────────────────────────────────────────────────────
-let tray        = null
-let loginWin    = null
-let statusWin   = null
-let _pollTimer  = null
+// ── State ─────────────────────────────────────────────────────────────────────
+let tray       = null
+let statusWin  = null
+let loginWin   = null
+let _pollTimer = null
 
-let _isCheckedIn  = false
-let _isOnBreak    = false
-let _checkInTime  = null
-let _autoBreakOn  = false   // break started by screen-lock
-let _currentBreakStart = null  // actual pause_start from backend
+let _isCheckedIn       = false
+let _isOnBreak         = false
+let _autoBreak         = false   // true when break was triggered by screen lock
+let _checkInTime       = null
+let _breakStartTime    = null
 
 const isDev    = process.argv.includes('--dev')
 const ICON_DIR = path.join(__dirname, 'assets')
-const POLL_MS  = 30 * 1000  // 30 seconds
+const POLL_MS  = 30 * 1000   // sync with backend every 30s
 
-// ── Single instance + deep-link handler ───────────────────────────────────────
-if (!app.requestSingleInstanceLock()) {
-  app.quit()
-  process.exit(0)
-}
+// ── Single instance lock ──────────────────────────────────────────────────────
+if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0) }
 
-// When the website fires epip-timing://... and the agent is already running
-// Windows sends the URL here via second-instance event
-app.on('second-instance', (_event, argv) => {
+app.on('second-instance', (_e, argv) => {
   const url = argv.find(a => a.startsWith('epip-timing://'))
   if (url) {
     _handleDeepLink(url)
   } else {
-    // Just focus the existing window
     if (statusWin && !statusWin.isDestroyed()) { statusWin.show(); statusWin.focus() }
     else if (auth.isLoggedIn()) showStatusWindow()
     else showLoginWindow()
   }
 })
 
-// ── App ready ──────────────────────────────────────────────────────────────────
-app.whenReady().then(async () => {
-  app.setAppUserModelId('com.sangria.screenlock')
+// macOS protocol handler
+app.on('open-url', (_e, url) => _handleDeepLink(url))
 
+// ── App ready ─────────────────────────────────────────────────────────────────
+app.whenReady().then(async () => {
+  app.setAppUserModelId('com.sangria.epip-timing')
+
+  // Windows auto-start on boot
   if (process.platform === 'win32') {
     app.setLoginItemSettings({
       openAtLogin: config.isAutoStart(),
@@ -73,38 +71,41 @@ app.whenReady().then(async () => {
     })
   }
 
-  // Check if launched via deep-link (first launch with URL in argv)
-  const deepLinkUrl = process.argv.find(a => a.startsWith('epip-timing://'))
+  // ── Auto-discover server URL (works for any network) ─────────────────────
+  console.log('[agent] Starting server discovery...')
+  await config.discoverServerUrl()
+  console.log('[agent] Using server:', config.getServerUrl())
 
-  // ── Screen lock / sleep → auto break ──────────────────────────────────────
+  // ── Screen lock / sleep → auto start break ────────────────────────────────
   powerMonitor.on('lock-screen', () => {
-    console.log('[timing] 🔒 Screen locked')
-    if (_isCheckedIn && !_isOnBreak) _autoStartBreak('screen_lock')
+    console.log('[agent] 🔒 Screen locked')
+    if (_isCheckedIn && !_isOnBreak) _autoStartBreak()
   })
   powerMonitor.on('suspend', () => {
-    console.log('[timing] 💤 System suspended')
-    if (_isCheckedIn && !_isOnBreak) _autoStartBreak('screen_lock')
+    console.log('[agent] 💤 System suspended')
+    if (_isCheckedIn && !_isOnBreak) _autoStartBreak()
   })
 
-  // ── Screen unlock / resume → auto resume ──────────────────────────────────
+  // ── Screen unlock / resume → auto resume ─────────────────────────────────
   powerMonitor.on('unlock-screen', () => {
-    console.log('[timing] 🔓 Screen unlocked')
-    if (_isCheckedIn && _isOnBreak && _autoBreakOn) _autoResumeBreak()
+    console.log('[agent] 🔓 Screen unlocked')
+    if (_isCheckedIn && _isOnBreak && _autoBreak) _autoResumeBreak()
   })
   powerMonitor.on('resume', () => {
-    console.log('[timing] ☀️  System resumed')
-    if (_isCheckedIn && _isOnBreak && _autoBreakOn) _autoResumeBreak()
+    console.log('[agent] ☀️  System resumed')
+    if (_isCheckedIn && _isOnBreak && _autoBreak) _autoResumeBreak()
   })
 
   createTray()
   setupIPC()
 
+  // Check if launched via deep-link on first start
+  const deepLinkUrl = process.argv.find(a => a.startsWith('epip-timing://'))
   if (deepLinkUrl) {
-    // Launched directly from website deep-link
-    console.log('[timing] Launched via deep-link:', deepLinkUrl)
+    console.log('[agent] Launched via deep-link')
     await _handleDeepLink(deepLinkUrl)
   } else {
-    // Normal startup — restore previous session
+    // Restore previous session
     const valid = await auth.validateToken()
     if (valid) {
       await _syncState()
@@ -112,8 +113,7 @@ app.whenReady().then(async () => {
       if (!process.argv.includes('--hidden')) showStatusWindow()
     } else {
       auth.logout()
-      // Agent starts hidden in tray — website will send token when employee logs in
-      console.log('[timing] Waiting for website login deep-link...')
+      console.log('[agent] Waiting for website login deep-link...')
     }
   }
 })
@@ -121,171 +121,76 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', e => e.preventDefault())
 app.on('before-quit', () => _stopPoller())
 
-// macOS: handle open-url event (protocol handler on macOS)
-app.on('open-url', (_event, url) => {
-  _handleDeepLink(url)
-})
-
 // ── Deep-link handler ─────────────────────────────────────────────────────────
-// URL format: epip-timing://launch?token=<jwt>&user=<base64-json>
+// URL: epip-timing://launch?token=<jwt>&user=<base64-json>
 async function _handleDeepLink(url) {
   try {
-    console.log('[timing] Processing deep-link:', url)
-    const parsed = new URL(url)
-
-    if (parsed.hostname !== 'launch') {
-      console.warn('[timing] Unknown deep-link command:', parsed.hostname)
-      return
-    }
+    console.log('[agent] Processing deep-link:', url.substring(0, 60) + '...')
+    const parsed  = new URL(url)
+    if (parsed.hostname !== 'launch') return
 
     const token   = parsed.searchParams.get('token')
     const userB64 = parsed.searchParams.get('user')
+    if (!token) { showLoginWindow(); return }
 
-    if (!token) {
-      console.error('[timing] No token in deep-link')
-      showLoginWindow()
-      return
-    }
-
-    // Decode user JSON
     let user = null
     if (userB64) {
-      try {
-        user = JSON.parse(Buffer.from(userB64, 'base64').toString('utf8'))
-      } catch (e) {
-        console.warn('[timing] Could not parse user from deep-link:', e.message)
-      }
+      try { user = JSON.parse(Buffer.from(decodeURIComponent(userB64), 'base64').toString('utf8')) }
+      catch (e) { console.warn('[agent] Could not decode user:', e.message) }
     }
 
-    // Store token + user (no password needed)
     auth.loginWithToken(token, user)
 
-    // Sync attendance state then show status popup
+    // Re-run discovery after login in case network changed
+    await config.discoverServerUrl()
+
     await _syncState()
     _startPoller()
     _buildTrayMenu()
     showStatusWindow()
-
-    console.log('[timing] ✅ Agent ready for:', user?.name || 'Employee')
+    console.log('[agent] ✅ Ready for:', user?.name || 'Employee')
   } catch (err) {
-    console.error('[timing] Deep-link error:', err.message)
+    console.error('[agent] Deep-link error:', err.message)
     showLoginWindow()
   }
 }
 
-// ── Auto break helpers ─────────────────────────────────────────────────────────
-async function _autoStartBreak(reason = 'screen_lock') {
+// ── Auto break (screen lock) ──────────────────────────────────────────────────
+async function _autoStartBreak() {
   try {
-    const rec = await attendance.pauseWork(reason, 'Auto-detected screen lock')
-    _isOnBreak          = true
-    _autoBreakOn        = true
-    _currentBreakStart  = rec?.pause_start || new Date().toISOString()
-    console.log(`[timing] ⏸ Auto break started (${reason})`)
+    const rec       = await attendance.pauseWork('screen_lock', 'Screen locked automatically')
+    _isOnBreak      = true
+    _autoBreak      = true
+    _breakStartTime = rec?.pause_start || new Date().toISOString()
+    console.log('[agent] ⏸ Auto break started (screen_lock)')
     _buildTrayMenu()
     _pushStatus()
   } catch (err) {
-    console.warn('[timing] Auto break start skipped:', err.response?.data?.message || err.message)
+    console.warn('[agent] Auto break skipped:', err.response?.data?.message || err.message)
   }
 }
 
 async function _autoResumeBreak() {
   try {
     await attendance.resumeWork()
-    _isOnBreak         = false
-    _autoBreakOn       = false
-    _currentBreakStart = null
-    console.log('[timing] ▶ Auto break resumed')
+    _isOnBreak      = false
+    _autoBreak      = false
+    _breakStartTime = null
+    console.log('[agent] ▶ Auto break resumed')
     _buildTrayMenu()
     _pushStatus()
   } catch (err) {
-    console.warn('[timing] Auto resume skipped:', err.response?.data?.message || err.message)
+    console.warn('[agent] Auto resume skipped:', err.response?.data?.message || err.message)
   }
 }
 
-// ── State sync from backend ────────────────────────────────────────────────────
-async function _syncState() {
-  if (!auth.isLoggedIn()) return
-  try {
-    const record = await attendance.getToday()
-    _isCheckedIn = !!(record?.check_in && !record?.check_out)
-    _checkInTime = record?.check_in || null
-
-    let _breakStartTime = null
-
-    if (_isCheckedIn) {
-      const pauses = await attendance.getMyPauses()
-      const active = pauses.find(p => p.pause_start && !p.pause_end)
-      _isOnBreak      = !!active
-      _breakStartTime = active?.pause_start || null
-      if (!active) _autoBreakOn = false
-    } else {
-      _isOnBreak      = false
-      _autoBreakOn    = false
-      _breakStartTime = null
-    }
-
-    // Store break start on module scope for push
-    _currentBreakStart = _breakStartTime
-
-    _buildTrayMenu()
-    _pushStatus()
-  } catch (err) {
-    console.warn('[timing] Sync error:', err.message)
-  }
-}
-
-// ── Poller ─────────────────────────────────────────────────────────────────────
-function _startPoller() {
-  if (_pollTimer) return
-  _syncState()
-  _pollTimer = setInterval(_syncState, POLL_MS)
-  console.log(`[timing] Poller started — every ${POLL_MS / 1000}s`)
-}
-
-function _stopPoller() {
-  if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null }
-}
-
-// ── Manual check-in / check-out ────────────────────────────────────────────────
-async function _doCheckIn() {
-  try {
-    const rec    = await attendance.checkIn('office')
-    _isCheckedIn = true
-    _checkInTime = rec?.check_in || new Date().toISOString()
-    _isOnBreak   = false
-    _autoBreakOn = false
-    _buildTrayMenu()
-    _pushStatus()
-    console.log('[timing] ✅ Checked in')
-  } catch (err) {
-    _pushError(err.response?.data?.message || err.message)
-  }
-}
-
-async function _doCheckOut() {
-  if (_isOnBreak) {
-    try { await attendance.resumeWork() } catch { /* ignore */ }
-  }
-  try {
-    await attendance.checkOut()
-    _isCheckedIn  = false
-    _isOnBreak    = false
-    _autoBreakOn  = false
-    _checkInTime  = null
-    _buildTrayMenu()
-    _pushStatus()
-    console.log('[timing] 🔴 Checked out')
-  } catch (err) {
-    _pushError(err.response?.data?.message || err.message)
-  }
-}
-
+// ── Manual break / resume ─────────────────────────────────────────────────────
 async function _doManualBreak(reason = 'other') {
   try {
-    const rec = await attendance.pauseWork(reason)
-    _isOnBreak         = true
-    _autoBreakOn       = false
-    _currentBreakStart = rec?.pause_start || new Date().toISOString()
+    const rec       = await attendance.pauseWork(reason)
+    _isOnBreak      = true
+    _autoBreak      = false
+    _breakStartTime = rec?.pause_start || new Date().toISOString()
     _buildTrayMenu()
     _pushStatus()
   } catch (err) {
@@ -296,9 +201,9 @@ async function _doManualBreak(reason = 'other') {
 async function _doManualResume() {
   try {
     await attendance.resumeWork()
-    _isOnBreak         = false
-    _autoBreakOn       = false
-    _currentBreakStart = null
+    _isOnBreak      = false
+    _autoBreak      = false
+    _breakStartTime = null
     _buildTrayMenu()
     _pushStatus()
   } catch (err) {
@@ -306,13 +211,59 @@ async function _doManualResume() {
   }
 }
 
-// ── Tray ───────────────────────────────────────────────────────────────────────
+// ── State sync from backend ───────────────────────────────────────────────────
+async function _syncState() {
+  if (!auth.isLoggedIn()) return
+  try {
+    const record = await attendance.getToday()
+    _isCheckedIn = !!(record?.check_in && !record?.check_out)
+    _checkInTime = record?.check_in || null
+
+    if (_isCheckedIn) {
+      const pauses = await attendance.getMyPauses()
+      const active = pauses.find(p => !p.pause_end)
+      _isOnBreak      = !!active
+      _breakStartTime = active?.pause_start || null
+      if (!active) _autoBreak = false
+    } else {
+      _isOnBreak = false; _autoBreak = false; _breakStartTime = null
+    }
+
+    _buildTrayMenu()
+    _pushStatus()
+  } catch (err) {
+    console.warn('[agent] Sync error:', err.message)
+  }
+}
+
+// ── Poller ────────────────────────────────────────────────────────────────────
+function _startPoller() {
+  if (_pollTimer) return
+  _syncState()
+  _pollTimer = setInterval(_syncState, POLL_MS)
+  console.log(`[agent] Poller started — every ${POLL_MS / 1000}s`)
+}
+function _stopPoller() {
+  if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null }
+}
+
+// ── Logout ────────────────────────────────────────────────────────────────────
+function _doLogout() {
+  _stopPoller()
+  auth.logout()
+  _isCheckedIn = false; _isOnBreak = false; _autoBreak = false; _checkInTime = null
+  _buildTrayMenu()
+  if (statusWin && !statusWin.isDestroyed()) statusWin.close()
+  console.log('[agent] Signed out — waiting for website login')
+}
+
+// ── Tray ──────────────────────────────────────────────────────────────────────
 function createTray() {
-  const iconPath = path.join(ICON_DIR, 'tray-icon.png')
-  const icon     = nativeImage.createFromPath(iconPath)
-  tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon)
-  tray.setToolTip('ScreenLock')
-  tray.on('click', () => auth.isLoggedIn() ? showStatusWindow() : null)
+  const iconPath = path.join(ICON_DIR, 'icon.ico')
+  const img      = nativeImage.createFromPath(iconPath)
+  tray = new Tray(img.isEmpty() ? nativeImage.createEmpty() : img)
+  tray.setToolTip('EPIP Timing Agent')
+  tray.on('click', () => auth.isLoggedIn() ? showStatusWindow() : showLoginWindow())
   _buildTrayMenu()
 }
 
@@ -320,42 +271,40 @@ function _buildTrayMenu() {
   if (!tray) return
   const user     = auth.getUser()
   const loggedIn = auth.isLoggedIn()
+  const server   = config.getServerUrl()
 
-  const statusLabel = !loggedIn
-    ? '⚪  Waiting for website login…'
+  const statusLine =
+    !loggedIn     ? '⚪  Waiting for website login…'
     : _isCheckedIn
       ? _isOnBreak
-        ? _autoBreakOn ? '⏸  On Break (screen locked)' : '⏸  On Break'
-        : '🟢  Checked In — Working'
-      : '⚪  Logged in — Not checked in'
+        ? _autoBreak ? '⏸  On Break (screen locked)' : '⏸  On Break'
+        : '🟢  Working'
+      : '⚪  Not checked in'
 
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: loggedIn ? `👤  ${user?.name || 'Employee'}` : '❌  Not logged in', enabled: false },
-    { label: statusLabel, enabled: false },
+    { label: statusLine, enabled: false },
+    { label: `🔗  ${server}`, enabled: false },
     { type: 'separator' },
-
-    { label: '📋  Open Status', click: () => auth.isLoggedIn() ? showStatusWindow() : null },
+    { label: '📋  Open Status', click: () => auth.isLoggedIn() ? showStatusWindow() : showLoginWindow() },
     { type: 'separator' },
-
-    // Check-In/Check-Out removed — handled automatically by website login/logout
     {
       label:   _isOnBreak ? '▶  Resume Work' : '⏸  Take Break',
       enabled: loggedIn && _isCheckedIn,
       submenu: _isOnBreak
         ? [{ label: '▶  Resume Work', click: () => _doManualResume() }]
         : [
-            { label: '☕  Tea Break',   click: () => _doManualBreak('tea_break')   },
-            { label: '🍽  Lunch Break', click: () => _doManualBreak('lunch_break') },
-            { label: '📅  Meeting',     click: () => _doManualBreak('meeting')     },
-            { label: '👤  Personal',    click: () => _doManualBreak('personal')    },
-            { label: '•  Other',        click: () => _doManualBreak('other')       },
+            { label: '☕  Tea Break',    click: () => _doManualBreak('tea_break')   },
+            { label: '🍽  Lunch Break',  click: () => _doManualBreak('lunch_break') },
+            { label: '📅  Meeting',      click: () => _doManualBreak('meeting')     },
+            { label: '👤  Personal',     click: () => _doManualBreak('personal')    },
+            { label: '•   Other',        click: () => _doManualBreak('other')       },
           ],
     },
     { type: 'separator' },
-
     {
       label: '🌐  Open Dashboard',
-      click: () => shell.openExternal(config.getServerUrl().replace(':5000', ':5173')),
+      click: () => shell.openExternal(server.replace(':5000', ':5173')),
     },
     { type: 'separator' },
     { label: 'Sign Out', enabled: loggedIn, click: () => _doLogout() },
@@ -363,23 +312,24 @@ function _buildTrayMenu() {
   ]))
 
   tray.setToolTip(
-    !loggedIn          ? 'ScreenLock — Waiting for website login' :
-    _isCheckedIn
-      ? _isOnBreak     ? 'ScreenLock — On Break'
-                       : 'ScreenLock — Working'
-      : 'ScreenLock — Not checked in'
+    !loggedIn    ? 'EPIP Timing Agent — Waiting for login'
+    : _isCheckedIn
+      ? _isOnBreak ? 'EPIP Timing Agent — On Break'
+                   : 'EPIP Timing Agent — Working'
+      : 'EPIP Timing Agent — Not checked in'
   )
 }
 
-// ── Push state to status window ────────────────────────────────────────────────
+// ── Push status to renderer ───────────────────────────────────────────────────
 function _pushStatus() {
   if (statusWin && !statusWin.isDestroyed()) {
     statusWin.webContents.send('status:update', {
       isCheckedIn:    _isCheckedIn,
       isOnBreak:      _isOnBreak,
-      autoBreakOn:    _autoBreakOn,
+      autoBreak:      _autoBreak,
       checkInTime:    _checkInTime,
-      breakStartTime: _currentBreakStart,  // ← actual pause_start from backend
+      breakStartTime: _breakStartTime,
+      serverUrl:      config.getServerUrl(),
       user:           auth.getUser(),
     })
   }
@@ -391,12 +341,35 @@ function _pushError(msg) {
   }
 }
 
-// ── Windows ────────────────────────────────────────────────────────────────────
+// ── Windows ───────────────────────────────────────────────────────────────────
+function showStatusWindow() {
+  if (statusWin && !statusWin.isDestroyed()) { statusWin.show(); statusWin.focus(); return }
+  const { screen } = require('electron')
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize
+  statusWin = new BrowserWindow({
+    width: 340, height: 460,
+    x: width - 356, y: height - 476,
+    resizable: false, maximizable: false, fullscreenable: false,
+    frame: false, alwaysOnTop: true, skipTaskbar: true, show: false,
+    backgroundColor: '#0f172a',
+    webPreferences: {
+      preload:          path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration:  false,
+      sandbox:          false,
+    },
+  })
+  statusWin.loadFile(path.join(__dirname, 'renderer', 'status.html'))
+  statusWin.once('ready-to-show', () => { statusWin.show(); _pushStatus() })
+  if (isDev) statusWin.webContents.openDevTools({ mode: 'detach' })
+  statusWin.on('blur',   () => { if (statusWin && !statusWin.isDestroyed()) statusWin.hide() })
+  statusWin.on('closed', () => { statusWin = null })
+}
+
 function showLoginWindow() {
-  // Fallback only — normally website handles login
   if (loginWin && !loginWin.isDestroyed()) { loginWin.show(); loginWin.focus(); return }
   loginWin = new BrowserWindow({
-    width: 360, height: 440,
+    width: 360, height: 460,
     resizable: false, maximizable: false, fullscreenable: false,
     frame: false, alwaysOnTop: true, center: true, show: false,
     backgroundColor: '#0f172a',
@@ -413,39 +386,12 @@ function showLoginWindow() {
   loginWin.on('closed', () => { loginWin = null })
 }
 
-function showStatusWindow() {
-  if (statusWin && !statusWin.isDestroyed()) { statusWin.show(); statusWin.focus(); return }
-  const { screen } = require('electron')
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize
-  statusWin = new BrowserWindow({
-    width: 320, height: 420,
-    x: width - 336, y: height - 436,
-    resizable: false, maximizable: false, fullscreenable: false,
-    frame: false, alwaysOnTop: true, skipTaskbar: true, show: false,
-    backgroundColor: '#1e293b',
-    webPreferences: {
-      preload:          path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration:  false,
-      sandbox:          false,
-    },
-  })
-  statusWin.loadFile(path.join(__dirname, 'renderer', 'status.html'))
-  statusWin.once('ready-to-show', () => {
-    statusWin.show()
-    _pushStatus()
-  })
-  if (isDev) statusWin.webContents.openDevTools({ mode: 'detach' })
-  statusWin.on('blur',   () => { if (statusWin && !statusWin.isDestroyed()) statusWin.hide() })
-  statusWin.on('closed', () => { statusWin = null })
-}
-
-// ── IPC ────────────────────────────────────────────────────────────────────────
+// ── IPC handlers ──────────────────────────────────────────────────────────────
 function setupIPC() {
-  // Fallback login (only if website didn't launch agent)
   ipcMain.handle('auth:login', async (_, username, password) => {
     const user = await auth.login(username, password)
     if (loginWin && !loginWin.isDestroyed()) loginWin.close()
+    await config.discoverServerUrl()
     await _syncState()
     _startPoller()
     _buildTrayMenu()
@@ -453,38 +399,25 @@ function setupIPC() {
     return user
   })
 
-  ipcMain.handle('auth:logout',    () => _doLogout())
-  ipcMain.handle('auth:getUser',   () => auth.getUser())
-  ipcMain.handle('auth:isLoggedIn',() => auth.isLoggedIn())
+  ipcMain.handle('auth:logout',     () => _doLogout())
+  ipcMain.handle('auth:getUser',    () => auth.getUser())
+  ipcMain.handle('auth:isLoggedIn', () => auth.isLoggedIn())
 
-  ipcMain.handle('attendance:checkIn',   (_, mode) => _doCheckIn(mode))
-  ipcMain.handle('attendance:checkOut',  ()        => _doCheckOut())
+  ipcMain.handle('attendance:checkIn',   (_, mode) => attendance.checkIn(mode))
+  ipcMain.handle('attendance:checkOut',  ()        => attendance.checkOut())
   ipcMain.handle('attendance:pause',     (_, r)    => _doManualBreak(r))
   ipcMain.handle('attendance:resume',    ()        => _doManualResume())
   ipcMain.handle('attendance:getStatus', ()        => ({
     isCheckedIn:    _isCheckedIn,
     isOnBreak:      _isOnBreak,
-    autoBreakOn:    _autoBreakOn,
+    autoBreak:      _autoBreak,
     checkInTime:    _checkInTime,
-    breakStartTime: _currentBreakStart,
+    breakStartTime: _breakStartTime,
+    serverUrl:      config.getServerUrl(),
     user:           auth.getUser(),
   }))
 
   ipcMain.handle('window:close', () => {
     if (statusWin && !statusWin.isDestroyed()) statusWin.hide()
   })
-}
-
-// ── Logout ─────────────────────────────────────────────────────────────────────
-function _doLogout() {
-  _stopPoller()
-  auth.logout()
-  _isCheckedIn = false
-  _isOnBreak   = false
-  _autoBreakOn = false
-  _checkInTime = null
-  _buildTrayMenu()
-  if (statusWin && !statusWin.isDestroyed()) statusWin.close()
-  // Don't show login window — employee should use the website
-  console.log('[timing] Signed out — waiting for website login')
 }

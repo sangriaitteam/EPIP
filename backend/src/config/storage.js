@@ -44,7 +44,7 @@ if (USE_CLOUDINARY) {
 const UPLOAD_DIR = path.join(__dirname, '../../', process.env.UPLOAD_DIR || 'uploads')
 
 if (!USE_CLOUDINARY) {
-  ;['screenshots', 'documents', 'avatars', 'evidence'].forEach(dir => {
+  ;['screenshots', 'documents', 'avatars', 'evidence', 'attachments'].forEach(dir => {
     const p = path.join(UPLOAD_DIR, dir)
     if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true })
   })
@@ -53,9 +53,10 @@ if (!USE_CLOUDINARY) {
 const diskStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     let subDir = 'documents'
-    if (file.fieldname === 'screenshot') subDir = 'screenshots'
-    if (file.fieldname === 'avatar')     subDir = 'avatars'
-    if (file.fieldname === 'evidence')   subDir = 'evidence'
+    if (file.fieldname === 'screenshot')  subDir = 'screenshots'
+    if (file.fieldname === 'avatar')      subDir = 'avatars'
+    if (file.fieldname === 'evidence')    subDir = 'evidence'
+    if (file.fieldname === 'attachment')  subDir = 'attachments'
     cb(null, path.join(UPLOAD_DIR, subDir))
   },
   filename: (req, file, cb) => {

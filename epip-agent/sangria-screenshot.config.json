@@ -1,5 +1,6 @@
 {
   "serverUrl": "http://localhost:5000",
   "autoStart": true,
-  "autoDiscover": true
+  "autoDiscover": true,
+  "intervalMinutes": 10
 }

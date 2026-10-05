@@ -1,42 +1,53 @@
 {
-  "name": "screenlock-agent",
-  "version": "1.0.0",
-  "description": "ScreenLock — Screen-off detection and attendance tracking agent for Sangria Edutainment",
+  "name": "epip-timing-agent",
+  "version": "2.0.0",
+  "description": "EPIP Timing Agent — screen-lock detection and attendance break tracking for Sangria Edutainment",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "dev":   "electron . --dev",
-    "build": "electron-builder --win portable --x64"
+    "build": "electron-builder --win --x64"
   },
   "build": {
-    "appId":       "com.sangria.screenlock",
-    "productName": "ScreenLock",
+    "appId":       "com.sangria.epip-timing",
+    "productName": "EPIP Timing Agent",
     "win": {
-      "target": "nsis",
-      "icon":   "assets/tray-icon.ico"
+      "target": [
+        { "target": "nsis",     "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ]
     },
     "nsis": {
-      "oneClick":         false,
-      "allowToChangeInstallationDirectory": true
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
     },
+    "protocols": [
+      {
+        "name": "EPIP Timing Agent",
+        "schemes": ["epip-timing"]
+      }
+    ],
     "files": [
       "**/*",
-      "!node_modules/.cache"
+      "!node_modules/.cache",
+      "!dist"
     ],
     "extraResources": [
       { "from": "epip-timing.config.json", "to": "epip-timing.config.json" }
     ],
     "portable": {
-      "artifactName": "ScreenLock-${version}.exe"
+      "artifactName": "EPIP-Timing-Agent-${version}-portable.exe"
     }
   },
   "dependencies": {
-    "axios":          "^1.6.8",
-    "electron-store": "^8.1.0"
+    "axios":          "1.6.8",
+    "electron-store": "8.1.0"
   },
   "devDependencies": {
-    "electron":         "^29.1.0",
-    "electron-builder": "^24.9.1"
+    "electron":         "29.4.6",
+    "electron-builder": "24.13.3"
   },
   "author": "Sangria Edutainment Pvt Ltd",
   "license": "MIT"

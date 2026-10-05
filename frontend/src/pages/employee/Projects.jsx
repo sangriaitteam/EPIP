@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
 import {
   FolderOpen, Search, Clock, CheckCircle,
   TrendingUp, AlertCircle, RefreshCw, ChevronDown,
@@ -161,13 +162,15 @@ const TableRow = ({ project, index, onStatusUpdated, empCode }) => {
   const isOverdue = days !== null && days < 0 && project.status !== 'completed'
   const isDueSoon = days !== null && days >= 0 && days <= 7
   const projId  = `${empCode || 'RU'}-${project.id}`
+  const navigate = useNavigate()
 
   return (
     <motion.tr
       initial={{ opacity: 0, x: -8 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.04 }}
-      className="hover:bg-gray-50/80 dark:hover:bg-dark-700/50 transition-colors group border-b border-gray-100 dark:border-dark-600 last:border-0"
+      onClick={() => navigate(`/employee/projects/${project.id}`)}
+      className="hover:bg-gray-50/80 dark:hover:bg-dark-700/50 transition-colors group border-b border-gray-100 dark:border-dark-600 last:border-0 cursor-pointer"
     >
       {/* ID */}
       <td className="px-4 py-3 whitespace-nowrap">
@@ -288,13 +291,15 @@ const MobileCard = ({ project, index, onStatusUpdated, empCode }) => {
   const isOverdue = days !== null && days < 0 && project.status !== 'completed'
   const isDueSoon = days !== null && days >= 0 && days <= 7
   const projId    = `${empCode || 'RU'}-${project.id}`
+  const navigate  = useNavigate()
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05, type: 'spring', stiffness: 120, damping: 14 }}
-      className="bg-white dark:bg-dark-800 rounded-2xl border border-gray-100 dark:border-dark-600 shadow-sm p-4 space-y-3"
+      onClick={() => navigate(`/employee/projects/${project.id}`)}
+      className="bg-white dark:bg-dark-800 rounded-2xl border border-gray-100 dark:border-dark-600 shadow-sm p-4 space-y-3 cursor-pointer hover:border-primary-500/40 hover:shadow-md transition-all"
     >
       {/* Header row */}
       <div className="flex items-start justify-between gap-2">

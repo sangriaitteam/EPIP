@@ -1,96 +1,96 @@
-// config.js — local settings + backend interval sync
+// config.js — Smart network auto-discovery for Sangria Screenshot Tool
+'use strict'
 const Store = require('electron-store')
 const axios = require('axios')
+const os    = require('os')
 const path  = require('path')
 const fs    = require('fs')
 
 const store = new Store({
-  name: 'sangria-agent-config',
+  name: 'sangria-screenshot-config',
+  encryptionKey: 'sangria-ss-v3',
   defaults: {
     serverUrl:       'http://localhost:5000',
-    intervalMinutes: 10,
     autoStart:       true,
+    intervalMinutes: 10,
   },
-  encryptionKey: 'sangria-agent-v1',
 })
 
-// ── Load server URL from sangria-agent.config.json if present ────────────────
-// IT team deploys this file alongside the .exe with the production URL.
-// This runs once at startup and writes the URL into the encrypted store.
-function loadExternalConfig() {
-  // Look for config file next to the executable (production)
-  // or in the project root (development)
+// Load external config file (next to .exe or project root)
+;(function loadExternalConfig() {
   const locations = [
-    path.join(process.execPath, '..', 'sangria-agent.config.json'),
-    path.join(__dirname, 'sangria-agent.config.json'),
-    // backward compat — old config name still works
-    path.join(process.execPath, '..', 'epip-agent.config.json'),
-    path.join(__dirname, 'epip-agent.config.json'),
+    path.join(process.execPath, '..', 'sangria-screenshot.config.json'),
+    path.join(process.resourcesPath || '', 'sangria-screenshot.config.json'),
+    path.join(__dirname, 'sangria-screenshot.config.json'),
   ]
-
   for (const loc of locations) {
     if (fs.existsSync(loc)) {
       try {
-        const raw = fs.readFileSync(loc, 'utf8')
-        const cfg = JSON.parse(raw)
-        if (cfg.serverUrl) {
-          // Always update — overwrite any cached old URL
-          store.set('serverUrl', cfg.serverUrl)
-          console.log(`[config] Server URL set to: ${cfg.serverUrl}`)
-        }
-        if (cfg.intervalMinutes && typeof cfg.intervalMinutes === 'number') {
-          store.set('intervalMinutes', cfg.intervalMinutes)
-        }
-        if (typeof cfg.autoStart === 'boolean') {
-          store.set('autoStart', cfg.autoStart)
-        }
-        break
-      } catch (err) {
-        console.warn('[config] Could not parse config file:', err.message)
-      }
+        const cfg = JSON.parse(fs.readFileSync(loc, 'utf8'))
+        if (cfg.serverUrl)                           store.set('serverUrl',       cfg.serverUrl)
+        if (typeof cfg.autoStart === 'boolean')      store.set('autoStart',       cfg.autoStart)
+        if (typeof cfg.intervalMinutes === 'number') store.set('intervalMinutes', cfg.intervalMinutes)
+        console.log('[config] Loaded from:', loc)
+      } catch (e) { console.warn('[config] Error:', e.message) }
+      break
     }
+  }
+})()
+
+function _getLANIPs() {
+  const ips = []
+  for (const ifaces of Object.values(os.networkInterfaces())) {
+    for (const i of ifaces) {
+      if (i.family === 'IPv4' && !i.internal) ips.push(i.address)
+    }
+  }
+  return ips
+}
+
+async function _probe(url) {
+  try {
+    const res = await axios.get(`${url}/health`, { timeout: 2000 })
+    return res.data?.service === 'EPIP Backend API'
+  } catch { return false }
+}
+
+async function discoverServerUrl() {
+  const candidates = [
+    store.get('serverUrl'),
+    'http://localhost:5000',
+    'http://127.0.0.1:5000',
+    ..._getLANIPs().map(ip => `http://${ip}:5000`),
+  ]
+  const unique = [...new Set(candidates)]
+  console.log('[config] Probing:', unique)
+  for (const url of unique) {
+    if (await _probe(url)) {
+      console.log('[config] ✅ Server:', url)
+      store.set('serverUrl', url)
+      return url
+    }
+  }
+  console.warn('[config] ⚠️ Using last known:', store.get('serverUrl'))
+  return store.get('serverUrl')
+}
+
+async function fetchInterval(token) {
+  try {
+    const res = await axios.get(`${store.get('serverUrl')}/api/attendance/agent-config`, {
+      headers: { Authorization: `Bearer ${token}` }, timeout: 8000,
+    })
+    const mins = parseInt(res.data?.data?.interval_minutes || 10)
+    store.set('intervalMinutes', mins)
+    return mins
+  } catch {
+    return store.get('intervalMinutes') || 10
   }
 }
 
-// Load external config on startup
-loadExternalConfig()
-
-const config = {
-  get:    (key)      => store.get(key),
-  set:    (key, val) => store.set(key, val),
-  getAll: ()         => store.store,
-
-  getServerUrl:       () => store.get('serverUrl'),
-  getIntervalMinutes: () => store.get('intervalMinutes'),
-  getIntervalMs:      () => store.get('intervalMinutes') * 60 * 1000,
-  isAutoStart:        () => store.get('autoStart'),
-
-  // ── Fetch interval from /api/attendance/agent-config (employee-accessible)
-  // Returns { minutes, changed, prev }
-  async fetchIntervalFromBackend(token) {
-    try {
-      const url = `${store.get('serverUrl')}/api/attendance/agent-config`
-      const res = await axios.get(url, {
-        headers: { Authorization: `Bearer ${token}` },
-        timeout: 6000,
-      })
-      const raw     = res.data?.data?.interval_minutes
-      const minutes = parseInt(raw)
-      if (!isNaN(minutes) && minutes > 0) {
-        const prev    = store.get('intervalMinutes')
-        const changed = prev !== minutes
-        if (changed) {
-          store.set('intervalMinutes', minutes)
-          console.log(`[config] Interval: ${prev} → ${minutes} min`)
-        }
-        return { minutes, changed, prev }
-      }
-    } catch (err) {
-      console.warn('[config] Interval fetch failed:', err.message)
-    }
-    const current = store.get('intervalMinutes')
-    return { minutes: current, changed: false, prev: current }
-  },
+module.exports = {
+  getServerUrl:      () => store.get('serverUrl'),
+  isAutoStart:       () => store.get('autoStart'),
+  getInterval:       () => store.get('intervalMinutes'),
+  discoverServerUrl,
+  fetchInterval,
 }
-
-module.exports = config

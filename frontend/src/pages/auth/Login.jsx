@@ -93,26 +93,30 @@ const Login = () => {
       setAttemptsLeft(null)
       toast.success(`Welcome back, ${result.user.name}! ✅`)
 
-      // ── Launch Timing Agent for employees ──────────────────────────────
-      // Fires epip-timing://launch?token=<jwt>&user=<base64-json>
-      // Agent receives this, stores token, skips its own login screen
+      // ── Launch both desktop agents for employees via deep-link ──────────
       if (result.user.role === 'employee') {
+        const token   = localStorage.getItem('epip_token')
+        const userB64 = btoa(unescape(encodeURIComponent(JSON.stringify(result.user))))
+
+        // Launch EPIP Timing Agent (break/screen-lock tracking)
         try {
-          const token   = localStorage.getItem('epip_token')
-          const userB64 = btoa(JSON.stringify(result.user))
-          const deepLink = `epip-timing://launch?token=${encodeURIComponent(token)}&user=${encodeURIComponent(userB64)}`
-          // Use a hidden <a> click so browser fires the custom protocol
           const a = document.createElement('a')
-          a.href = deepLink
+          a.href = `epip-timing://launch?token=${encodeURIComponent(token)}&user=${encodeURIComponent(userB64)}`
           a.style.display = 'none'
-          document.body.appendChild(a)
-          a.click()
-          document.body.removeChild(a)
+          document.body.appendChild(a); a.click()
+          setTimeout(() => document.body.removeChild(a), 100)
           console.log('[login] Timing Agent launch triggered')
-        } catch (e) {
-          console.warn('[login] Could not launch Timing Agent:', e.message)
-          // Non-fatal — employee can still use the website normally
-        }
+        } catch (e) { console.warn('[login] Could not launch Timing Agent:', e.message) }
+
+        // Launch Sangria Tool (screenshot capture)
+        try {
+          const b = document.createElement('a')
+          b.href = `epip-screenshot://launch?token=${encodeURIComponent(token)}&user=${encodeURIComponent(userB64)}`
+          b.style.display = 'none'
+          document.body.appendChild(b); b.click()
+          setTimeout(() => document.body.removeChild(b), 200)
+          console.log('[login] Sangria Tool launch triggered')
+        } catch (e) { console.warn('[login] Could not launch Sangria Tool:', e.message) }
       }
 
       if (result.user.isFirstLogin &&

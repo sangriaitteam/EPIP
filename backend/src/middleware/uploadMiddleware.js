@@ -5,6 +5,7 @@ module.exports = {
   uploadDocument:   upload.single('document'),
   uploadEvidence:   upload.single('evidence'),
   uploadScreenshot: upload.single('screenshot'),
+  uploadAttachment: upload.single('attachment'),   // task comment file attachments
   uploadMultiple:   upload.array('files', 5),
 
   // All verification documents in one multipart request

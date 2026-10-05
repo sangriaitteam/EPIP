@@ -1,48 +1,55 @@
-// main.js — Sangria Agent
-// 1. Employee-only login
-// 2. Check-in  → screenshot capture starts automatically
-// 3. Check-out → capture stops automatically
-// 4. Superadmin interval change → applied within 30 seconds
+// main.js — Sangria Screenshot Tool v3
 'use strict'
 
+const electron = require('electron')
+// Must be set before app is ready
+electron.app.commandLine.appendSwitch('disable-features', 'HardwareMediaKeyHandling,MediaSessionService')
+electron.app.commandLine.appendSwitch('use-angle', 'swiftshader')
+
 const {
-  app, BrowserWindow, Tray, Menu, ipcMain,
-  nativeImage, shell, powerMonitor,
-} = require('electron')
-const path      = require('path')
-const axios     = require('axios')
-const auth      = require('./auth')
-const config    = require('./config')
-const scheduler = require('./scheduler')
-const { captureAndUpload, setActiveWindowTitleFn } = require('./capture')
+  app, Tray, Menu, nativeImage,
+  shell, powerMonitor,
+} = electron
+const path   = require('path')
+const axios  = require('axios')
+const auth   = require('./auth')
+const config = require('./config')
+const { captureAndUpload } = require('./capture')
+
+// ── Register deep-link protocol ───────────────────────────────────────────────
+if (process.defaultApp) {
+  if (process.argv.length >= 2)
+    app.setAsDefaultProtocolClient('epip-screenshot', process.execPath, [path.resolve(process.argv[1])])
+} else {
+  app.setAsDefaultProtocolClient('epip-screenshot')
+}
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let tray             = null
-let loginWin         = null
-let statusWin        = null
-let _activeWindow    = 'Unknown'
-let _pollTimer       = null
-let _isCheckedIn     = false
-let _isOnScreenBreak = false   // true when screen is locked/off
-let _screenOffStart  = null    // timestamp when screen went off
+let tray           = null
+let _captureTimer  = null   // interval timer for screenshots
+let _pollTimer     = null   // 30s poller for interval changes
+let _midnightTimer = null   // midnight stop timer
+let _paused        = false  // screen locked
+let _running       = false  // capture active
+let _captureCount  = 0
+let _lastCapture   = null
+let _intervalMins  = 10
 
-const isDev    = process.argv.includes('--dev')
-const ICON_DIR = path.join(__dirname, 'assets')
-const POLL_MS  = 30 * 1000   // check attendance + interval every 30s
+const isDev = process.argv.includes('--dev')
 
 // ── Single instance ───────────────────────────────────────────────────────────
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0) }
-app.on('second-instance', () => {
-  if (statusWin && !statusWin.isDestroyed()) { statusWin.show(); statusWin.focus() }
-  else if (auth.isLoggedIn()) showStatusWindow()
-  else showLoginWindow()
+app.on('second-instance', (_e, argv) => {
+  const url = argv.find(a => a.startsWith('epip-screenshot://'))
+  if (url) _handleDeepLink(url)
 })
+app.on('open-url', (_e, url) => _handleDeepLink(url))
 
 // ── App ready ─────────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
-  app.setAppUserModelId('com.sangria.agent')
+  app.setAppUserModelId('com.sangria.screenshot')
 
-  // Windows auto-start
+  // Windows startup
   if (process.platform === 'win32') {
     app.setLoginItemSettings({
       openAtLogin: config.isAutoStart(),
@@ -51,332 +58,205 @@ app.whenReady().then(async () => {
     })
   }
 
-  setActiveWindowTitleFn(() => _activeWindow)
-  setInterval(updateActiveWindow, 3000)
+  // Discover server URL (localhost / LAN / WiFi / mobile hotspot)
+  await config.discoverServerUrl()
+  console.log('[agent] Server:', config.getServerUrl())
 
-  // ── Screen lock / sleep → pause screenshot capture + record screen-off ──
+  // Screen lock → pause captures
   powerMonitor.on('lock-screen', () => {
-    if (scheduler.isRunning()) scheduler.pause()
-    _onScreenOff('lock-screen')
+    if (_running && !_paused) { _paused = true; console.log('[agent] ⏸ Screen locked — paused') }
+    _updateTray()
   })
   powerMonitor.on('suspend', () => {
-    if (scheduler.isRunning()) scheduler.pause()
-    _onScreenOff('suspend')
+    if (_running && !_paused) { _paused = true; console.log('[agent] ⏸ Suspended — paused') }
+    _updateTray()
   })
 
-  // ── Screen unlock / resume → resume screenshot capture + end screen-off ─
+  // Screen unlock → resume captures
   powerMonitor.on('unlock-screen', () => {
-    if (scheduler.isPaused()) scheduler.resume()
-    _onScreenOn()
+    if (_running && _paused) { _paused = false; console.log('[agent] ▶ Unlocked — resumed') }
+    _updateTray()
   })
   powerMonitor.on('resume', () => {
-    if (scheduler.isPaused()) scheduler.resume()
-    _onScreenOn()
+    if (_running && _paused) { _paused = false; console.log('[agent] ▶ Resumed') }
+    _updateTray()
   })
 
-  // When scheduler fires a capture, push status to tray + popup
-  scheduler.setStatusCallback((status) => {
-    _updateTray(status)
-    _pushStatus(status)
-  })
+  _createTray()
 
-  createTray()
-  setupIPC()
-
-  // Restore previous session
-  const valid = await auth.validateToken()
-  if (valid) {
-    const { minutes } = await config.fetchIntervalFromBackend(auth.getToken())
-    scheduler.updateInterval(minutes)
-    _startPoller()
+  // Check deep-link on first launch
+  const deepLink = process.argv.find(a => a.startsWith('epip-screenshot://'))
+  if (deepLink) {
+    await _handleDeepLink(deepLink)
   } else {
-    auth.logout()
-    showLoginWindow()
+    // Restore previous session
+    const valid = await auth.validateToken()
+    if (valid) {
+      console.log('[agent] Restoring session for:', auth.getUser()?.name)
+      _intervalMins = await config.fetchInterval(auth.getToken())
+      _startCapture()
+      _startPoller()
+    } else {
+      auth.logout()
+      console.log('[agent] Waiting for website login...')
+    }
   }
+
+  _scheduleMidnightStop()
 })
 
 app.on('window-all-closed', e => e.preventDefault())
-app.on('before-quit', () => { _stopPoller(); scheduler.stop() })
+app.on('before-quit', () => { _stopCapture(); _stopPoller(); _stopMidnight() })
 
-// ── Poller — runs every 30s while logged in ───────────────────────────────────
-// Checks: (a) attendance status → start/stop capture
-//         (b) interval setting  → apply any admin changes live
-
-async function _poll() {
-  if (!auth.isLoggedIn()) return
+// ── Deep-link handler ─────────────────────────────────────────────────────────
+async function _handleDeepLink(url) {
   try {
-    const [attendanceRes, intervalData] = await Promise.all([
-      axios.get(`${config.getServerUrl()}/api/attendance/today`, {
-        headers: auth.getHeaders(), timeout: 8000,
-      }),
-      config.fetchIntervalFromBackend(auth.getToken()),
-    ])
+    const parsed = new URL(url)
+    if (parsed.hostname !== 'launch') return
 
-    // ── 1. Attendance check ─────────────────────────────────────────────────
-    const record    = attendanceRes.data?.data
-    const checkedIn = !!(record?.check_in && !record?.check_out)
+    const token   = parsed.searchParams.get('token')
+    const userB64 = parsed.searchParams.get('user')
+    if (!token) return
 
-    if (checkedIn && !_isCheckedIn) {
-      // Just checked in → start capturing
-      _isCheckedIn     = true
-      _isOnScreenBreak = false
-      _screenOffStart  = null
-      console.log('[agent] ✅ Checked in — starting capture')
-      scheduler.updateInterval(intervalData.minutes)
-      scheduler.start()
-      _buildTrayMenu()
-      _pushToStatus({ checkedIn: true })
-
-    } else if (!checkedIn && _isCheckedIn) {
-      // Just checked out → stop capturing then quit agent
-      _isCheckedIn     = false
-      _isOnScreenBreak = false
-      _screenOffStart  = null
-      console.log('[agent] 🔴 Checked out — stopping capture, quitting in 5s')
-      scheduler.stop()
-      _buildTrayMenu()
-      _pushToStatus({ checkedIn: false })
-
-      // Show "Checked out" in status popup for 5 seconds then quit
-      setTimeout(() => {
-        console.log('[agent] Quitting after check-out')
-        _stopPoller()
-        app.quit()
-      }, 5000)
-
-    } else if (checkedIn && _isCheckedIn && intervalData.changed) {
-      // ── 2. Interval changed while checked in → apply immediately ──────────
-      console.log(`[agent] ⚙ Interval changed: ${intervalData.prev} → ${intervalData.minutes} min`)
-      scheduler.updateInterval(intervalData.minutes)
-      _buildTrayMenu()
-      // Push full status so popup updates the interval number live
-      _pushStatus({ ...scheduler.getStatus(), checkedIn: true })
+    let user = null
+    if (userB64) {
+      try { user = JSON.parse(Buffer.from(decodeURIComponent(userB64), 'base64').toString('utf8')) }
+      catch {}
     }
 
+    auth.loginWithToken(token, user)
+    await config.discoverServerUrl()
+    _intervalMins = await config.fetchInterval(token)
+
+    _startCapture()
+    _startPoller()
+    _updateTray()
+    console.log('[agent] ✅ Started for:', user?.name)
   } catch (err) {
-    console.warn('[agent] Poll error:', err.message)
+    console.error('[agent] Deep-link error:', err.message)
   }
 }
 
+// ── Capture start/stop ────────────────────────────────────────────────────────
+function _startCapture() {
+  if (_running) return
+  _running = true
+  _paused  = false
+  _captureCount = 0
+
+  // Take first screenshot immediately
+  _doCapture()
+
+  // Then on interval
+  _captureTimer = setInterval(_doCapture, _intervalMins * 60 * 1000)
+  console.log(`[agent] 📸 Capture started — every ${_intervalMins} min`)
+  _updateTray()
+}
+
+function _stopCapture() {
+  if (_captureTimer) { clearInterval(_captureTimer); _captureTimer = null }
+  _running = false
+  _paused  = false
+  console.log('[agent] ⏹ Capture stopped')
+  _updateTray()
+}
+
+async function _doCapture() {
+  if (!_running || _paused || !auth.isLoggedIn()) return
+  const ok = await captureAndUpload()
+  if (ok) { _captureCount++; _lastCapture = new Date().toLocaleTimeString('en-IN') }
+  _updateTray()
+}
+
+// ── Interval poller — checks for admin interval changes every 30s ─────────────
 function _startPoller() {
   if (_pollTimer) return
-  _poll()   // run immediately
-  _pollTimer = setInterval(_poll, POLL_MS)
-  console.log(`[agent] Poller started — every ${POLL_MS / 1000}s`)
+  _pollTimer = setInterval(async () => {
+    if (!auth.isLoggedIn()) return
+    const newMins = await config.fetchInterval(auth.getToken())
+    if (newMins !== _intervalMins) {
+      console.log(`[agent] ⚙ Interval: ${_intervalMins} → ${newMins} min`)
+      _intervalMins = newMins
+      // Restart capture timer with new interval
+      if (_captureTimer) { clearInterval(_captureTimer); _captureTimer = null }
+      if (_running) _captureTimer = setInterval(_doCapture, _intervalMins * 60 * 1000)
+      _updateTray()
+    }
+  }, 30 * 1000)
 }
 
 function _stopPoller() {
   if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null }
-  _isCheckedIn = false
 }
 
-// ── Screen-Off helpers ────────────────────────────────────────────────────────
-async function _onScreenOff(event) {
-  if (!auth.isLoggedIn() || !_isCheckedIn || _isOnScreenBreak) return
-  _isOnScreenBreak = true
-  _screenOffStart  = Date.now()
-  console.log(`[agent] 🔒 Screen off (${event}) — recording pause`)
-  try {
-    await axios.post(
-      `${config.getServerUrl()}/api/attendance/pause`,
-      { reason: 'screen_lock', comment: `Auto-detected: ${event}` },
-      { headers: auth.getHeaders(), timeout: 8000 }
-    )
-    console.log('[agent] ✅ Screen-off pause recorded')
-  } catch (err) {
-    // 409 = already on break — fine
-    console.warn('[agent] Screen-off pause skipped:', err.response?.data?.message || err.message)
-  }
-  _buildTrayMenu()
-  _pushStatus({ ...scheduler.getStatus(), checkedIn: _isCheckedIn, screenOff: true })
+// ── Midnight stop at 23:58 IST ────────────────────────────────────────────────
+function _scheduleMidnightStop() {
+  if (_midnightTimer) clearInterval(_midnightTimer)
+
+  // Check every minute
+  _midnightTimer = setInterval(() => {
+    const now = new Date(Date.now() + 5.5 * 60 * 60 * 1000) // IST
+    const h = now.getUTCHours(); const m = now.getUTCMinutes()
+    if (h === 23 && m === 58) {
+      console.log('[agent] 🌙 Midnight — stopping capture and clearing session')
+      _stopCapture()
+      _stopPoller()
+      auth.logout()
+      _captureCount = 0
+      _lastCapture  = null
+      _updateTray()
+    }
+  }, 60 * 1000)
 }
 
-async function _onScreenOn() {
-  if (!auth.isLoggedIn() || !_isCheckedIn || !_isOnScreenBreak) return
-  _isOnScreenBreak = false
-  const offSecs = _screenOffStart ? Math.round((Date.now() - _screenOffStart) / 1000) : 0
-  _screenOffStart  = null
-  console.log(`[agent] 🔓 Screen on — resuming after ${offSecs}s off`)
-  try {
-    await axios.post(
-      `${config.getServerUrl()}/api/attendance/resume`,
-      {},
-      { headers: auth.getHeaders(), timeout: 8000 }
-    )
-    console.log('[agent] ✅ Screen-on resume recorded')
-  } catch (err) {
-    // 404 = no active break — fine (e.g. agent restarted mid-break)
-    console.warn('[agent] Screen-on resume skipped:', err.response?.data?.message || err.message)
-  }
-  _buildTrayMenu()
-  _pushStatus({ ...scheduler.getStatus(), checkedIn: _isCheckedIn, screenOff: false })
+function _stopMidnight() {
+  if (_midnightTimer) { clearInterval(_midnightTimer); _midnightTimer = null }
 }
 
 // ── Tray ──────────────────────────────────────────────────────────────────────
-function createTray() {
-  const icon = nativeImage.createFromPath(path.join(ICON_DIR, 'tray-icon.png'))
-  tray       = new Tray(icon)
-  tray.setToolTip('Sangria Agent')
-  tray.on('click', () => auth.isLoggedIn() ? showStatusWindow() : showLoginWindow())
-  _buildTrayMenu()
+function _createTray() {
+  const iconPath = path.join(__dirname, 'assets', 'tray-icon.png')
+  const img      = nativeImage.createFromPath(iconPath)
+  tray = new Tray(img.isEmpty() ? nativeImage.createEmpty() : img)
+  tray.setToolTip('Sangria Screenshot')
+  _updateTray()
 }
 
-function _buildTrayMenu() {
+function _updateTray() {
   if (!tray) return
-  const running  = scheduler.isRunning()
-  const paused   = scheduler.isPaused()
-  const loggedIn = auth.isLoggedIn()
   const user     = auth.getUser()
-  const interval = config.getIntervalMinutes()
+  const loggedIn = auth.isLoggedIn()
+  const server   = config.getServerUrl().replace('http://', '')
 
-  const statusLabel = !loggedIn
-    ? '⚪  Not logged in'
-    : !_isCheckedIn
-    ? '⚪  Waiting for check-in'
-    : _isOnScreenBreak
-    ? '🔒  Screen Off — paused'
-    : '🟢  Checked in — capturing'
+  const statusLine =
+    !loggedIn  ? '⚪  Waiting for login...'
+    : _paused  ? '⏸  Screen locked — paused'
+    : _running ? `📸  Capturing every ${_intervalMins} min`
+               : '🟢  Logged in — idle'
 
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: loggedIn ? `👤  ${user?.name || 'Employee'}` : '❌  Not logged in', enabled: false },
-    { label: statusLabel, enabled: false },
-    { label: running && !paused ? `📸  Every ${interval} min` : paused ? '⏸  Paused (screen off)' : '⏹  Stopped', enabled: false },
-    { type: 'separator' },
-    { label: 'Open Status', click: () => auth.isLoggedIn() ? showStatusWindow() : showLoginWindow() },
+    { label: statusLine, enabled: false },
+    { label: `📷  Captures today: ${_captureCount}`, enabled: false },
+    { label: _lastCapture ? `🕐  Last: ${_lastCapture}` : '🕐  No captures yet', enabled: false },
+    { label: `🔗  ${server}`, enabled: false },
     { type: 'separator' },
     {
-      label:   paused ? '▶  Resume' : '⏸  Pause',
-      enabled: loggedIn && running,
-      click:   () => { paused ? scheduler.resume() : scheduler.pause(); _buildTrayMenu() },
-    },
-    {
-      label:   '📸  Capture Now',
-      enabled: loggedIn && _isCheckedIn && !_isOnScreenBreak,
-      click:   () => captureAndUpload(),
+      label: '🌐  Open Dashboard',
+      click: () => shell.openExternal(`http://${server.split(':')[0]}:5173`),
     },
     { type: 'separator' },
     {
-      label: '🌐  Open Sangria Dashboard',
-      click: () => shell.openExternal(config.getServerUrl().replace(':5000', ':5173')),
+      label: 'Sign Out',
+      enabled: loggedIn,
+      click: () => { _stopCapture(); _stopPoller(); auth.logout(); _updateTray() },
     },
-    { type: 'separator' },
-    { label: 'Sign Out', enabled: loggedIn, click: _doLogout },
-    { label: 'Quit', click: () => { _stopPoller(); scheduler.stop(); app.quit() } },
+    { label: 'Quit', click: () => { _stopCapture(); _stopPoller(); _stopMidnight(); app.quit() } },
   ]))
-}
 
-function _updateTray(status) {
-  if (!tray) return
-  const last  = status.lastCapture
-    ? new Date(status.lastCapture).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : 'Never'
-  const state = _isOnScreenBreak ? 'Screen Off' : status.paused ? 'Paused' : status.running ? 'Active' : 'Waiting'
-  tray.setToolTip(`Sangria Agent — ${state} | Last: ${last} | Today: ${status.captureCount}`)
-  _buildTrayMenu()
-}
-
-// ── Status window helpers ──────────────────────────────────────────────────────
-function _pushStatus(data) {
-  if (statusWin && !statusWin.isDestroyed()) {
-    statusWin.webContents.send('status:update', {
-      ...data,
-      checkedIn: _isCheckedIn,
-      screenOff: _isOnScreenBreak,
-    })
-  }
-}
-function _pushToStatus(data) {
-  if (statusWin && !statusWin.isDestroyed()) {
-    statusWin.webContents.send('checkin:update', { ...data, screenOff: _isOnScreenBreak })
-  }
-}
-
-// ── Login Window ──────────────────────────────────────────────────────────────
-function showLoginWindow() {
-  if (loginWin && !loginWin.isDestroyed()) { loginWin.show(); loginWin.focus(); return }
-  loginWin = new BrowserWindow({
-    width: 360, height: 420,
-    resizable: false, maximizable: false, fullscreenable: false,
-    frame: false, alwaysOnTop: true, center: true, show: false,
-    backgroundColor: '#0f172a',
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: false },
-  })
-  loginWin.loadFile(path.join(__dirname, 'renderer', 'login.html'))
-  loginWin.once('ready-to-show', () => loginWin.show())
-  if (isDev) loginWin.webContents.openDevTools({ mode: 'detach' })
-  loginWin.on('closed', () => { loginWin = null })
-}
-
-// ── Status Window ─────────────────────────────────────────────────────────────
-function showStatusWindow() {
-  if (statusWin && !statusWin.isDestroyed()) { statusWin.show(); statusWin.focus(); return }
-  const { screen } = require('electron')
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize
-  statusWin = new BrowserWindow({
-    width: 300, height: 330,
-    x: width - 316, y: height - 346,
-    resizable: false, maximizable: false, fullscreenable: false,
-    frame: false, alwaysOnTop: true, skipTaskbar: true, show: false,
-    backgroundColor: '#1e293b',
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: false },
-  })
-  statusWin.loadFile(path.join(__dirname, 'renderer', 'status.html'))
-  statusWin.once('ready-to-show', () => statusWin.show())
-  if (isDev) statusWin.webContents.openDevTools({ mode: 'detach' })
-  statusWin.on('blur',   () => { if (statusWin && !statusWin.isDestroyed()) statusWin.hide() })
-  statusWin.on('closed', () => { statusWin = null })
-}
-
-// ── IPC ────────────────────────────────────────────────────────────────────────
-function setupIPC() {
-  ipcMain.handle('auth:login', async (_, username, password) => {
-    const user = await auth.login(username, password)   // throws if not employee
-    if (loginWin && !loginWin.isDestroyed()) loginWin.close()
-    const { minutes } = await config.fetchIntervalFromBackend(auth.getToken())
-    scheduler.updateInterval(minutes)
-    _startPoller()
-    _buildTrayMenu()
-    return user
-  })
-
-  ipcMain.handle('auth:logout',     ()          => _doLogout())
-  ipcMain.handle('auth:getUser',    ()          => auth.getUser())
-  ipcMain.handle('auth:isLoggedIn', ()          => auth.isLoggedIn())
-
-  ipcMain.handle('scheduler:start',  ()         => { scheduler.start();  _buildTrayMenu() })
-  ipcMain.handle('scheduler:stop',   ()         => { scheduler.stop();   _buildTrayMenu() })
-  ipcMain.handle('scheduler:pause',  ()         => { scheduler.pause();  _buildTrayMenu() })
-  ipcMain.handle('scheduler:resume', ()         => { scheduler.resume(); _buildTrayMenu() })
-  ipcMain.handle('scheduler:status', ()         => ({ ...scheduler.getStatus(), checkedIn: _isCheckedIn }))
-
-  ipcMain.handle('config:get',      ()          => config.getAll())
-  ipcMain.handle('config:set',      (_, k, v)   => config.set(k, v))
-  ipcMain.handle('checkin:status',  ()          => _isCheckedIn)
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function _doLogout() {
-  _stopPoller()
-  scheduler.stop()
-  auth.logout()
-  _isCheckedIn     = false
-  _isOnScreenBreak = false
-  _screenOffStart  = null
-  _buildTrayMenu()
-  if (statusWin && !statusWin.isDestroyed()) statusWin.close()
-  showLoginWindow()
-}
-
-function updateActiveWindow() {
-  try {
-    require('child_process').execFile('powershell', [
-      '-NoProfile', '-NonInteractive', '-Command',
-      'Add-Type @\'\nusing System; using System.Runtime.InteropServices;\n' +
-      'public class W { [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();\n' +
-      '[DllImport("user32.dll")] public static extern int GetWindowText(IntPtr h,System.Text.StringBuilder s,int n);\n' +
-      'public static string Get(){var b=new System.Text.StringBuilder(256);GetWindowText(GetForegroundWindow(),b,256);return b.ToString();}}\n\'@; [W]::Get()',
-    ], { timeout: 2000 }, (err, stdout) => {
-      if (!err && stdout.trim()) _activeWindow = stdout.trim()
-    })
-  } catch { /* silent */ }
+  tray.setToolTip(
+    !loggedIn  ? 'Sangria Screenshot — Waiting'
+    : _running ? `Sangria Screenshot — ${_captureCount} captures`
+               : 'Sangria Screenshot — Idle'
+  )
 }

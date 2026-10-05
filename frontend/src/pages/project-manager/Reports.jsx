@@ -159,13 +159,14 @@ const AssignTaskDrawer = ({ employee, day, employees, onClose, onTaskAdded }) =>
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex"
+      className="fixed top-[60px] right-0 bottom-0 z-40 flex"
+      style={{ left: 0 }}
     >
-      <div className="flex-1 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="flex-1" onClick={onClose} />
       <motion.div
         initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
         transition={{ type: 'spring', stiffness: 280, damping: 28 }}
-        className="w-full max-w-md bg-white dark:bg-dark-800 h-full overflow-y-auto shadow-2xl flex flex-col"
+        className="w-full max-w-md bg-white dark:bg-dark-800 h-full overflow-y-auto shadow-2xl flex flex-col border-l border-gray-200 dark:border-dark-600"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-dark-600 sticky top-0 bg-white dark:bg-dark-800 z-10">

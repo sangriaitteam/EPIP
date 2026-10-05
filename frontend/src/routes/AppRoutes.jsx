@@ -14,6 +14,7 @@ import EmployeeProfile from '../pages/employee/Profile'
 import EmployeeAttendance from '../pages/employee/Attendance'
 import EmployeeTasks from '../pages/employee/Tasks'
 import EmployeeProjects from '../pages/employee/Projects'
+import EmployeeProjectDetail from '../pages/employee/ProjectDetail'
 import VerifyDocuments from '../pages/employee/VerifyDocuments'
 
 // Project Manager pages
@@ -23,6 +24,7 @@ import PMProjects      from '../pages/project-manager/Projects'
 import PMProjectUpdates from '../pages/project-manager/ProjectUpdates'
 import PMProjectDetail from '../pages/project-manager/ProjectDetail'
 import PMChats         from '../pages/project-manager/Chats'
+import PMGroupChats    from '../pages/project-manager/GroupChats'
 
 // HR (Admin) pages
 import HRDashboard from '../pages/hr/Dashboard'
@@ -74,7 +76,8 @@ const AppRoutes = () => (
         <Route path="/employee/profile"         element={<EmployeeProfile />} />
         <Route path="/employee/attendance"      element={<EmployeeAttendance />} />
         <Route path="/employee/tasks"           element={<EmployeeTasks />} />
-        <Route path="/employee/projects"        element={<EmployeeProjects />} />
+        <Route path="/employee/projects"         element={<EmployeeProjects />} />
+        <Route path="/employee/projects/:id"      element={<EmployeeProjectDetail />} />
       </Route>
     </Route>
 
@@ -109,8 +112,9 @@ const AppRoutes = () => (
         <Route path="/pm/reports"   element={<PMReports />} />
         <Route path="/pm/projects"  element={<PMProjects />} />
         <Route path="/pm/projects/:id" element={<PMProjectDetail />} />
-        <Route path="/pm/updates"   element={<PMProjectUpdates />} />
-        <Route path="/pm/chats"     element={<PMChats />} />
+        <Route path="/pm/updates"      element={<PMProjectUpdates />} />
+        <Route path="/pm/chats"        element={<PMChats />} />
+        <Route path="/pm/group-chats"  element={<PMGroupChats />} />
       </Route>
     </Route>
 

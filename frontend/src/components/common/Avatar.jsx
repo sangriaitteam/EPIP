@@ -58,7 +58,20 @@ const Avatar = ({ name, src, size = 'md', className, online, animate = true }) =
         'shadow-lg ring-2 ring-white/20 dark:ring-dark-600/50'
       )}>
         {src ? (
-          <img src={src} alt={name} className="w-full h-full object-cover" />
+          <img
+            src={(() => {
+              // Normalize stored URL to current browser host
+              // Handles cases where server IP changed or localhost vs LAN IP mismatch
+              try {
+                const { protocol, hostname } = window.location
+                const host = hostname.includes(':') ? `[${hostname}]` : hostname
+                return src.replace(/^https?:\/\/[^/]+/, `${protocol}//${host}:5000`)
+              } catch { return src }
+            })()}
+            alt={name}
+            className="w-full h-full object-cover"
+            onError={e => { e.target.style.display = 'none' }}
+          />
         ) : (
           <span style={{ textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
             {getInitials(name)}

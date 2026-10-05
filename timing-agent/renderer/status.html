@@ -3,214 +3,298 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ScreenLock Agent</title>
+  <title>EPIP Timing Agent</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #1e293b;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a;
       color: #f1f5f9;
       height: 100vh;
       display: flex;
       flex-direction: column;
       overflow: hidden;
       user-select: none;
+      -webkit-font-smoothing: antialiased;
     }
 
-    /* Drag region */
+    /* ── Title bar ── */
     .titlebar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 14px;
-      background: #0f172a;
-      border-bottom: 1px solid #334155;
+      padding: 10px 14px 10px 16px;
+      background: #020617;
+      border-bottom: 1px solid #1e293b;
       -webkit-app-region: drag;
       flex-shrink: 0;
     }
-    .titlebar span { font-size: 12px; font-weight: 700; color: #94a3b8; }
-    .titlebar .close-btn {
+    .titlebar-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .titlebar-logo {
+      width: 18px; height: 18px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border-radius: 5px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px;
+      flex-shrink: 0;
+    }
+    .titlebar-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #64748b;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .close-btn {
       width: 12px; height: 12px;
       background: #ef4444;
       border-radius: 50%;
-      cursor: pointer;
       border: none;
+      cursor: pointer;
       -webkit-app-region: no-drag;
+      transition: background 0.15s;
     }
-    .titlebar .close-btn:hover { background: #dc2626; }
+    .close-btn:hover { background: #dc2626; }
 
-    /* Status indicator */
+    /* ── Status pill ── */
     .status-bar {
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 14px 16px;
-      background: #0f172a;
+      padding: 12px 16px;
+      background: #020617;
       border-bottom: 1px solid #1e293b;
+      flex-shrink: 0;
     }
     .status-dot {
-      width: 10px; height: 10px;
+      width: 9px; height: 9px;
       border-radius: 50%;
       flex-shrink: 0;
-      transition: background 0.3s;
     }
-    .status-dot.working   { background: #22c55e; animation: pulse-green 2s infinite; }
-    .status-dot.break     { background: #f59e0b; animation: pulse-amber 2s infinite; }
-    .status-dot.idle      { background: #475569; }
-    .status-label { font-size: 13px; font-weight: 700; flex: 1; }
-    .status-label.working { color: #22c55e; }
-    .status-label.break   { color: #f59e0b; }
-    .status-label.idle    { color: #64748b; }
+    .status-dot.working { background: #22c55e; animation: pulse-g 2s infinite; }
+    .status-dot.break   { background: #f59e0b; animation: pulse-a 2s infinite; }
+    .status-dot.idle    { background: #334155; }
+    @keyframes pulse-g {
+      0%,100% { box-shadow: 0 0 0 0 rgba(34,197,94,.5); }
+      50%      { box-shadow: 0 0 0 5px rgba(34,197,94,0); }
+    }
+    @keyframes pulse-a {
+      0%,100% { box-shadow: 0 0 0 0 rgba(245,158,11,.5); }
+      50%      { box-shadow: 0 0 0 5px rgba(245,158,11,0); }
+    }
+    .status-text {
+      font-size: 12px;
+      font-weight: 700;
+      flex: 1;
+    }
+    .status-text.working { color: #22c55e; }
+    .status-text.break   { color: #f59e0b; }
+    .status-text.idle    { color: #475569; }
 
-    @keyframes pulse-green {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.4); }
-      50%       { box-shadow: 0 0 0 6px rgba(34,197,94,0); }
-    }
-    @keyframes pulse-amber {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0.4); }
-      50%       { box-shadow: 0 0 0 6px rgba(245,158,11,0); }
-    }
-
-    /* User info */
+    /* ── User row ── */
     .user-row {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 11px;
       padding: 12px 16px;
-      border-bottom: 1px solid #334155;
+      border-bottom: 1px solid #1e293b;
+      flex-shrink: 0;
     }
     .avatar {
       width: 36px; height: 36px;
       border-radius: 50%;
       background: linear-gradient(135deg, #6366f1, #8b5cf6);
       display: flex; align-items: center; justify-content: center;
-      font-size: 14px; font-weight: 700;
+      font-size: 15px; font-weight: 800;
+      flex-shrink: 0;
+      color: white;
+    }
+    .user-name { font-size: 13px; font-weight: 700; color: #f1f5f9; }
+    .user-sub  { font-size: 11px; color: #475569; margin-top: 2px; }
+
+    /* ── Time cards ── */
+    .time-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      padding: 12px 16px;
+      border-bottom: 1px solid #1e293b;
       flex-shrink: 0;
     }
-    .user-name  { font-size: 13px; font-weight: 700; color: #f1f5f9; }
-    .user-role  { font-size: 11px; color: #64748b; margin-top: 1px; }
-
-    /* Time display */
-    .time-section {
-      padding: 14px 16px;
-      border-bottom: 1px solid #334155;
+    .time-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 10px 12px;
     }
-    .time-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
+    .time-card-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 4px;
     }
-    .time-row:last-child { margin-bottom: 0; }
-    .time-label { font-size: 11px; color: #64748b; font-weight: 500; }
-    .time-value { font-size: 13px; font-weight: 700; color: #f1f5f9; font-variant-numeric: tabular-nums; }
-    .time-value.accent { color: #6366f1; }
-    .time-value.green  { color: #22c55e; }
-    .time-value.amber  { color: #f59e0b; }
+    .time-card-value {
+      font-size: 15px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+    }
+    .time-card-value.green  { color: #22c55e; }
+    .time-card-value.amber  { color: #f59e0b; }
+    .time-card-value.purple { color: #a78bfa; }
+    .time-card-value.muted  { color: #334155; }
 
-    /* Auto-break notice */
-    .auto-break-notice {
+    /* ── Screen lock notice ── */
+    .lock-notice {
       margin: 0 16px;
-      padding: 8px 12px;
-      background: rgba(245,158,11,0.1);
-      border: 1px solid rgba(245,158,11,0.25);
-      border-radius: 8px;
+      padding: 9px 12px;
+      background: rgba(245,158,11,.08);
+      border: 1px solid rgba(245,158,11,.2);
+      border-radius: 10px;
       font-size: 11px;
       color: #fbbf24;
+      line-height: 1.55;
       display: none;
-      line-height: 1.5;
+      flex-shrink: 0;
+    }
+    .lock-notice.visible { display: block; }
+
+    /* ── Server row ── */
+    .server-row {
+      padding: 6px 16px;
+      flex-shrink: 0;
+    }
+    .server-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      font-size: 10px;
+      color: #475569;
+      font-variant-numeric: tabular-nums;
+    }
+    .server-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #22c55e;
+      animation: pulse-g 2s infinite;
     }
 
-    /* Action buttons */
+    /* ── Actions ── */
     .actions {
-      padding: 12px 16px;
+      padding: 10px 16px 14px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 7px;
       flex: 1;
       justify-content: flex-end;
     }
-
     .btn {
       width: 100%;
       padding: 11px;
       border: none;
       border-radius: 10px;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 700;
       cursor: pointer;
-      transition: opacity 0.15s, transform 0.1s;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 7px;
+      gap: 6px;
+      transition: opacity .15s, transform .1s;
+      letter-spacing: 0.02em;
     }
-    .btn:active { transform: scale(0.98); }
-    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .btn:active  { transform: scale(0.97); }
+    .btn:disabled { opacity: .35; cursor: not-allowed; }
 
-    .btn-checkin  { background: linear-gradient(135deg, #22c55e, #16a34a); color: white; }
-    .btn-checkout { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; }
-    .btn-break    { background: #334155; color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
-    .btn-resume   { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; }
-
-    .btn-row { display: flex; gap: 8px; }
-    .btn-row .btn { flex: 1; }
-
-    /* Break dropdown */
-    .break-dropdown {
-      position: relative;
+    .btn-break  {
+      background: #1e293b;
+      color: #f59e0b;
+      border: 1px solid rgba(245,158,11,.25);
     }
+    .btn-break:hover:not(:disabled) { background: #1e3a2f; border-color: rgba(245,158,11,.5); }
+
+    .btn-resume {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: white;
+    }
+    .btn-resume:hover:not(:disabled) { opacity: .9; }
+
+    .btn-logout {
+      background: transparent;
+      color: #334155;
+      font-size: 11px;
+      padding: 8px;
+    }
+    .btn-logout:hover { color: #64748b; }
+
+    /* ── Break dropdown ── */
+    .break-wrap { position: relative; }
     .break-menu {
       position: absolute;
       bottom: calc(100% + 6px);
       left: 0; right: 0;
-      background: #0f172a;
+      background: #1e293b;
       border: 1px solid #334155;
       border-radius: 10px;
       overflow: hidden;
       display: none;
       z-index: 99;
-      box-shadow: 0 -8px 24px rgba(0,0,0,0.4);
+      box-shadow: 0 -10px 30px rgba(0,0,0,.5);
     }
     .break-menu.open { display: block; }
     .break-menu button {
       display: flex; align-items: center; gap: 8px;
-      width: 100%;
-      padding: 10px 14px;
-      background: none;
-      border: none;
-      color: #cbd5e1;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      text-align: left;
-      transition: background 0.1s;
+      width: 100%; padding: 10px 14px;
+      background: none; border: none;
+      color: #cbd5e1; font-size: 12px; font-weight: 600;
+      cursor: pointer; text-align: left;
+      transition: background .1s;
     }
-    .break-menu button:hover { background: #1e293b; }
-    .break-menu button:not(:last-child) { border-bottom: 1px solid #1e293b; }
+    .break-menu button:hover { background: #334155; }
+    .break-menu button + button { border-top: 1px solid #0f172a; }
 
-    /* Error */
+    /* ── Not-checked-in message ── */
+    .idle-msg {
+      margin: 0 16px;
+      padding: 14px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      text-align: center;
+      display: none;
+    }
+    .idle-msg p   { font-size: 12px; color: #475569; line-height: 1.65; }
+    .idle-msg span { font-size: 11px; color: #334155; }
+
+    /* ── Error toast ── */
     .error-toast {
       position: absolute;
-      top: 56px;
-      left: 10px; right: 10px;
-      background: rgba(239,68,68,0.12);
-      border: 1px solid rgba(239,68,68,0.3);
+      top: 48px; left: 10px; right: 10px;
+      background: rgba(239,68,68,.12);
+      border: 1px solid rgba(239,68,68,.3);
       border-radius: 8px;
       padding: 9px 13px;
-      font-size: 11px;
-      color: #fca5a5;
-      display: none;
-      z-index: 100;
+      font-size: 11px; color: #fca5a5;
+      display: none; z-index: 200;
     }
 
     .spinner {
-      width: 13px; height: 13px;
-      border: 2px solid rgba(255,255,255,0.3);
+      width: 12px; height: 12px;
+      border: 2px solid rgba(255,255,255,.25);
       border-top-color: currentColor;
       border-radius: 50%;
-      animation: spin 0.7s linear infinite;
+      animation: spin .7s linear infinite;
       display: inline-block;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -218,208 +302,210 @@
 </head>
 <body>
 
-  <div class="titlebar" style="-webkit-app-region:drag">
-    <span>🔒 ScreenLock Agent</span>
-    <button class="close-btn" onclick="window.timingAgent.closeWindow()"></button>
+  <div class="titlebar">
+    <div class="titlebar-left">
+      <div class="titlebar-logo">⏱</div>
+      <span class="titlebar-title">EPIP Timing Agent</span>
+    </div>
+    <button class="close-btn" onclick="window.epipAgent.closeWindow()"></button>
   </div>
 
   <div class="error-toast" id="errorToast"></div>
 
-  <!-- Status indicator -->
+  <!-- Status -->
   <div class="status-bar">
     <div class="status-dot idle" id="statusDot"></div>
-    <span class="status-label idle" id="statusLabel">Not checked in</span>
+    <span class="status-text idle" id="statusText">Not checked in</span>
   </div>
 
   <!-- User -->
-  <div class="user-row" id="userRow">
-    <div class="avatar" id="avatarEl">?</div>
+  <div class="user-row">
+    <div class="avatar" id="avatar">?</div>
     <div>
       <div class="user-name" id="userName">—</div>
-      <div class="user-role">Employee</div>
+      <div class="user-sub"  id="userSub">Employee</div>
     </div>
   </div>
 
-  <!-- Times -->
-  <div class="time-section">
-    <div class="time-row">
-      <span class="time-label">Checked In</span>
-      <span class="time-value accent" id="checkInTime">—</span>
+  <!-- Time cards -->
+  <div class="time-grid">
+    <div class="time-card">
+      <div class="time-card-label">Checked In</div>
+      <div class="time-card-value purple" id="checkInTime">—</div>
     </div>
-    <div class="time-row">
-      <span class="time-label">Work Duration</span>
-      <span class="time-value green" id="workDuration">—</span>
+    <div class="time-card">
+      <div class="time-card-label">Work Time</div>
+      <div class="time-card-value green" id="workDuration">—</div>
     </div>
-    <div class="time-row">
-      <span class="time-label">Current Break</span>
-      <span class="time-value amber" id="breakDuration">—</span>
+    <div class="time-card">
+      <div class="time-card-label">Break Time</div>
+      <div class="time-card-value amber" id="breakDuration">—</div>
+    </div>
+    <div class="time-card">
+      <div class="time-card-label">Status</div>
+      <div class="time-card-value muted" id="statusBadge">—</div>
     </div>
   </div>
 
-  <!-- Auto-break notice -->
-  <div class="auto-break-notice" id="autoBreakNotice">
+  <!-- Screen lock notice -->
+  <div class="lock-notice" id="lockNotice">
     🔒 Screen locked — break started automatically.<br>
-    Unlock your screen to resume.
+    Unlock your screen to resume working.
   </div>
 
-  <!-- Action buttons -->
-  <div class="actions">
+  <!-- Not checked in -->
+  <div class="idle-msg" id="idleMsg">
+    <p>🌐 Login via the website to start tracking.<br>
+    <span>Attendance check-in happens automatically on login.</span></p>
+  </div>
 
-    <!-- Check-In/Check-Out removed — handled by website login/logout automatically -->
-
-    <!-- Status info when not checked in -->
-    <div id="notCheckedInMsg" style="display:none; text-align:center; padding:12px; background:rgba(100,116,139,0.1); border-radius:10px; border:1px solid #334155;">
-      <p style="font-size:12px; color:#64748b; line-height:1.6;">
-        🌐 Login via website to start tracking<br>
-        <span style="font-size:11px; color:#475569;">Check-in happens automatically on login</span>
-      </p>
+  <!-- Server tag -->
+  <div class="server-row" id="serverRow" style="display:none">
+    <div class="server-tag">
+      <div class="server-dot"></div>
+      <span id="serverUrl">localhost:5000</span>
     </div>
+  </div>
 
-    <!-- Break / Resume row -->
-    <div class="btn-row" id="breakRow" style="display:none">
-      <!-- Break dropdown -->
-      <div class="break-dropdown" style="flex:1">
-        <button class="btn btn-break" id="btnBreak" onclick="toggleBreakMenu()">
-          ⏸ Take Break
-        </button>
-        <div class="break-menu" id="breakMenu">
-          <button onclick="doBreak('tea_break')">   ☕ Tea Break</button>
-          <button onclick="doBreak('lunch_break')"> 🍽 Lunch Break</button>
-          <button onclick="doBreak('meeting')">     📅 Meeting</button>
-          <button onclick="doBreak('personal')">    👤 Personal</button>
-          <button onclick="doBreak('other')">       • Other</button>
-        </div>
+  <!-- Actions -->
+  <div class="actions">
+    <!-- Break dropdown -->
+    <div class="break-wrap" id="breakWrap" style="display:none">
+      <button class="btn btn-break" id="btnBreak" onclick="toggleBreakMenu()">
+        ⏸&nbsp; Take a Break
+      </button>
+      <div class="break-menu" id="breakMenu">
+        <button onclick="doBreak('tea_break')">   ☕&nbsp; Tea Break</button>
+        <button onclick="doBreak('lunch_break')"> 🍽&nbsp; Lunch Break</button>
+        <button onclick="doBreak('meeting')">     📅&nbsp; Meeting</button>
+        <button onclick="doBreak('personal')">    👤&nbsp; Personal</button>
+        <button onclick="doBreak('other')">       •&nbsp;&nbsp; Other</button>
       </div>
     </div>
 
-    <!-- Resume button (shown when on break) -->
+    <!-- Resume -->
     <button class="btn btn-resume" id="btnResume" style="display:none" onclick="doResume()">
-      ▶ Resume Work
+      ▶&nbsp; Resume Work
     </button>
 
-    <!-- Sign Out -->
-    <button class="btn" style="background:#1e293b; color:#64748b; font-size:12px; padding:8px"
-      onclick="doLogout()">
-      Sign Out
-    </button>
+    <!-- Sign out -->
+    <button class="btn btn-logout" onclick="doLogout()">Sign Out</button>
   </div>
 
   <script>
     // ── State ────────────────────────────────────────────────────────────────
-    let _state = { isCheckedIn: false, isOnBreak: false, autoBreakOn: false, checkInTime: null, breakStartTime: null, user: null }
+    let _s = {
+      isCheckedIn: false, isOnBreak: false, autoBreak: false,
+      checkInTime: null,  breakStartTime: null,
+      serverUrl: null,    user: null,
+    }
     let _workTimer  = null
     let _breakTimer = null
 
     // ── Boot ─────────────────────────────────────────────────────────────────
     window.addEventListener('DOMContentLoaded', async () => {
       try {
-        const s = await window.timingAgent.getStatus()
+        const s = await window.epipAgent.getStatus()
         applyState(s)
       } catch (e) { showError(e.message) }
     })
 
-    // ── Real-time updates from main process ───────────────────────────────────
-    window.timingAgent.onStatusUpdate(data => applyState(data))
-    window.timingAgent.onError(msg => showError(msg))
+    window.epipAgent.onStatusUpdate(data => applyState(data))
+    window.epipAgent.onError(msg => showError(msg))
 
-    // ── Apply state to UI ─────────────────────────────────────────────────────
+    // ── Apply state ───────────────────────────────────────────────────────────
     function applyState(s) {
-      _state = s || _state
-
-      const { isCheckedIn, isOnBreak, autoBreakOn, checkInTime, user } = _state
+      if (!s) return
+      _s = { ..._s, ...s }
+      const { isCheckedIn, isOnBreak, autoBreak, checkInTime, serverUrl, user } = _s
 
       // User info
       if (user) {
         document.getElementById('userName').textContent = user.name || user.username || '—'
-        document.getElementById('avatarEl').textContent = (user.name || 'E')[0].toUpperCase()
+        document.getElementById('avatar').textContent   = (user.name || 'E')[0].toUpperCase()
+        document.getElementById('userSub').textContent  = user.employee?.designation || 'Employee'
       }
 
-      // Status dot + label
-      const dot   = document.getElementById('statusDot')
-      const label = document.getElementById('statusLabel')
+      // Status dot + text
+      const dot  = document.getElementById('statusDot')
+      const text = document.getElementById('statusText')
+      const badge = document.getElementById('statusBadge')
       if (!isCheckedIn) {
-        dot.className   = 'status-dot idle'
-        label.className = 'status-label idle'
-        label.textContent = 'Not checked in'
+        dot.className  = 'status-dot idle'
+        text.className = 'status-text idle'
+        text.textContent = 'Not checked in'
+        badge.textContent = '—'; badge.className = 'time-card-value muted'
       } else if (isOnBreak) {
-        dot.className   = 'status-dot break'
-        label.className = 'status-label break'
-        label.textContent = autoBreakOn ? '⏸ On Break (screen locked)' : '⏸ On Break'
+        dot.className  = 'status-dot break'
+        text.className = 'status-text break'
+        text.textContent = autoBreak ? '⏸  On Break (screen locked)' : '⏸  On Break'
+        badge.textContent = 'Break'; badge.className = 'time-card-value amber'
       } else {
-        dot.className   = 'status-dot working'
-        label.className = 'status-label working'
-        label.textContent = '🟢 Working'
+        dot.className  = 'status-dot working'
+        text.className = 'status-text working'
+        text.textContent = '🟢  Working'
+        badge.textContent = 'Active'; badge.className = 'time-card-value green'
       }
 
-      // Auto-break notice
-      document.getElementById('autoBreakNotice').style.display = (isOnBreak && autoBreakOn) ? 'block' : 'none'
+      // Screen lock notice
+      document.getElementById('lockNotice').classList.toggle('visible', isOnBreak && autoBreak)
+
+      // Idle message
+      document.getElementById('idleMsg').style.display = !isCheckedIn ? 'block' : 'none'
 
       // Check-in time
       document.getElementById('checkInTime').textContent =
-        checkInTime ? formatTime(new Date(checkInTime)) : '—'
+        checkInTime ? fmtTime(new Date(checkInTime)) : '—'
 
-      // Work duration live counter
+      // Work duration live ticker
       clearInterval(_workTimer)
       if (isCheckedIn && checkInTime && !isOnBreak) {
-        updateWorkDuration(checkInTime)
-        _workTimer = setInterval(() => updateWorkDuration(checkInTime), 1000)
+        _tickWork(checkInTime)
+        _workTimer = setInterval(() => _tickWork(checkInTime), 1000)
       } else if (!isCheckedIn) {
         document.getElementById('workDuration').textContent = '—'
       }
 
-      // Break duration live counter — use ACTUAL pause_start from backend
+      // Break duration live ticker
       clearInterval(_breakTimer)
-      if (isOnBreak) {
-        // breakStartTime = ISO string from backend (actual pause start)
-        // fallback to now if not available (should not happen)
-        const breakStartISO = _state.breakStartTime || new Date().toISOString()
-        updateBreakDuration(breakStartISO)
-        _breakTimer = setInterval(() => updateBreakDuration(breakStartISO), 1000)
+      if (isOnBreak && _s.breakStartTime) {
+        _tickBreak(_s.breakStartTime)
+        _breakTimer = setInterval(() => _tickBreak(_s.breakStartTime), 1000)
       } else {
         document.getElementById('breakDuration').textContent = '—'
       }
 
-      // Buttons — no Check-In/Check-Out (handled by website)
-      const notCheckedInMsg = document.getElementById('notCheckedInMsg')
-      if (notCheckedInMsg) notCheckedInMsg.style.display = !isCheckedIn ? 'block' : 'none'
-      document.getElementById('breakRow').style.display      = isCheckedIn && !isOnBreak ? 'flex' : 'none'
-      document.getElementById('btnResume').style.display     = isOnBreak ? 'flex' : 'none'
+      // Server tag
+      if (serverUrl) {
+        document.getElementById('serverUrl').textContent =
+          serverUrl.replace('http://', '').replace('https://', '')
+        document.getElementById('serverRow').style.display = 'block'
+      }
+
+      // Buttons
+      document.getElementById('breakWrap').style.display  = isCheckedIn && !isOnBreak ? 'block' : 'none'
+      document.getElementById('btnResume').style.display  = isOnBreak ? 'flex' : 'none'
     }
 
     // ── Actions ───────────────────────────────────────────────────────────────
-    async function doCheckIn() {
-      setLoading('btnCheckIn', true)
-      try { await window.timingAgent.checkIn('office') }
-      catch (e) { showError(e.message) }
-      setLoading('btnCheckIn', false)
-    }
-
-    async function doCheckOut() {
-      if (!confirm('Check out now?')) return
-      setLoading('btnCheckOut', true)
-      try { await window.timingAgent.checkOut() }
-      catch (e) { showError(e.message) }
-      setLoading('btnCheckOut', false)
-    }
-
     async function doBreak(reason) {
       closeBreakMenu()
-      try { await window.timingAgent.pause(reason) }
+      try { await window.epipAgent.pause(reason) }
       catch (e) { showError(e.message) }
     }
 
     async function doResume() {
-      setLoading('btnResume', true)
-      try { await window.timingAgent.resume() }
+      busy('btnResume', true)
+      try { await window.epipAgent.resume() }
       catch (e) { showError(e.message) }
-      setLoading('btnResume', false)
+      busy('btnResume', false)
     }
 
     function doLogout() {
-      if (confirm('Sign out?')) window.timingAgent.logout()
+      if (confirm('Sign out of EPIP Timing Agent?')) window.epipAgent.logout()
     }
 
-    // ── Break dropdown ────────────────────────────────────────────────────────
+    // ── Break menu ────────────────────────────────────────────────────────────
     function toggleBreakMenu() {
       document.getElementById('breakMenu').classList.toggle('open')
     }
@@ -427,52 +513,50 @@
       document.getElementById('breakMenu').classList.remove('open')
     }
     document.addEventListener('click', e => {
-      if (!e.target.closest('.break-dropdown')) closeBreakMenu()
+      if (!e.target.closest('.break-wrap')) closeBreakMenu()
     })
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-    function formatTime(date) {
-      return date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }).toUpperCase()
+    function fmtTime(d) {
+      return d.toLocaleTimeString('en-IN', {
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
+      }).toUpperCase()
     }
 
-    function formatDuration(ms) {
+    function fmtDuration(ms) {
       if (ms < 0) ms = 0
       const h = Math.floor(ms / 3600000)
       const m = Math.floor((ms % 3600000) / 60000)
-      const s = Math.floor((ms % 60000) / 1000)
-      if (h > 0) return `${h}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`
-      return `${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`
+      const s = Math.floor((ms % 60000)   / 1000)
+      if (h > 0) return `${h}h ${pad(m)}m ${pad(s)}s`
+      return `${pad(m)}m ${pad(s)}s`
     }
 
-    function updateWorkDuration(checkInISO) {
+    function pad(n) { return String(n).padStart(2, '0') }
+
+    function _tickWork(checkInISO) {
       const ms = Date.now() - new Date(checkInISO).getTime()
-      document.getElementById('workDuration').textContent = formatDuration(ms)
+      document.getElementById('workDuration').textContent = fmtDuration(ms)
+    }
+    function _tickBreak(breakISO) {
+      const ms = Date.now() - new Date(breakISO).getTime()
+      document.getElementById('breakDuration').textContent = fmtDuration(ms)
     }
 
-    function updateBreakDuration(breakStartISO) {
-      const ms = Date.now() - new Date(breakStartISO).getTime()
-      document.getElementById('breakDuration').textContent = formatDuration(ms)
-    }
-
-    function setLoading(id, on) {
+    function busy(id, on) {
       const btn = document.getElementById(id)
       if (!btn) return
       btn.disabled = on
-      if (on) {
-        btn._origHTML   = btn.innerHTML
-        btn.innerHTML   = '<span class="spinner"></span>'
-      } else if (btn._origHTML) {
-        btn.innerHTML = btn._origHTML
-      }
+      if (on) { btn._orig = btn.innerHTML; btn.innerHTML = '<span class="spinner"></span>' }
+      else if (btn._orig) btn.innerHTML = btn._orig
     }
 
     function showError(msg) {
       const el = document.getElementById('errorToast')
-      el.textContent   = msg
+      el.textContent = msg
       el.style.display = 'block'
       setTimeout(() => { el.style.display = 'none' }, 4000)
     }
   </script>
-
 </body>
 </html>

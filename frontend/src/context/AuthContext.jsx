@@ -30,57 +30,31 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('epip_user', JSON.stringify(userData))
   }
 
-  // ── Auto check-out on browser/tab close (employee only) ─────────────────
-  // Uses pagehide + visibilitychange for more reliable detection
-  // Does NOT fire on SPA navigation (React Router pushState)
-  useEffect(() => {
-    const sendCheckout = () => {
-      const stored = localStorage.getItem('epip_user')
-      if (!stored) return
-      try {
-        const userData = JSON.parse(stored)
-        if (userData?.role !== 'employee') return
-        const token = localStorage.getItem('epip_token')
-        if (!token) return
-        const API = import.meta.env.VITE_API_URL ||
-          (import.meta.env.PROD ? '/api' : `${window.location.protocol}//${window.location.hostname}:5000/api`)
-        navigator.sendBeacon(
-          `${API}/attendance/check-out`,
-          new Blob([JSON.stringify({ _token: token, tab_close: true })], { type: 'application/json' })
-        )
-      } catch { /* silent */ }
-    }
-
-    // pagehide fires when tab closes or browser closes
-    // It does NOT fire on SPA navigation (pushState)
-    const handlePageHide = (event) => {
-      // event.persisted = true means page is being cached (bfcache), not closing
-      if (!event.persisted) {
-        sendCheckout()
-      }
-    }
-
-    window.addEventListener('pagehide', handlePageHide)
-    return () => window.removeEventListener('pagehide', handlePageHide)
-  }, [])
+  // ── Auto check-out: Only on explicit logout button click ─────────────────
+  // Tab/browser close → session stays open until 11:58 PM midnight cron closes it
+  // This prevents false checkouts on page refresh
   // Returns { locked, warning } so Login page can show appropriate message
   const _autoCheckIn = async () => {
     try {
       const res = await api.post('/attendance/check-in', { work_mode: 'office' })
-      if (res.success && res.data?.warning) {
-        // Show warning toast — re-login detected
-        toast(`${res.data.warning.message}`, {
-          icon: '⚠️',
-          duration: 6000,
-          style: { background: '#fef3c7', color: '#92400e', fontWeight: 600 },
-        })
+      if (res.success) {
+        // Notify DashboardLayout to activate the beforeunload warning
+        window.dispatchEvent(new Event('epip:checked-in'))
+        if (res.data?.warning) {
+          toast(`${res.data.warning.message}`, {
+            icon: '⚠️',
+            duration: 6000,
+            style: { background: '#fef3c7', color: '#92400e', fontWeight: 600 },
+          })
+        }
       }
       return { locked: false }
     } catch (err) {
       if (err?.response?.status === 423 || err?.message?.includes('423')) {
         return { locked: true, message: err?.response?.data?.message || 'Attendance locked for today' }
       }
-      // 409 = already checked in today — fine
+      // 409 = already checked in today — fine, still mark as checked in
+      window.dispatchEvent(new Event('epip:checked-in'))
       return { locked: false }
     }
   }
@@ -89,6 +63,8 @@ export const AuthProvider = ({ children }) => {
   const _autoCheckOut = async () => {
     try {
       await api.post('/attendance/check-out', {})
+      // Notify DashboardLayout to remove the beforeunload warning
+      window.dispatchEvent(new Event('epip:checked-out'))
       console.log('[auth] Auto check-out done')
     } catch {
       // Not checked in, or already checked out — ignore silently

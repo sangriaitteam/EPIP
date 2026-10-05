@@ -96,11 +96,11 @@ const Attendance = {
   },
 
   async findByEmployee(employee_id, { from, to, limit = 50 } = {}) {
-    let q = `SELECT * FROM attendance WHERE employee_id = $1`
+    let q = `SELECT *, to_char(attendance.date, 'YYYY-MM-DD') AS date FROM attendance WHERE employee_id = $1`
     const params = [employee_id]
-    if (from) { params.push(from); q += ` AND date >= $${params.length}` }
-    if (to)   { params.push(to);   q += ` AND date <= $${params.length}` }
-    q += ` ORDER BY date DESC LIMIT $${params.length + 1}`
+    if (from) { params.push(from); q += ` AND attendance.date >= $${params.length}` }
+    if (to)   { params.push(to);   q += ` AND attendance.date <= $${params.length}` }
+    q += ` ORDER BY attendance.date DESC LIMIT $${params.length + 1}`
     params.push(limit)
     const { rows } = await db.query(q, params)
     return rows

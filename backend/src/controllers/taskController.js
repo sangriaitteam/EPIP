@@ -3,6 +3,7 @@ const Employee     = require('../models/Employee')
 const Notification = require('../models/Notification')
 const { query }    = require('../config/db')
 const { ok, created, fail } = require('../utils/response')
+const { getFileUrl } = require('../config/storage')
 const emailService = require('../services/emailService')
 
 // POST /api/tasks
@@ -72,7 +73,9 @@ const getTeamTasks = async (req, res, next) => {
                 AND tc.is_read = false) AS unread_count
       FROM tasks t
       LEFT JOIN employees a ON t.assigned_to = a.id
-      WHERE (t.source = 'project_manager'`
+      WHERE t.project_id IS NULL
+        AND (t.project_name IS NULL OR t.project_name = '')
+        AND (t.source = 'project_manager'`
 
     const params = []
 
@@ -110,6 +113,8 @@ const getTeamUpdates = async (req, res, next) => {
        LEFT JOIN employees a ON t.assigned_to = a.id
        LEFT JOIN employees b ON t.assigned_by = b.id
        WHERE t.assigned_to IS NOT NULL
+         AND t.project_id IS NULL
+         AND (t.project_name IS NULL OR t.project_name = '')
        ORDER BY t.created_at DESC`
     )
 
@@ -223,19 +228,34 @@ const remove = async (req, res, next) => {
 const addComment = async (req, res, next) => {
   try {
     const { content } = req.body
-    if (!content) return fail(res, 'Comment content is required', 400)
+
+    // Build file attachment info if a file was uploaded
+    let file_url   = null
+    let file_name  = null
+    let file_type  = null
+    let file_size_kb = null
+
+    if (req.file) {
+      file_url     = getFileUrl('attachments', req.file.filename)
+      file_name    = req.file.originalname
+      file_type    = req.file.mimetype
+      file_size_kb = Math.round(req.file.size / 1024)
+    }
+
+    // Must have content OR a file
+    if (!content && !file_url) return fail(res, 'Comment content or file is required', 400)
 
     // Try to find employee record — PM / HR may not have one, that's OK
     const employee = await Employee.findByUserId(req.user.id)
-
-    // Use employee.id if available, otherwise NULL (allowed after migration 025)
     const authorId   = employee?.id ?? null
-    // Fallback display name for non-employee users (PM, HR, Admin)
     const authorName = employee
       ? `${employee.first_name} ${employee.last_name}`
       : (req.user.name || req.user.email || 'Project Manager')
 
-    const comment = await Task.addComment(req.params.id, authorId, content, authorName)
+    const comment = await Task.addComment(
+      req.params.id, authorId, content || '', authorName,
+      { file_url, file_name, file_type, file_size_kb }
+    )
     return created(res, comment, 'Comment added')
   } catch (err) { next(err) }
 }

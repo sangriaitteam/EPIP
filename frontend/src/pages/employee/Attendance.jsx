@@ -534,7 +534,11 @@ const MySessionPanel = ({ date, onClose }) => {
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-semibold text-gray-800 dark:text-white flex items-center gap-2">
             <Clock size={14} className="text-primary-500" />
-            Session Log — {new Date(date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+            Session Log — {(() => {
+              const [y, m, d] = date.split('-')
+              const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+              return `${parseInt(d)} ${months[parseInt(m) - 1]} ${y}`
+            })()}
           </p>
           <button onClick={onClose}
             className="p-1 rounded-lg hover:bg-gray-200 dark:hover:bg-dark-600 text-gray-400">
@@ -1039,10 +1043,20 @@ const EmployeeAttendance = () => {
                           // Live hours: tick-based for today's active session
                           const liveHoursStr = (() => {
                             if (!r.check_in) return '—'
-                            // Past day with stored value — just show it
-                            if (!isToday && r.hours_worked) return `${r.hours_worked}h`
-                            // Completed today — show stored
-                            if (r.check_out && r.hours_worked) return `${r.hours_worked}h`
+                            // Helper: decimal hours → "Xh Ym"
+                            const fmtDecHours = (dh) => {
+                              const totalMins = Math.round(Number(dh) * 60)
+                              if (totalMins <= 0) return '—'
+                              const hrs  = Math.floor(totalMins / 60)
+                              const mins = totalMins % 60
+                              if (hrs === 0) return `${mins}m`
+                              if (mins === 0) return `${hrs}h`
+                              return `${hrs}h ${mins}m`
+                            }
+                            // Past day with stored value — show formatted
+                            if (!isToday && r.hours_worked) return fmtDecHours(r.hours_worked)
+                            // Completed today — show stored formatted
+                            if (r.check_out && r.hours_worked) return fmtDecHours(r.hours_worked)
                             // Live — calc from check_in to now minus pauses
                             const endMs      = r.check_out ? new Date(r.check_out).getTime() : Date.now()
                             const elapsedSec = Math.max(0, Math.floor((endMs - new Date(r.check_in).getTime()) / 1000))

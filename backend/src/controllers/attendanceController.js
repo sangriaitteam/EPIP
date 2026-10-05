@@ -39,6 +39,19 @@ const checkIn = async (req, res, next) => {
 
     // ── Close ALL stale open pauses (from any previous session/day) ──────────
     // Prevents old unclosed screen-lock pauses from leaking into new sessions
+    // ── Also close any sessions from PREVIOUS days that are still open ──────
+    await query(
+      `UPDATE employee_sessions
+       SET logout_at = DATE_TRUNC('day', login_at) + INTERVAL '23 hours 58 minutes',
+           duration_mins = GREATEST(0, ROUND(
+             EXTRACT(EPOCH FROM (
+               DATE_TRUNC('day', login_at) + INTERVAL '23 hours 58 minutes' - login_at
+             )) / 60, 2))
+       WHERE employee_id = $1
+         AND logout_at IS NULL
+         AND DATE(login_at AT TIME ZONE 'Asia/Kolkata') < $2`,
+      [employee.id, today]
+    )
     await query(
       `UPDATE attendance_pauses
        SET pause_end     = NOW(),
@@ -194,10 +207,14 @@ const checkOut = async (req, res, next) => {
       .filter(p => p.reason === 'screen_lock')
       .reduce((s, p) => s + parseFloat(p.duration_mins), 0)
 
+    // Determine logout type — tab_close from sendBeacon, else manual
+    const logoutType = req.body?.tab_close === true ? 'tab_close' : 'manual'
+
     // Close the latest open session
     await query(
       `UPDATE employee_sessions
        SET logout_at         = NOW(),
+           logout_type       = $4,
            manual_break_mins = $1,
            screen_off_mins   = $2,
            duration_mins     = GREATEST(0, ROUND(
@@ -208,7 +225,7 @@ const checkOut = async (req, res, next) => {
          WHERE employee_id = $3 AND logout_at IS NULL
          ORDER BY login_at DESC LIMIT 1
        )`,
-      [manualMins, screenMins, employee.id]
+      [manualMins, screenMins, employee.id, logoutType]
     )
 
     // Recalculate total work hours from ALL sessions today using live formula
@@ -435,7 +452,8 @@ const getHolidays = async (req, res, next) => {
 const getSessionsByEmployee = async (req, res, next) => {
   try {
     const { employeeId } = req.params
-    const date = req.query.date || new Date().toISOString().split('T')[0]
+    const istNow3 = new Date(Date.now() + 5.5 * 60 * 60 * 1000)
+    const date = req.query.date || istNow3.toISOString().split('T')[0]
 
     const { rows } = await query(
       `SELECT
@@ -443,6 +461,7 @@ const getSessionsByEmployee = async (req, res, next) => {
          s.employee_id,
          s.login_at,
          s.logout_at,
+         s.logout_type,
          -- Live work duration: (elapsed since login OR stored logout) minus all pauses
          ROUND(
            GREATEST(0,
@@ -540,8 +559,9 @@ const getMyPausesRange = async (req, res, next) => {
 }
 const getTodayAll = async (req, res, next) => {
   try {
-    // Allow ?date=YYYY-MM-DD — defaults to today
-    const date = req.query.date || new Date().toISOString().split('T')[0]
+    // Allow ?date=YYYY-MM-DD — defaults to today in IST
+    const istNow = new Date(Date.now() + 5.5 * 60 * 60 * 1000)
+    const date = req.query.date || istNow.toISOString().split('T')[0]
     const { rows } = await query(
       `SELECT
          e.id          AS employee_id,
@@ -558,7 +578,46 @@ const getTodayAll = async (req, res, next) => {
          a.overtime,
          a.work_mode,
          a.status,
-         a.is_late
+         a.is_late,
+         a.total_pause_mins,
+         -- live_pause_mins: sum of ALL pauses including currently open ones
+         COALESCE((
+           SELECT ROUND(SUM(
+             CASE
+               WHEN ap.pause_end IS NOT NULL
+                 THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+               ELSE
+                 EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
+             END
+           )::numeric, 2)
+           FROM attendance_pauses ap
+           WHERE ap.attendance_id = a.id
+         ), 0) AS live_pause_mins,
+         -- live_hours_mins: sum of all session work durations (matches session panel "Total Work")
+         -- Each session: elapsed_in_session - pauses_in_session
+         COALESCE((
+           SELECT ROUND(SUM(
+             GREATEST(0,
+               EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
+               - COALESCE((
+                   SELECT SUM(
+                     CASE
+                       WHEN ap.pause_end IS NOT NULL
+                         THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+                       ELSE EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
+                     END
+                   )
+                   FROM attendance_pauses ap
+                   WHERE ap.attendance_id = s.attendance_id
+                     AND ap.pause_start >= s.login_at
+                     AND (s.logout_at IS NULL OR ap.pause_start <= s.logout_at)
+                 ), 0)
+             )
+           )::numeric, 2)
+           FROM employee_sessions s
+           WHERE s.employee_id = e.id
+             AND s.attendance_id = a.id
+         ), 0) AS live_hours_mins
        FROM employees e
        LEFT JOIN departments d ON e.department_id = d.id
        LEFT JOIN attendance  a ON a.employee_id = e.id AND a.date = $1
@@ -597,7 +656,8 @@ const getMySessions = async (req, res, next) => {
   try {
     const employee = await Employee.findByUserId(req.user.id)
     if (!employee) return fail(res, 'Employee profile not found', 404)
-    const date = req.query.date || new Date().toISOString().split('T')[0]
+    const istNow2 = new Date(Date.now() + 5.5 * 60 * 60 * 1000)
+    const date = req.query.date || istNow2.toISOString().split('T')[0]
 
     const { rows } = await query(
       `SELECT

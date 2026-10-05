@@ -54,6 +54,18 @@ export const api = {
   put:    (endpoint, body) => request(endpoint, { method: 'PUT',    body: JSON.stringify(body) }),
   patch:  (endpoint, body) => request(endpoint, { method: 'PATCH',  body: JSON.stringify(body) }),
   delete: (endpoint)       => request(endpoint, { method: 'DELETE' }),
+
+  // Multipart upload (FormData) — does NOT set Content-Type so browser sets boundary automatically
+  upload: (endpoint, formData) => {
+    const token = getToken()
+    return fetch(`${BASE_URL}${endpoint}`, {
+      method:  'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body:    formData,
+    })
+      .then(r => r.json().then(d => ({ ...d, httpStatus: r.status })))
+      .catch(err => ({ success: false, message: err.message }))
+  },
 }
 
 export default api

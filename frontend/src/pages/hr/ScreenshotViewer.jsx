@@ -204,7 +204,13 @@ const ScreenshotViewer = () => {
                     {/* Real screenshot image */}
                     {shot.file_url ? (
                       <img
-                        src={shot.file_url}
+                        src={(() => {
+                          // Replace stored hostname with current browser host
+                          // so images work on any machine (LAN, WiFi, etc.)
+                          const { protocol, hostname } = window.location
+                          const host = hostname.includes(':') ? `[${hostname}]` : hostname
+                          return shot.file_url.replace(/^https?:\/\/[^/]+/, `${protocol}//${host}:5000`)
+                        })()}
                         alt={`Screenshot ${fmtTime(shot.captured_at || shot.created_at)}`}
                         className="w-full h-full object-cover"
                         onError={e => { e.target.style.display = 'none' }}
@@ -277,7 +283,15 @@ const ScreenshotViewer = () => {
               </div>
               <div className="bg-black">
                 {preview.file_url
-                  ? <img src={preview.file_url} alt="Screenshot" className="w-full max-h-[70vh] object-contain" />
+                  ? <img
+                      src={(() => {
+                        const { protocol, hostname } = window.location
+                        const host = hostname.includes(':') ? `[${hostname}]` : hostname
+                        return preview.file_url.replace(/^https?:\/\/[^/]+/, `${protocol}//${host}:5000`)
+                      })()}
+                      alt="Screenshot"
+                      className="w-full max-h-[70vh] object-contain"
+                    />
                   : <div className="flex items-center justify-center h-64">
                       <Camera size={40} className="text-gray-600" />
                     </div>

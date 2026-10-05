@@ -1,4 +1,4 @@
-// ProjectDetail.jsx — Full project detail page (Overview / Tasks / Team / Reports)
+﻿// ProjectDetail.jsx — Full project detail page (Overview / Tasks / Team / Reports)
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -6,7 +6,7 @@ import {
   ArrowLeft, FolderOpen, Users, Calendar, Flag, CheckCircle2,
   Circle, Loader2, Clock, MoreHorizontal, RefreshCw, Search, Plus, X,
   BarChart2, ListTodo, UserCheck, FileBarChart, AlertCircle,
-  TrendingUp, Briefcase, Download
+  TrendingUp, Briefcase, Download, ChevronLeft, ChevronRight
 } from 'lucide-react'
 import Avatar from '../../components/common/Avatar'
 import { api } from '../../services/api'
@@ -122,7 +122,7 @@ const OverviewTab = ({ project, tasks, memberStats }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Related / project info */}
+        {/* Left: Project Info */}
         <div className="bg-white dark:bg-dark-800 rounded-2xl border border-gray-100 dark:border-dark-600 p-5 shadow-sm">
           <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
             <Briefcase size={14} className="text-primary-500" /> Project Info
@@ -144,7 +144,7 @@ const OverviewTab = ({ project, tasks, memberStats }) => {
           </div>
         </div>
 
-        {/* Employee progress */}
+        {/* Right column: Employee Progress */}
         <div className="bg-white dark:bg-dark-800 rounded-2xl border border-gray-100 dark:border-dark-600 p-5 shadow-sm">
           <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
             <UserCheck size={14} className="text-primary-500" /> Employee Progress
@@ -283,7 +283,7 @@ const AddTaskModal = ({ projectId, column, employees, onClose, onCreated }) => {
             <div>
               <label className="text-xs font-semibold text-gray-400 uppercase block mb-1">Priority</label>
               <select value={form.priority} onChange={e => setF('priority', e.target.value)} className={iCls}>
-                {['low','medium','high','urgent'].map(p => (
+                {['low','medium','high'].map(p => (
                   <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
                 ))}
               </select>
@@ -415,264 +415,262 @@ const TaskCard = ({ task, onStatusChange, onDelete }) => {
   )
 }
 
-const TasksTab = ({ tasks: initialTasks, projectId, project, memberStats, onRefresh }) => {
-  const [tasks, setTasks]           = useState(initialTasks)
-  const [search, setSearch]         = useState('')
-  const [statusFilter, setStatus]   = useState('all')
-  const [addTaskCol, setAddTaskCol] = useState(null)   // column id to add task in
+const TasksTab = ({ tasks, projectId, project, memberStats, weekStart, setWeekStart }) => {
+  const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
+  const DAY_SHORT = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
 
-  // Sync when parent data refreshes
-  useEffect(() => { setTasks(initialTasks) }, [initialTasks])
+  // weekStart / setWeekStart come from ProjectDetail (shared with header date picker)
+  const weekEnd = new Date(weekStart)
+  weekEnd.setDate(weekStart.getDate() + 6)
 
-  // Build employee list from memberStats for the add task modal
-  const employees = memberStats.map(m => ({
-    id: m.id, first_name: m.first_name, last_name: m.last_name,
-  }))
-
-  // Filter tasks
-  const filtered = tasks.filter(t => {
-    const matchSearch = !search ||
-      t.title.toLowerCase().includes(search.toLowerCase()) ||
-      (t.description || '').toLowerCase().includes(search.toLowerCase())
-    const matchStatus = statusFilter === 'all' || t.status === statusFilter
-    return matchSearch && matchStatus
-  })
-
-  // Per-column tasks
-  const byCol = (colId) => filtered.filter(t => t.status === colId)
-
-  // Stats
-  const total      = tasks.length
-  const done       = tasks.filter(t => t.status === 'done').length
-  const inProgress = tasks.filter(t => t.status === 'in_progress').length
-  const pending    = tasks.filter(t => t.status === 'todo').length
-  const donePct    = total > 0 ? Math.round(done / total * 100) : 0
-  const progPct    = total > 0 ? Math.round(inProgress / total * 100) : 0
-  const pendPct    = total > 0 ? Math.round(pending / total * 100) : 0
-
-  const handleStatusChange = (taskId, newStatus) => {
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t))
+  const prevWeek = () => {
+    const d = new Date(weekStart); d.setDate(d.getDate() - 7); setWeekStart(d)
+  }
+  const nextWeek = () => {
+    const d = new Date(weekStart); d.setDate(d.getDate() + 7); setWeekStart(d)
   }
 
-  const handleDelete = (taskId) => {
-    setTasks(prev => prev.filter(t => t.id !== taskId))
+  const DAY_COLORS = {
+    Monday:    { bg: 'bg-blue-500',    text: 'text-white', bar: '#3b82f6' },
+    Tuesday:   { bg: 'bg-purple-500',  text: 'text-white', bar: '#a855f7' },
+    Wednesday: { bg: 'bg-orange-400',  text: 'text-white', bar: '#fb923c' },
+    Thursday:  { bg: 'bg-teal-500',    text: 'text-white', bar: '#14b8a6' },
+    Friday:    { bg: 'bg-pink-500',    text: 'text-white', bar: '#ec4899' },
+    Saturday:  { bg: 'bg-indigo-400',  text: 'text-white', bar: '#818cf8' },
+    Sunday:    { bg: 'bg-violet-500',  text: 'text-white', bar: '#8b5cf6' },
   }
 
-  const handleTaskCreated = (newTask) => {
-    // Inject assignee_name if possible
-    const member = employees.find(e => e.id === newTask.assigned_to)
-    const enriched = {
-      ...newTask,
-      assignee_name: member ? member.first_name + ' ' + member.last_name : null,
+  const STATUS_MAP = {
+    done:        { label: 'Completed',   dot: 'bg-green-500',  pill: 'bg-green-500/15 text-green-400 border border-green-500/30' },
+    in_progress: { label: 'In Progress', dot: 'bg-blue-500',   pill: 'bg-blue-500/15 text-blue-400 border border-blue-500/30' },
+    review:      { label: 'Review',      dot: 'bg-yellow-400', pill: 'bg-yellow-500/15 text-yellow-400 border border-yellow-500/30' },
+    todo:        { label: 'Pending',     dot: 'bg-gray-500',   pill: 'bg-gray-500/15 text-gray-400 border border-gray-500/30' },
+  }
+
+  // ── Build display rows — real tasks line-by-line, or default placeholders ──
+  const defaultRows = [
+    { seq: 0, day: 'Monday',    taskName: 'Project Setup & Requirements', start: '09:00 AM', end: '11:00 AM', duration: '2h',  status: 'todo', pct: 0, hasTask: false },
+    { seq: 1, day: 'Tuesday',   taskName: 'Design & Planning',            start: '09:00 AM', end: '12:00 PM', duration: '3h',  status: 'todo', pct: 0, hasTask: false },
+    { seq: 2, day: 'Wednesday', taskName: 'Development',                  start: '09:00 AM', end: '01:00 PM', duration: '4h',  status: 'todo', pct: 0, hasTask: false },
+    { seq: 3, day: 'Thursday',  taskName: 'Testing & QA',                 start: '10:00 AM', end: '02:00 PM', duration: '4h',  status: 'todo', pct: 0, hasTask: false },
+    { seq: 4, day: 'Friday',    taskName: 'Content & Documentation',      start: '09:00 AM', end: '12:00 PM', duration: '3h',  status: 'todo', pct: 0, hasTask: false },
+    { seq: 5, day: 'Saturday',  taskName: 'Review & Feedback',            start: '10:00 AM', end: '01:00 PM', duration: '3h',  status: 'todo', pct: 0, hasTask: false },
+    { seq: 6, day: 'Sunday',    taskName: 'Final Submission',             start: '09:00 AM', end: '11:00 AM', duration: '2h',  status: 'todo', pct: 0, hasTask: false },
+  ]
+
+  // Parse duration hint from description "(N min)" → "Xh" or "Xm"
+  // Also can calculate from start_time/end_time
+  const parseDuration = (desc, startTime, endTime) => {
+    // If both start and end times exist, calculate duration
+    if (startTime && endTime) {
+      try {
+        const parseTime = (t) => {
+          const [time, period] = t.trim().split(' ')
+          let [h, m] = time.split(':').map(Number)
+          if (period?.toUpperCase() === 'PM' && h !== 12) h += 12
+          if (period?.toUpperCase() === 'AM' && h === 12) h = 0
+          return h * 60 + (m || 0)
+        }
+        const diff = parseTime(endTime) - parseTime(startTime)
+        if (diff > 0) {
+          const hrs = Math.floor(diff / 60)
+          const mins = diff % 60
+          if (hrs > 0 && mins > 0) return `${hrs}h ${mins}m`
+          if (hrs > 0) return `${hrs}h`
+          return `${mins}m`
+        }
+      } catch {}
     }
-    setTasks(prev => [enriched, ...prev])
+    // Fallback: parse from description
+    if (!desc) return '—'
+    const m = desc.match(/\((\d+)\s*min\)/)
+    if (!m) return '—'
+    const mins = parseInt(m[1])
+    if (mins === 0) return '—'
+    if (mins >= 60) return `${Math.round(mins / 60)}h`
+    return `${mins}m`
   }
 
-  // Today/this week/this month due counts
-  const now       = new Date()
-  const todayStr  = now.toISOString().split('T')[0]
-  const weekEnd   = new Date(now); weekEnd.setDate(now.getDate() + 7)
-  const monthEnd  = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  const overdueCt = tasks.filter(t => t.due_date && t.due_date < todayStr && t.status !== 'done').length
-  const todayCt   = tasks.filter(t => t.due_date === todayStr && t.status !== 'done').length
-  const weekCt    = tasks.filter(t => t.due_date && new Date(t.due_date) <= weekEnd && t.status !== 'done').length
-  const monthCt   = tasks.filter(t => t.due_date && new Date(t.due_date) <= monthEnd && t.status !== 'done').length
+  // Real tasks → render ALL of them line-by-line (no 7-row limit)
+  // Day color cycles through DAYS array by index
+  const [editingTime, setEditingTime] = useState(null) // { taskId, field: 'start'|'end', value }
+  const [savingTime,  setSavingTime]  = useState(null)
+
+  const handleTimeSave = async (taskId, field, value) => {
+    if (!value?.trim()) { setEditingTime(null); return }
+    setSavingTime(`${taskId}-${field}`)
+    try {
+      const body = field === 'start' ? { start_time: value.trim() } : { end_time: value.trim() }
+      await api.put(`/tasks/${taskId}`, body)
+    } catch {}
+    setSavingTime(null)
+    setEditingTime(null)
+  }
+
+  const displayRows = tasks.length > 0
+    ? tasks.map((t, i) => ({
+        seq:      i,
+        day:      DAYS[i % 7],
+        taskName: t.title,
+        taskId:   t.id,
+        start:    t.start_time || '09:00 AM',
+        end:      t.end_time   || '05:00 PM',
+        duration: parseDuration(t.description, t.start_time, t.end_time),
+        status:   t.status || 'todo',
+        pct:      t.completion_percent || 0,
+        hasTask:  true,
+      }))
+    : defaultRows
 
   return (
-    <div className="flex gap-4 items-start">
-      {/* Main kanban area */}
-      <div className="flex-1 min-w-0 space-y-4">
-        {/* Stat cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {[
-            { label: 'Total Tasks',   value: total,      pct: null,     color: '#6366f1', bg: 'bg-indigo-500' },
-            { label: 'Completed',     value: done,       pct: donePct,  color: '#22c55e', bg: 'bg-green-500'  },
-            { label: 'In Progress',   value: inProgress, pct: progPct,  color: '#6366f1', bg: 'bg-blue-500'   },
-            { label: 'Pending',       value: pending,    pct: pendPct,  color: '#f59e0b', bg: 'bg-amber-500'  },
-          ].map((c, i) => (
-            <motion.div key={c.label} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              className="bg-dark-800 rounded-2xl border border-dark-600 px-4 py-3.5 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-400">{c.label}</p>
-                <p className="text-2xl font-bold text-white mt-0.5">{c.value}</p>
-              </div>
-              {c.pct !== null
-                ? <MiniDonut pct={c.pct} color={c.color} size={48} />
-                : <div className={`w-10 h-10 rounded-xl ${c.bg} flex items-center justify-center`}>
-                    <ListTodo size={18} className="text-white" />
-                  </div>
-              }
-            </motion.div>
-          ))}
-        </div>
-
-        {/* Search + filter bar */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative flex-1 min-w-[180px]">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tasks..."
-              className="w-full pl-8 pr-3 py-2 text-sm rounded-xl border border-dark-600 bg-dark-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500" />
-          </div>
-          <select value={statusFilter} onChange={e => setStatus(e.target.value)}
-            className="px-3 py-2 text-xs rounded-xl bg-dark-800 border border-dark-600 text-gray-300 focus:outline-none focus:ring-1 focus:ring-primary-500">
-            <option value="all">All Status</option>
-            <option value="todo">To Do</option>
-            <option value="in_progress">In Progress</option>
-            <option value="review">Review</option>
-            <option value="done">Completed</option>
-          </select>
-        </div>
-
-        {/* Kanban columns */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-          {COLUMNS.map(col => {
-            const colTasks = byCol(col.id)
+    <div className="space-y-3">
+      {/* Gantt table */}
+      <div className="overflow-x-auto rounded-2xl border border-gray-100 dark:border-dark-600 shadow-sm bg-white dark:bg-dark-800">
+      <table className="w-full text-sm" style={{ minWidth: 900 }}>
+        <thead>
+          <tr className="border-b border-gray-100 dark:border-dark-600">
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide w-28">Day</th>
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">
+              <span className="flex items-center gap-1.5"><ListTodo size={12} /> Task</span>
+            </th>
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Start Timing</th>
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">End Timing</th>
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Duration</th>
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">
+              <span className="flex items-center gap-1.5"><Circle size={10} /> Status</span>
+            </th>
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">
+              <span className="flex items-center gap-1.5"><TrendingUp size={11} /> Completion</span>
+            </th>
+            {/* Day columns */}
+            {DAY_SHORT.map(d => (
+              <th key={d} className="px-2 py-3 text-center text-xs font-semibold text-gray-400 uppercase tracking-wide w-12">{d}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-50 dark:divide-dark-700">
+          {displayRows.map((row, i) => {
+            const col      = DAY_COLORS[row.day]
+            const st       = STATUS_MAP[row.status] || STATUS_MAP.todo
+            const taskName = row.taskName || row.task
+            // Gantt bar column = day-of-week index (0=Mon … 6=Sun), cycling for >7 tasks
+            const ganttCol = i % 7
             return (
-              <div key={col.id} className="bg-dark-800 rounded-2xl border border-dark-600 flex flex-col min-h-[300px]">
-                {/* Column header */}
-                <div className="flex items-center justify-between px-3 py-2.5 border-b border-dark-600">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2.5 h-2.5 rounded-full ${col.dot}`} />
-                    <span className="text-xs font-bold text-gray-300">{col.label}</span>
+              <motion.tr
+                key={row.taskId ? `task-${row.taskId}` : `default-${i}`}
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: Math.min(i * 0.04, 0.5) }}
+                className="hover:bg-gray-50/50 dark:hover:bg-dark-700/30 transition-colors"
+              >
+                {/* Seq / Day badge */}
+                <td className="px-4 py-3.5">
+                  <div className="flex flex-col items-start gap-1">
+                    {row.hasTask && (
+                      <span className="text-[9px] font-mono text-gray-400">#{String(i).padStart(2,'0')}</span>
+                    )}
+                    <span className={`inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-xs font-bold ${col.bg} ${col.text} min-w-[90px]`}>
+                      {row.day}
+                    </span>
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-dark-700 text-gray-400">
-                    {colTasks.length}
-                  </span>
-                </div>
+                </td>
 
-                {/* Cards */}
-                <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-96">
-                  <AnimatePresence>
-                    {colTasks.map(t => (
-                      <TaskCard key={t.id} task={t}
-                        onStatusChange={handleStatusChange}
-                        onDelete={handleDelete}
-                      />
-                    ))}
-                  </AnimatePresence>
-                  {colTasks.length === 0 && (
-                    <div className="py-6 text-center text-[10px] text-gray-500">No tasks</div>
+                {/* Task name */}
+                <td className="px-4 py-3.5">
+                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200 max-w-[220px] leading-snug">{taskName}</p>
+                </td>
+
+                {/* Start — inline editable */}
+                <td className="px-4 py-3.5 whitespace-nowrap">
+                  {row.hasTask && editingTime?.taskId === row.taskId && editingTime?.field === 'start' ? (
+                    <input
+                      autoFocus
+                      defaultValue={row.start}
+                      onBlur={e => handleTimeSave(row.taskId, 'start', e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') setEditingTime(null) }}
+                      className="w-24 px-2 py-1 text-xs rounded-lg border border-primary-500 bg-dark-700 text-white focus:outline-none"
+                      placeholder="09:00 AM"
+                    />
+                  ) : (
+                    <span
+                      onClick={() => row.hasTask && setEditingTime({ taskId: row.taskId, field: 'start', value: row.start })}
+                      className={`text-sm text-gray-500 dark:text-gray-400 ${row.hasTask ? 'cursor-pointer hover:text-primary-400 hover:underline' : ''}`}
+                      title={row.hasTask ? 'Click to edit' : ''}
+                    >
+                      {savingTime === `${row.taskId}-start` ? '...' : row.start}
+                    </span>
                   )}
-                </div>
+                </td>
 
-                {/* Add task button */}
-                <button onClick={() => setAddTaskCol(col.id)}
-                  className="flex items-center gap-1.5 px-3 py-2.5 text-xs text-gray-500 hover:text-primary-400 hover:bg-primary-500/5 transition-colors border-t border-dark-600 rounded-b-2xl">
-                  <Plus size={12} /> Add Task
-                </button>
-              </div>
+                {/* End — inline editable */}
+                <td className="px-4 py-3.5 whitespace-nowrap">
+                  {row.hasTask && editingTime?.taskId === row.taskId && editingTime?.field === 'end' ? (
+                    <input
+                      autoFocus
+                      defaultValue={row.end}
+                      onBlur={e => handleTimeSave(row.taskId, 'end', e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') setEditingTime(null) }}
+                      className="w-24 px-2 py-1 text-xs rounded-lg border border-primary-500 bg-dark-700 text-white focus:outline-none"
+                      placeholder="05:00 PM"
+                    />
+                  ) : (
+                    <span
+                      onClick={() => row.hasTask && setEditingTime({ taskId: row.taskId, field: 'end', value: row.end })}
+                      className={`text-sm text-gray-500 dark:text-gray-400 ${row.hasTask ? 'cursor-pointer hover:text-primary-400 hover:underline' : ''}`}
+                      title={row.hasTask ? 'Click to edit' : ''}
+                    >
+                      {savingTime === `${row.taskId}-end` ? '...' : row.end}
+                    </span>
+                  )}
+                </td>
+
+                {/* Duration */}
+                <td className="px-4 py-3.5 text-sm font-semibold text-gray-700 dark:text-gray-300">{row.duration}</td>
+
+                {/* Status */}
+                <td className="px-4 py-3.5">
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${st.pill}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
+                    {st.label}
+                  </span>
+                </td>
+
+                {/* Completion */}
+                <td className="px-4 py-3.5 min-w-[120px]">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1.5 bg-gray-100 dark:bg-dark-600 rounded-full overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: row.pct + '%' }}
+                        transition={{ duration: 0.8, delay: Math.min(i * 0.04, 0.5) }}
+                        className="h-full rounded-full"
+                        style={{ background: col.bar }}
+                      />
+                    </div>
+                    <span className="text-xs font-bold text-gray-500 dark:text-gray-400 w-8 text-right">{row.pct}%</span>
+                  </div>
+                </td>
+
+                {/* Day Gantt bars — bar appears in the column matching this row's day-of-week */}
+                {DAY_SHORT.map((d, di) => (
+                  <td key={d} className="px-1.5 py-3.5 text-center">
+                    {di === ganttCol ? (
+                      <motion.div
+                        initial={{ scaleX: 0 }}
+                        animate={{ scaleX: 1 }}
+                        transition={{ duration: 0.4, delay: Math.min(i * 0.04, 0.5) }}
+                        className="h-5 rounded-md mx-auto"
+                        style={{ background: col.bar, width: 36, transformOrigin: 'left' }}
+                      />
+                    ) : null}
+                  </td>
+                ))}
+              </motion.tr>
             )
           })}
-        </div>
-      </div>
-
-      {/* Right sidebar */}
-      <div className="w-56 flex-shrink-0 hidden xl:flex flex-col gap-4">
-        {/* Task Progress donut */}
-        <div className="bg-dark-800 rounded-2xl border border-dark-600 p-4">
-          <h4 className="text-xs font-bold text-gray-300 mb-3 flex items-center gap-1.5">
-            <BarChart2 size={12} className="text-primary-500" /> Task Progress
-          </h4>
-          <div className="flex justify-center mb-3">
-            <div className="relative">
-              <svg width="80" height="80" viewBox="0 0 80 80">
-                {/* Track */}
-                <circle cx="40" cy="40" r="32" fill="none" stroke="#1e293b" strokeWidth="8" />
-                {/* Done */}
-                {done > 0 && (() => {
-                  const r = 32, circ = 2*Math.PI*r
-                  const d = circ*(done/total); const ip = circ*(inProgress/total); const pn = circ*(pending/total)
-                  return <>
-                    <circle cx="40" cy="40" r={r} fill="none" stroke="#22c55e" strokeWidth="8"
-                      strokeDasharray={`${d} ${circ-d}`} strokeLinecap="round"
-                      style={{transform:'rotate(-90deg)',transformOrigin:'40px 40px'}} />
-                    {inProgress > 0 && <circle cx="40" cy="40" r={r} fill="none" stroke="#6366f1" strokeWidth="8"
-                      strokeDasharray={`${ip} ${circ-ip}`} strokeDashoffset={-d} strokeLinecap="round"
-                      style={{transform:'rotate(-90deg)',transformOrigin:'40px 40px'}} />}
-                    {pending > 0 && <circle cx="40" cy="40" r={r} fill="none" stroke="#f59e0b" strokeWidth="8"
-                      strokeDasharray={`${pn} ${circ-pn}`} strokeDashoffset={-(d+ip)} strokeLinecap="round"
-                      style={{transform:'rotate(-90deg)',transformOrigin:'40px 40px'}} />}
-                  </>
-                })()}
-                <text x="40" y="36" textAnchor="middle" fill="white" fontSize="13" fontWeight="bold">{donePct}%</text>
-                <text x="40" y="48" textAnchor="middle" fill="#94a3b8" fontSize="7">Completed</text>
-              </svg>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            {[
-              { label: 'Completed', count: done,       color: '#22c55e' },
-              { label: 'In Progress', count: inProgress, color: '#6366f1' },
-              { label: 'Pending',   count: pending,    color: '#f59e0b' },
-            ].map(s => (
-              <div key={s.label} className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full" style={{ background: s.color }} />
-                  <span className="text-[10px] text-gray-400">{s.label}</span>
-                </div>
-                <span className="text-[10px] font-bold text-gray-300">{s.count}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Quick Filters */}
-        <div className="bg-dark-800 rounded-2xl border border-dark-600 p-4">
-          <h4 className="text-xs font-bold text-gray-300 mb-3 flex items-center gap-1.5">
-            <Flag size={12} className="text-primary-500" /> Quick Filters
-          </h4>
-          <div className="space-y-1">
-            {[
-              { label: 'All Tasks',   count: total,      dot: 'bg-primary-500', val: 'all' },
-              { label: 'To Do',       count: tasks.filter(t=>t.status==='todo').length, dot: 'bg-slate-400', val: 'todo' },
-              { label: 'In Progress', count: inProgress, dot: 'bg-indigo-500', val: 'in_progress' },
-              { label: 'Review',      count: tasks.filter(t=>t.status==='review').length, dot: 'bg-yellow-400', val: 'review' },
-              { label: 'Completed',   count: done,       dot: 'bg-green-500', val: 'done' },
-            ].map(f => (
-              <button key={f.val} onClick={() => setStatus(f.val)}
-                className={'w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-[10px] transition-colors ' +
-                  (statusFilter === f.val ? 'bg-primary-500/20 text-primary-400' : 'hover:bg-dark-700 text-gray-400')}>
-                <div className="flex items-center gap-1.5">
-                  <span className={`w-2 h-2 rounded-full ${f.dot}`} />
-                  {f.label}
-                </div>
-                <span className="font-bold">{f.count}</span>
-              </button>
-            ))}
-          </div>
-          <div className="border-t border-dark-600 mt-3 pt-3">
-            <p className="text-[10px] font-bold text-gray-500 uppercase mb-1.5">Due Date</p>
-            {[
-              { label: 'Overdue',    count: overdueCt, dot: 'bg-red-500' },
-              { label: 'Today',      count: todayCt,   dot: 'bg-orange-400' },
-              { label: 'This Week',  count: weekCt,    dot: 'bg-yellow-400' },
-              { label: 'This Month', count: monthCt,   dot: 'bg-blue-400' },
-            ].map(f => (
-              <div key={f.label} className="flex items-center justify-between px-2 py-1.5 text-[10px] text-gray-400">
-                <div className="flex items-center gap-1.5">
-                  <span className={`w-2 h-2 rounded-full ${f.dot}`} />
-                  {f.label}
-                </div>
-                <span className="font-bold">{f.count}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Add Task Modal */}
-      <AnimatePresence>
-        {addTaskCol && (
-          <AddTaskModal
-            projectId={projectId}
-            column={addTaskCol}
-            employees={employees}
-            onClose={() => setAddTaskCol(null)}
-            onCreated={handleTaskCreated}
-          />
-        )}
-      </AnimatePresence>
+        </tbody>
+      </table>
+    </div>
     </div>
   )
 }
@@ -1085,20 +1083,121 @@ const ReportsTab = ({ project, projectId, currentUser }) => {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
+// ── Task Assignment Tab ───────────────────────────────────────────────────────
+const TaskAssignmentTab = ({ tasks, memberStats }) => {
+  if (tasks.length === 0) return (
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <div className="w-16 h-16 rounded-2xl bg-primary-500/10 flex items-center justify-center mb-4">
+        <UserCheck size={28} className="text-primary-400" />
+      </div>
+      <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">No tasks assigned yet</p>
+      <p className="text-xs text-gray-400 mt-1">Tasks assigned in this project will appear here</p>
+    </div>
+  )
+
+  // Group tasks by assignee
+  const grouped = {}
+  tasks.forEach(t => {
+    const key = t.assigned_to ?? 'unassigned'
+    if (!grouped[key]) grouped[key] = { member: memberStats.find(m => m.id === t.assigned_to) || null, tasks: [] }
+    grouped[key].tasks.push(t)
+  })
+
+  return (
+    <div className="space-y-5">
+      {Object.entries(grouped).map(([key, { member, tasks: mTasks }]) => {
+        const name = member ? (member.first_name + ' ' + member.last_name).trim() : 'Unassigned'
+        const done = mTasks.filter(t => t.status === 'done').length
+        const pct  = mTasks.length > 0 ? Math.round((done / mTasks.length) * 100) : 0
+        return (
+          <div key={key} className="bg-white dark:bg-dark-800 rounded-2xl border border-gray-100 dark:border-dark-600 shadow-sm overflow-hidden">
+            {/* Member header */}
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-50 dark:border-dark-700 bg-gray-50/50 dark:bg-dark-700/40">
+              {member
+                ? <Avatar name={name} src={member.avatar_url} size="sm" animate={false} />
+                : <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-dark-600 flex items-center justify-center"><UserCheck size={14} className="text-gray-400" /></div>
+              }
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-gray-900 dark:text-white">{name}</p>
+                <p className="text-[10px] text-gray-400">{member?.designation || member?.role || '—'}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-gray-400">{mTasks.length} task{mTasks.length !== 1 ? 's' : ''}</span>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-16 h-1.5 bg-gray-100 dark:bg-dark-600 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full bg-primary-500 transition-all" style={{ width: pct + '%' }} />
+                  </div>
+                  <span className="text-[10px] font-bold text-primary-500">{pct}%</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Task list */}
+            <div className="divide-y divide-gray-50 dark:divide-dark-700">
+              {mTasks.map(t => (
+                <div key={t.id} className="flex items-center gap-3 px-5 py-3">
+                  <div className="flex-shrink-0">{taskStatusIcon(t.status)}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{t.title}</p>
+                    {t.description && (
+                      <p className="text-[10px] text-gray-400 truncate mt-0.5">{t.description}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {t.due_date && (
+                      <span className="text-[10px] text-gray-400 flex items-center gap-0.5">
+                        <Calendar size={9} /> {fmtDate(t.due_date)}
+                      </span>
+                    )}
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${
+                      t.priority === 'urgent' ? 'bg-red-500/10 text-red-500' :
+                      t.priority === 'high'   ? 'bg-orange-500/10 text-orange-500' :
+                      t.priority === 'medium' ? 'bg-yellow-500/10 text-yellow-600' :
+                                                'bg-gray-100 text-gray-500 dark:bg-dark-700'
+                    }`}>{t.priority}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                      t.status === 'done'        ? 'bg-green-500/10 text-green-500' :
+                      t.status === 'in_progress' ? 'bg-indigo-500/10 text-indigo-400' :
+                      t.status === 'review'      ? 'bg-yellow-500/10 text-yellow-600' :
+                                                   'bg-gray-100 text-gray-500 dark:bg-dark-700'
+                    }`}>{taskStatusLabel(t.status)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
 const TABS = [
-  { id: 'overview', label: 'Overview',  icon: BarChart2 },
-  { id: 'tasks',    label: 'Tasks',     icon: ListTodo },
-  { id: 'team',     label: 'Team',      icon: Users },
-  { id: 'reports',  label: 'Reports',   icon: FileBarChart },
+  { id: 'tasks',    label: 'Tasks',    icon: ListTodo     },
+  { id: 'overview', label: 'Overview', icon: BarChart2    },
+  { id: 'team',     label: 'Team',     icon: Users        },
+  { id: 'reports',  label: 'Reports',  icon: FileBarChart },
 ]
 
 const ProjectDetail = () => {
   const { id }     = useParams()
   const navigate   = useNavigate()
-  const [tab,      setTab]      = useState('overview')
+  const [tab,      setTab]      = useState('tasks')
   const [data,     setData]     = useState(null)   // { project, tasks, memberStats }
   const [loading,  setLoading]  = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+
+  // ── Week date range state (shared between header date picker + TasksTab) ──
+  const [weekStart, setWeekStart] = useState(() => {
+    const now = new Date()
+    const day = now.getDay()
+    const diff = (day === 0 ? -6 : 1 - day)
+    const mon = new Date(now)
+    mon.setDate(now.getDate() + diff)
+    mon.setHours(0, 0, 0, 0)
+    return mon
+  })
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true)
@@ -1171,14 +1270,50 @@ const ProjectDetail = () => {
                 </span>
               </div>
             </div>
-            <div className="flex items-center gap-2 ml-auto">
-              <button onClick={() => load(true)} disabled={refreshing}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-gray-100 dark:bg-dark-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 transition-colors">
-                <motion.div animate={refreshing ? { rotate: 360 } : {}} transition={{ duration: 0.8, repeat: refreshing ? Infinity : 0, ease: 'linear' }}>
-                  <RefreshCw size={12} />
+            <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+              {/* Date Range Picker */}
+              <div className="flex items-center gap-1 px-3 py-2 rounded-xl bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-600 shadow-sm">
+                <button
+                  onClick={() => {
+                    const d = new Date(weekStart); d.setDate(d.getDate() - 7); setWeekStart(d)
+                  }}
+                  className="p-0.5 rounded text-gray-400 hover:text-primary-500 transition-colors"
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <div className="flex items-center gap-1.5 px-1">
+                  <Calendar size={12} className="text-primary-500 flex-shrink-0" />
+                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                    {weekStart.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
+                    {' – '}
+                    {(() => { const e = new Date(weekStart); e.setDate(e.getDate() + 6); return e.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }) })()}
+                  </span>
+                </div>
+                <button
+                  onClick={() => {
+                    const d = new Date(weekStart); d.setDate(d.getDate() + 7); setWeekStart(d)
+                  }}
+                  className="p-0.5 rounded text-gray-400 hover:text-primary-500 transition-colors"
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+              {/* Refresh Button */}
+              <motion.button
+                onClick={() => load(true)}
+                disabled={refreshing}
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.96 }}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary-500 text-white text-xs font-semibold shadow-md shadow-primary-500/25 disabled:opacity-60 transition-colors"
+              >
+                <motion.div
+                  animate={refreshing ? { rotate: 360 } : {}}
+                  transition={{ duration: 0.8, repeat: refreshing ? Infinity : 0, ease: 'linear' }}
+                >
+                  <RefreshCw size={13} />
                 </motion.div>
                 Refresh
-              </button>
+              </motion.button>
             </div>
           </div>
         </div>
@@ -1211,8 +1346,8 @@ const ProjectDetail = () => {
       <AnimatePresence mode="wait">
         <motion.div key={tab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
+          {tab === 'tasks'    && <TasksTab tasks={tasks} projectId={id} project={project} memberStats={memberStats} weekStart={weekStart} setWeekStart={setWeekStart} />}
           {tab === 'overview' && <OverviewTab project={project} tasks={tasks} memberStats={memberStats} />}
-          {tab === 'tasks'    && <TasksTab tasks={tasks} projectId={id} project={project} memberStats={memberStats} onRefresh={() => load(true)} />}
           {tab === 'team'     && <TeamTab memberStats={memberStats} />}
           {tab === 'reports'  && <ReportsTab project={project} projectId={id} />}
         </motion.div>

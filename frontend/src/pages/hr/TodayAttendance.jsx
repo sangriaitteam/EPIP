@@ -20,6 +20,30 @@ const fmtTime = (ts) => ts
   ? new Date(ts).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
   : '—'
 
+// Convert decimal hours (e.g. 1.89) to "1h 53m" format
+const fmtHours = (h) => {
+  if (!h && h !== 0) return '—'
+  const totalMins = Math.round(Number(h) * 60)
+  if (totalMins <= 0) return '—'
+  const hrs  = Math.floor(totalMins / 60)
+  const mins = totalMins % 60
+  if (hrs === 0) return `${mins}m`
+  if (mins === 0) return `${hrs}h`
+  return `${hrs}h ${mins}m`
+}
+
+// Live hours — uses backend session-sum formula (matches session panel "Total Work" exactly)
+const getLiveHours = (row) => {
+  if (!row.check_in) return null
+  const mins = Number(row.live_hours_mins)
+  if (!mins && mins !== 0) return null
+  const h = Math.floor(mins / 60)
+  const m = Math.floor(mins % 60)
+  if (h === 0) return `${m}m`
+  if (m === 0) return `${h}h`
+  return `${h}h ${m}m`
+}
+
 const toISO = (d) => d.toISOString().split('T')[0]  // YYYY-MM-DD
 
 const statusBadge = (row) => {
@@ -265,6 +289,20 @@ const SessionPanel = ({ employeeId, employeeName, date, onClose }) => {
                       <span className={`text-xs font-bold ${isActive ? 'text-green-500' : 'text-red-500'}`}>
                         {isActive ? 'Still working' : fmtTime(s.logout_at)}
                       </span>
+                      {/* Logout type badge */}
+                      {!isActive && s.logout_type && (
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ml-1 ${
+                          s.logout_type === 'tab_close' ? 'bg-orange-500/15 text-orange-400' :
+                          s.logout_type === 'midnight'  ? 'bg-purple-500/15 text-purple-400' :
+                          s.logout_type === 'manual'    ? 'bg-green-500/15 text-green-400' :
+                          'bg-gray-500/15 text-gray-400'
+                        }`}>
+                          {s.logout_type === 'tab_close' ? '⚠ Tab Close' :
+                           s.logout_type === 'midnight'  ? '🌙 Midnight' :
+                           s.logout_type === 'manual'    ? '✓ Logout' :
+                           s.logout_type}
+                        </span>
+                      )}
                     </div>
                     {workMins > 0 && (
                       <span className="ml-auto text-xs font-semibold text-primary-500 flex-shrink-0">
@@ -522,7 +560,7 @@ const HRTodayAttendance = () => {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100 dark:border-dark-600 bg-gray-50 dark:bg-dark-700">
-                      {['Employee','Dept','Check In','Check Out','Hours','Status','Late',''].map(h => (
+                      {['Employee','Check In','Check Out','Hours','Status','Late',''].map(h => (
                         <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                           {h}
                         </th>
@@ -551,7 +589,6 @@ const HRTodayAttendance = () => {
                                 </div>
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">{row.department || '—'}</td>
                             <td className="px-4 py-3">
                               <span className={`font-semibold text-sm ${row.check_in ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`}>
                                 {fmtTime(row.check_in)}
@@ -567,7 +604,14 @@ const HRTodayAttendance = () => {
                               </span>
                             </td>
                             <td className="px-4 py-3 text-xs font-medium text-gray-700 dark:text-gray-300">
-                              {row.hours_worked ? `${row.hours_worked}h` : '—'}
+                              {(() => {
+                                const live = getLiveHours(row)
+                                if (live !== null) {
+                                  const isActive = row.check_in && !row.check_out
+                                  return <span className={isActive ? 'text-green-600 dark:text-green-400 font-semibold' : ''}>{live}</span>
+                                }
+                                return fmtHours(row.hours_worked)
+                              })()}
                             </td>
                             <td className="px-4 py-3">
                               <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${badge.color}`}>
@@ -625,7 +669,7 @@ const HRTodayAttendance = () => {
                         <Avatar name={name} src={row.avatar_url} size="md" online={!!(row.check_in && !row.check_out)} animate={false} />
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-gray-900 dark:text-white text-sm truncate">{name}</p>
-                          <p className="text-xs text-gray-400">{row.emp_code} · {row.department || '—'}</p>
+                          <p className="text-xs text-gray-400">{row.emp_code}</p>
                         </div>
                         <span className={`px-2.5 py-1 rounded-full text-xs font-semibold flex-shrink-0 ${badge.color}`}>
                           {badge.label}
@@ -641,7 +685,12 @@ const HRTodayAttendance = () => {
                           <p className="text-[10px] text-gray-400 mt-0.5">Check Out</p>
                         </div>
                         <div className="p-2 rounded-xl bg-blue-500/10">
-                          <p className="text-xs font-bold text-blue-500">{row.hours_worked ? `${row.hours_worked}h` : '—'}</p>
+                          <p className="text-xs font-bold text-blue-500">
+                            {(() => {
+                              const live = getLiveHours(row)
+                              return live !== null ? live : fmtHours(row.hours_worked)
+                            })()}
+                          </p>
                           <p className="text-[10px] text-gray-400 mt-0.5">Hours</p>
                         </div>
                       </div>

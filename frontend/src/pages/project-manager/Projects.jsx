@@ -329,18 +329,101 @@ const ActiveProjectsTab = ({ projects, loading, onDeleteProject, onRefresh }) =>
 }
 
 // ── Create New Project ────────────────────────────────────────────────────────
+// ── Project Templates ─────────────────────────────────────────────────────────
+// ── 3D Models — 18 chapter tasks (from production content sheet) ──────────────
+const TEMPLATE_TASKS = {
+  '3d_models': [
+    { seq: 0,  title: 'Login Screen',              file_name: '00_Scr', duration_mins: 0,   description: 'Project login screen setup and access configuration.' },
+    { seq: 1,  title: 'Intro',                     file_name: '01_Scr', duration_mins: 10,  description: 'Project introduction — overview, objectives and scope. (10 min)' },
+    { seq: 2,  title: 'Features',                  file_name: '02_Scr', duration_mins: 5,   description: 'Key features and capabilities walkthrough. (5 min)' },
+    { seq: 3,  title: 'System Configuration',      file_name: '03_Scr', duration_mins: 15,  description: 'System configuration requirements and setup steps. (15 min)' },
+    { seq: 4,  title: 'Technical Specifications',  file_name: '04_Scr', duration_mins: 15,  description: 'Detailed technical specifications and standards. (15 min)' },
+    { seq: 5,  title: 'Software Loading',          file_name: '05_Scr', duration_mins: 30,  description: 'Software installation and loading procedures. (30 min)' },
+    { seq: 6,  title: 'Deployment',                file_name: '06_Scr', duration_mins: 45,  description: 'Deployment process and environment setup. (45 min)' },
+    { seq: 7,  title: 'Operation',                 file_name: '07_Scr', duration_mins: 120, description: 'Full operational procedures and workflow. (120 min)' },
+    { seq: 8,  title: 'Firing',                    file_name: '08_Scr', duration_mins: 20,  description: 'Firing sequence, triggers and execution procedures. (20 min)' },
+    { seq: 9,  title: 'Preventive Maintenance',    file_name: '09_Scr', duration_mins: 60,  description: 'Scheduled preventive maintenance tasks and checklist. (60 min)' },
+    { seq: 10, title: 'Fault Diagnosis',           file_name: '10_Scr', duration_mins: 80,  description: 'Fault detection, diagnosis and troubleshooting guide. (80 min)' },
+    { seq: 11, title: 'Dismantling & Reassembly',  file_name: '11_Scr', duration_mins: 240, description: 'Step-by-step dismantling and reassembly instructions. (240 min)' },
+    { seq: 12, title: 'Test Equipment',            file_name: '12_Scr', duration_mins: 60,  description: 'Test equipment usage, calibration and procedures. (60 min)' },
+    { seq: 13, title: "Do's and Don'ts",           file_name: '13_Scr', duration_mins: 20,  description: 'Safety guidelines, do\'s and don\'ts for operations. (20 min)' },
+    { seq: 14, title: '3D Models',                 file_name: '14_Scr', duration_mins: 0,   description: '3D model creation, rigging, texturing and animation assets.' },
+    { seq: 15, title: 'Gallery',                   file_name: '15_Scr', duration_mins: 0,   description: 'Image and media gallery compilation for the project.' },
+    { seq: 16, title: 'Manuals',                   file_name: '16_Scr', duration_mins: 0,   description: 'User manuals, reference guides and documentation.' },
+    { seq: 17, title: 'Extra',                     file_name: '17_Scr', duration_mins: 0,   description: 'Additional content, appendix and supplementary material.' },
+  ],
+}
+
+const PROJECT_TEMPLATES = [
+  {
+    id:          'cbt',
+    name:        'CBT',
+    fullName:    'Computer Based Training',
+    icon:        '🎓',
+    color:       'from-blue-500 to-indigo-600',
+    description: 'A structured Computer Based Training project for employee skill development and certification.',
+    priority:    'medium',
+    status:      'planning',
+  },
+  {
+    id:          's1000d',
+    name:        'S1000D',
+    fullName:    'International Technical Documentation',
+    icon:        '📋',
+    color:       'from-emerald-500 to-teal-600',
+    description: 'Technical documentation project following S1000D specification for aerospace, defence and industrial equipment.',
+    priority:    'high',
+    status:      'planning',
+  },
+  {
+    id:          'ietm',
+    name:        'IETM',
+    fullName:    'Interactive Electronic Technical Manual',
+    icon:        '💻',
+    color:       'from-orange-500 to-red-500',
+    description: 'Interactive Electronic Technical Manual project for digital maintenance and operation documentation.',
+    priority:    'high',
+    status:      'planning',
+  },
+  {
+    id:          '3d_models',
+    name:        '3D Models',
+    fullName:    '3D Modelling & Animation',
+    icon:        '🧊',
+    color:       'from-violet-500 to-purple-600',
+    description: 'End-to-end 3D modelling, rigging, texturing and animation project for product visualisation, training simulations or cinematic content.',
+    priority:    'high',
+    status:      'planning',
+  },
+]
+
 const CreateNewProject = ({ onBack, onCreated }) => {
   const [form, setForm] = useState({
     name: '', description: '', start_date: new Date().toISOString().split('T')[0],
     deadline: '', priority: '', client: '', project_owner: '', project_group: '', status: 'planning',
   })
+  const [showTemplates, setShowTemplates]   = useState(true)
+  const [selectedTemplate, setSelectedTemplate] = useState(null)
   const [employees, setEmployees] = useState([])
   const [selectedIds, setSelectedIds] = useState([])
   const [empSearch, setEmpSearch] = useState('')
   const [showEmpPanel, setShowEmpPanel] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [taskProgress, setTaskProgress] = useState(null) // null | { current, total }
 
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  // ── Apply template to form ────────────────────────────────────────────────
+  const applyTemplate = (tpl) => {
+    setSelectedTemplate(tpl.id)
+    setForm(f => ({
+      ...f,
+      name:        f.name || tpl.name,
+      description: f.description || tpl.description,
+      priority:    tpl.priority,
+      status:      tpl.status,
+    }))
+  }
 
   useEffect(() => {
     api.get('/employees?limit=200').then(res => {
@@ -375,16 +458,73 @@ const CreateNewProject = ({ onBack, onCreated }) => {
         team_member_ids: selectedIds,
       })
       if (!res.success) { toast.error(res.message || 'Failed to create project'); setSaving(false); return }
-      toast.success('Project created!')
-      onCreated(res.data)
+
+      const project = res.data
+
+      // ── Auto-create template tasks (line by line, like video chapters) ────
+      const templateTasks = TEMPLATE_TASKS[selectedTemplate]
+      if (templateTasks && templateTasks.length > 0) {
+        // Need at least one assigned employee — use first selected or skip
+        const assignTo = selectedIds[0] || null
+
+        if (!assignTo) {
+          toast('Project created! Add team members to auto-assign template tasks.', { icon: 'ℹ️', duration: 5000 })
+        } else {
+          setTaskProgress({ current: 0, total: templateTasks.length })
+
+          // Calc due dates: start_date + seq days, one task per day
+          const startDate = new Date(form.start_date)
+          let failedCount = 0
+
+          for (let i = 0; i < templateTasks.length; i++) {
+            const t = templateTasks[i]
+            const dueDate = new Date(startDate)
+            dueDate.setDate(startDate.getDate() + t.seq)
+
+            setTaskProgress({ current: i + 1, total: templateTasks.length })
+
+            const taskRes = await api.post('/tasks', {
+              title:        `${t.file_name} — ${t.title}`,
+              description:  t.description,
+              assigned_to:  parseInt(assignTo),
+              priority:     'medium',
+              due_date:     dueDate.toISOString().split('T')[0],
+              status:       'todo',
+              project_id:   parseInt(project.id),
+              project_name: project.name,
+              source:       'project_manager',
+              tags:         [t.file_name],
+            })
+
+            if (!taskRes?.success) {
+              failedCount++
+              console.warn(`[Template Task ${i+1}/${templateTasks.length} FAILED]`, taskRes?.message, '| assigned_to:', parseInt(assignTo), '| project_id:', parseInt(project.id))
+            }
+          }
+
+          setTaskProgress(null)
+          if (failedCount === 0) {
+            toast.success(`✅ Project created with ${templateTasks.length} template tasks!`)
+          } else if (failedCount < templateTasks.length) {
+            toast(`Project created. ${templateTasks.length - failedCount}/${templateTasks.length} tasks added (${failedCount} failed — check console)`, { icon: '⚠️', duration: 6000 })
+          } else {
+            toast.error(`Project created but tasks failed. Check if team members have employee profiles.`)
+          }
+        }
+      } else {
+        toast.success('Project created!')
+      }
+
+      onCreated(project)
     } catch { toast.error('Cannot connect to server') }
     setSaving(false)
+    setTaskProgress(null)
   }
 
   const iCls = 'w-full px-3 py-2.5 text-sm rounded-lg border border-gray-200 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all'
   const sCls = iCls + ' appearance-none cursor-pointer'
 
-  const PRIO = ['low', 'medium', 'high', 'urgent']
+  const PRIO = ['low', 'medium', 'high']
   const STAT = [
     { value: 'planning',    label: 'Planning' },
     { value: 'in_progress', label: 'Active' },
@@ -462,35 +602,6 @@ const CreateNewProject = ({ onBack, onCreated }) => {
                 {PRIO.map(p => <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
               </select>
               <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">Client</label>
-            <div className="relative">
-              <Briefcase size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input value={form.client} onChange={e => setF('client', e.target.value)}
-                placeholder="Client name" className={iCls + ' pl-9'} />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
-              Project Owner <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <Users size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              <select value={form.project_owner} onChange={e => setF('project_owner', e.target.value)} className={sCls + ' pl-9'}>
-                <option value="">Select owner</option>
-                {employees.map(e => <option key={e.id} value={empName(e)}>{empName(e)}</option>)}
-              </select>
-              <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">Project Group</label>
-            <div className="relative">
-              <Tag size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input value={form.project_group} onChange={e => setF('project_group', e.target.value)}
-                placeholder="Group name" className={iCls + ' pl-9'} />
             </div>
           </div>
           <div>
@@ -589,17 +700,145 @@ const CreateNewProject = ({ onBack, onCreated }) => {
         </div>
       </div>
 
+      {/* ── Project Templates ── */}
+      <div className="bg-white dark:bg-dark-800 rounded-2xl border border-gray-100 dark:border-dark-600 shadow-sm p-5">
+        <div className="mb-4">
+          <h3 className="text-sm font-bold text-gray-900 dark:text-white">Project Templates</h3>
+          <p className="text-xs text-gray-400 mt-0.5">Start faster with a pre-configured template</p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pb-1">
+          {PROJECT_TEMPLATES.map(tpl => {
+            const isSelected = selectedTemplate === tpl.id
+            return (
+              <motion.div
+                key={tpl.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`relative p-4 rounded-xl border-2 transition-all ${
+                  isSelected
+                    ? 'border-primary-500 bg-primary-500/8 dark:bg-primary-500/10'
+                    : 'border-gray-100 dark:border-dark-600 bg-gray-50 dark:bg-dark-700'
+                }`}
+              >
+                {/* Selected check */}
+                {isSelected && (
+                  <div className="absolute top-2.5 right-2.5 w-5 h-5 rounded-full bg-primary-500 flex items-center justify-center">
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                      <path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </div>
+                )}
+
+                {/* Icon + name */}
+                <div className="flex items-center gap-3 mb-2">
+                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${tpl.color} flex items-center justify-center text-xl flex-shrink-0 shadow-sm`}>
+                    {tpl.icon}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">{tpl.name}</p>
+                    <p className="text-[10px] text-gray-400 truncate">{tpl.fullName}</p>
+                  </div>
+                </div>
+
+                {/* Description */}
+                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed line-clamp-2 mb-3">
+                  {tpl.description}
+                </p>
+
+                {/* Tags */}
+                <div className="flex items-center gap-1.5 mb-3">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-primary-500/10 text-primary-600 dark:text-primary-400 capitalize">
+                    {tpl.priority}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 dark:bg-dark-600 text-gray-500 dark:text-gray-400 capitalize">
+                    {tpl.status}
+                  </span>
+                </div>
+
+                {/* Use Template button */}
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => applyTemplate(tpl)}
+                  className={`w-full py-2 rounded-lg text-xs font-semibold transition-all ${
+                    isSelected
+                      ? 'bg-primary-500 text-white'
+                      : 'bg-primary-500/10 text-primary-600 dark:text-primary-400 hover:bg-primary-500 hover:text-white'
+                  }`}
+                >
+                  {isSelected ? '✓ Template Applied' : 'Use Template'}
+                </motion.button>
+              </motion.div>
+            )
+          })}
+        </div>
+
+        <p className="text-[10px] text-gray-400 mt-2">
+          Click a template to auto-fill the form. You can still edit all fields after applying.
+        </p>
+
+        {selectedTemplate && (
+          <div className="flex items-center gap-2 px-3 py-2 mt-2 rounded-xl bg-primary-500/8 border border-primary-500/20 text-xs">
+            <span className="text-primary-600 dark:text-primary-400 font-semibold">
+              ✓ Template applied: {PROJECT_TEMPLATES.find(t => t.id === selectedTemplate)?.name}
+            </span>
+            <button onClick={() => setSelectedTemplate(null)} className="ml-auto text-gray-400 hover:text-gray-600">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Task creation progress bar ── */}
+      {taskProgress && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+          className="mx-0 px-5 py-4 rounded-2xl bg-primary-500/8 border border-primary-500/20"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-semibold text-primary-600 dark:text-primary-400 flex items-center gap-2">
+              <motion.div animate={{ rotate: 360 }} transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
+                className="w-4 h-4 border-2 border-primary-300 border-t-primary-500 rounded-full inline-block" />
+              Creating template tasks…
+            </span>
+            <span className="text-sm font-bold text-primary-500">
+              {taskProgress.current} / {taskProgress.total}
+            </span>
+          </div>
+          <div className="h-2 bg-primary-500/20 rounded-full overflow-hidden">
+            <motion.div
+              animate={{ width: `${(taskProgress.current / taskProgress.total) * 100}%` }}
+              transition={{ duration: 0.3 }}
+              className="h-full bg-gradient-to-r from-primary-500 to-purple-500 rounded-full"
+            />
+          </div>
+          <p className="text-[11px] text-primary-400 mt-1.5">
+            {taskProgress.current < taskProgress.total
+              ? `Setting up: ${TEMPLATE_TASKS['3d_models']?.[taskProgress.current - 1]?.title || '...'}`
+              : '✅ All tasks created!'}
+          </p>
+        </motion.div>
+      )}
+
       <div className="flex items-center justify-end gap-3 pb-6">
-        <button onClick={onBack}
-          className="px-6 py-2.5 rounded-xl border border-gray-200 dark:border-dark-600 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors">
+        <button onClick={onBack} disabled={saving}
+          className="px-6 py-2.5 rounded-xl border border-gray-200 dark:border-dark-600 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors disabled:opacity-40">
           Cancel
         </button>
         <motion.button onClick={handleCreate} disabled={saving || !form.name.trim()}
           whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
           className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-primary-500 to-purple-600 text-white text-sm font-semibold disabled:opacity-50 shadow-md shadow-primary-500/20">
           {saving ? (
-            <motion.div animate={{ rotate: 360 }} transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
-              className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+            taskProgress
+              ? <><motion.div animate={{ rotate: 360 }} transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
+                  className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+                  {taskProgress.current}/{taskProgress.total} Tasks…</>
+              : <><motion.div animate={{ rotate: 360 }} transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
+                  className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+                  Creating…</>
           ) : (
             <><Plus size={15} /> Create Project</>
           )}

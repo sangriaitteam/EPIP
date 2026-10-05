@@ -89,6 +89,32 @@ const ChatBubble = ({ msg, isMe }) => (
           : 'bg-gray-100 dark:bg-dark-700 text-gray-800 dark:text-gray-200 rounded-bl-sm'
       }`}>
         {msg.content}
+        {/* File attachment */}
+        {msg.file_url && (
+          <div className="mt-2">
+            {msg.file_type?.startsWith('image/') ? (
+              <a href={msg.file_url.replace(/^https?:\/\/[^/]+/, `${window.location.protocol}//${window.location.hostname}:5000`)} target="_blank" rel="noreferrer">
+                <img
+                  src={msg.file_url.replace(/^https?:\/\/[^/]+/, `${window.location.protocol}//${window.location.hostname}:5000`)}
+                  alt={msg.file_name}
+                  className="max-w-[220px] rounded-lg border border-white/20 mt-1"
+                />
+              </a>
+            ) : (
+              <a
+                href={msg.file_url.replace(/^https?:\/\/[^/]+/, `${window.location.protocol}//${window.location.hostname}:5000`)}
+                target="_blank" rel="noreferrer"
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium mt-1 ${
+                  isMe ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-white dark:bg-dark-600 text-primary-600 dark:text-primary-400 hover:bg-gray-50 dark:hover:bg-dark-500'
+                } transition-colors`}
+              >
+                <Paperclip size={12} />
+                {msg.file_name || 'Attachment'}
+                {msg.file_size_kb && <span className="opacity-60">({msg.file_size_kb} KB)</span>}
+              </a>
+            )}
+          </div>
+        )}
         {msg._isFirst && !isMe && (
           <div className="mt-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-white dark:bg-dark-600 text-primary-600 dark:text-primary-400">
             <Paperclip size={11} /> Task Assignment
@@ -221,6 +247,8 @@ const PMChats = () => {
 
   // Message input
   const [message, setMessage] = useState('')
+  const [attachedFile, setAttachedFile] = useState(null) // { file, preview, name }
+  const fileInputRef = useRef(null)
 
   // Mobile step: 'employees' | 'tasks' | 'chat'
   const [mobileStep, setMobileStep] = useState('employees')
@@ -287,7 +315,9 @@ const PMChats = () => {
           author_id:   null,
           author_name: 'Project Manager',
           avatar_url:  null,
-          content:     `${task.title} task assigned. Please review the requirements and proceed with the work.`,
+          content:     task.description
+            ? `${task.title} task assigned.\n\n${task.description}`
+            : `${task.title} task assigned. Please review the requirements and proceed with the work.`,
           created_at:  task.created_at,
           _isFirst:    true,
           _synthetic:  true,
@@ -323,17 +353,34 @@ const PMChats = () => {
   }
 
   // ── Send message (PM → Employee) ─────────────────────────────────────────
-  // Uses POST /api/tasks/:id/comments — same endpoint employee uses
-  // So employee will see it on their Tasks chat page automatically
   const handleSend = async () => {
     const content = message.trim()
-    if (!content || !selectedTask) return
+    if (!content && !attachedFile) return
+    if (!selectedTask) return
     setSending(true)
     try {
-      const res = await api.post(`/tasks/${selectedTask.id}/comments`, { content })
+      let res
+      if (attachedFile) {
+        // Use FormData for multipart upload
+        const fd = new FormData()
+        if (content) fd.append('content', content)
+        fd.append('attachment', attachedFile.file)
+        const token = localStorage.getItem('epip_token')
+        const apiBase = window.location.hostname === 'localhost'
+          ? `http://localhost:5000/api`
+          : `${window.location.protocol}//${window.location.hostname}:5000/api`
+        const raw = await fetch(`${apiBase}/tasks/${selectedTask.id}/comments`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        })
+        res = await raw.json()
+      } else {
+        res = await api.post(`/tasks/${selectedTask.id}/comments`, { content })
+      }
       if (res.success) {
         setMessage('')
-        // Reload comments to get the fresh list with PM's new message
+        setAttachedFile(null)
         await loadComments(selectedTask)
         toast.success('Message sent')
       } else {
@@ -343,6 +390,15 @@ const PMChats = () => {
       toast.error('Cannot connect to server')
     }
     setSending(false)
+  }
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) { toast.error('File too large (max 10 MB)'); return }
+    const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : null
+    setAttachedFile({ file, preview, name: file.name, type: file.type, size: file.size })
+    e.target.value = ''
   }
 
   const handleKeyDown = (e) => {
@@ -594,6 +650,22 @@ const PMChats = () => {
             {/* ── Input ── */}
             <div className="px-4 sm:px-5 py-4 border-t border-gray-100 dark:border-dark-600 bg-white dark:bg-dark-800">
               <div className="flex flex-col gap-3">
+                {/* File preview */}
+                {attachedFile && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-primary-500/8 border border-primary-500/20">
+                    {attachedFile.preview
+                      ? <img src={attachedFile.preview} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                      : <div className="w-10 h-10 rounded-lg bg-primary-500/20 flex items-center justify-center flex-shrink-0"><Paperclip size={16} className="text-primary-500" /></div>
+                    }
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate">{attachedFile.name}</p>
+                      <p className="text-[10px] text-gray-400">{Math.round(attachedFile.size / 1024)} KB</p>
+                    </div>
+                    <button onClick={() => setAttachedFile(null)} className="p-1 rounded-lg hover:bg-red-100 dark:hover:bg-red-500/10 text-gray-400 hover:text-red-500 transition-colors">
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                    </button>
+                  </div>
+                )}
                 <textarea
                   ref={textareaRef}
                   value={message}
@@ -605,20 +677,22 @@ const PMChats = () => {
                 />
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1">
+                    {/* Hidden file input */}
+                    <input ref={fileInputRef} type="file" className="hidden"
+                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
+                      onChange={handleFileSelect}
+                    />
                     <button
-                      className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 text-gray-400 hover:text-gray-600 transition-colors"
-                      onClick={() => toast('File attachment coming soon')}
+                      className={`p-2 rounded-lg transition-colors ${attachedFile ? 'bg-primary-500/10 text-primary-500' : 'hover:bg-gray-100 dark:hover:bg-dark-700 text-gray-400 hover:text-gray-600'}`}
+                      onClick={() => fileInputRef.current?.click()}
                       title="Attach file"
                     >
                       <Paperclip size={16} />
                     </button>
-                    <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 text-gray-400 hover:text-gray-600 transition-colors">
-                      <Smile size={16} />
-                    </button>
                   </div>
                   <motion.button
                     onClick={handleSend}
-                    disabled={!message.trim() || sending}
+                    disabled={(!message.trim() && !attachedFile) || sending}
                     whileHover={{ scale: 1.03 }}
                     whileTap={{ scale: 0.97 }}
                     className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold disabled:opacity-40 transition-all"

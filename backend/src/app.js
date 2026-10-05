@@ -101,17 +101,23 @@ app.use(cors({
 }))
 
 // ── Rate limiting ─────────────────────────────────────────────────────────
+// Dev: generous limits so polling + multi-tab usage never hits 429
+// Production: tighter limits to protect the server
+const isDev = process.env.NODE_ENV !== 'production'
+
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,  // 15 min
-  max:      300,
+  windowMs: 15 * 60 * 1000,          // 15 min window
+  max:      isDev ? 5000 : 500,      // dev: 5000 | prod: 500 per IP
   standardHeaders: true,
   legacyHeaders:   false,
+  skip: () => isDev,                 // skip entirely in development
   message: { success: false, message: 'Too many requests, please try again later' },
 })
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max:      20,
+  max:      isDev ? 100 : 20,        // dev: 100 | prod: 20 login attempts
+  skip: () => isDev,
   message:  { success: false, message: 'Too many login attempts, please try again in 15 minutes' },
 })
 

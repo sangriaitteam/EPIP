@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Paperclip, Smile, Send, CheckCircle2,
-  FolderOpen, Calendar, AlertTriangle, Clock, ChevronDown
+  FolderOpen, Calendar, AlertTriangle, Clock, ChevronDown, Trash2
 } from 'lucide-react'
 import { api } from '../../services/api'
 import { useAuth } from '../../context/AuthContext'
@@ -119,22 +119,23 @@ const StatusDropdown = ({ taskId, currentStatus, onUpdated }) => {
 }
 
 // ── Task List Item ────────────────────────────────────────────────────────────
-const TaskItem = ({ task, selected, onClick }) => {
+const TaskItem = ({ task, selected, onClick, onDelete }) => {
   const cfg  = STATUS_MAP[task.status] || STATUS_MAP.todo
   const days = daysLeft(task.due_date)
   const isOverdue = days !== null && days < 0 && task.status !== 'done'
   const unread = parseInt(task.unread_count) || 0
 
   return (
-    <motion.button
-      onClick={onClick}
-      whileHover={{ x: 2 }}
-      className={`w-full text-left px-4 py-3.5 border-b border-gray-100 dark:border-dark-700 transition-all ${
-        selected
-          ? 'bg-primary-500/8 border-l-2 border-l-primary-500'
-          : 'hover:bg-gray-50 dark:hover:bg-dark-700/40 border-l-2 border-l-transparent'
-      }`}
-    >
+    <div className="relative group">
+      <motion.button
+        onClick={onClick}
+        whileHover={{ x: 2 }}
+        className={`w-full text-left pl-4 pr-12 py-3.5 border-b border-gray-100 dark:border-dark-700 transition-all ${
+          selected
+            ? 'bg-primary-500/8 border-l-2 border-l-primary-500'
+            : 'hover:bg-gray-50 dark:hover:bg-dark-700/40 border-l-2 border-l-transparent'
+        }`}
+      >
       <div className="flex items-start justify-between gap-2 mb-1.5">
         <p className={`text-sm font-semibold leading-tight flex-1 ${
           selected ? 'text-primary-600 dark:text-primary-400' : 'text-gray-800 dark:text-gray-200'
@@ -177,7 +178,17 @@ const TaskItem = ({ task, selected, onClick }) => {
           <span className="text-[10px] text-gray-400 truncate">{task.project_name}</span>
         </div>
       )}
-    </motion.button>
+      </motion.button>
+
+      {/* Delete button — always visible, right side */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onDelete(task) }}
+        className="absolute top-1/2 -translate-y-1/2 right-3 p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-500/10 transition-all z-10"
+        title="Delete task"
+      >
+        <Trash2 size={14} />
+      </button>
+    </div>
   )
 }
 
@@ -223,6 +234,33 @@ const ChatMessage = ({ msg, isMe }) => (
       }`}>
         <p>{msg.content}</p>
 
+        {/* File attachment */}
+        {msg.file_url && (
+          <div className="mt-2">
+            {msg.file_type?.startsWith('image/') ? (
+              <a href={msg.file_url.replace(/^https?:\/\/[^/]+/, `${window.location.protocol}//${window.location.hostname}:5000`)} target="_blank" rel="noreferrer">
+                <img
+                  src={msg.file_url.replace(/^https?:\/\/[^/]+/, `${window.location.protocol}//${window.location.hostname}:5000`)}
+                  alt={msg.file_name}
+                  className="max-w-[220px] rounded-lg border border-white/20 mt-1"
+                />
+              </a>
+            ) : (
+              <a
+                href={msg.file_url.replace(/^https?:\/\/[^/]+/, `${window.location.protocol}//${window.location.hostname}:5000`)}
+                target="_blank" rel="noreferrer"
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium mt-1 ${
+                  isMe ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-white dark:bg-dark-600 text-primary-600 dark:text-primary-400 hover:bg-gray-50'
+                } transition-colors`}
+              >
+                <Paperclip size={12} />
+                {msg.file_name || 'Attachment'}
+                {msg.file_size_kb && <span className="opacity-60">({msg.file_size_kb} KB)</span>}
+              </a>
+            )}
+          </div>
+        )}
+
         {/* System attachment badge (first PM message gets Task Assignment label) */}
         {msg._isFirstPM && (
           <div className={`mt-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium ${
@@ -259,8 +297,10 @@ const EmployeeTasks = () => {
   const [loadingComments,setLoadingComments]= useState(false)
   const [sending,        setSending]        = useState(false)
   const [accepting,      setAccepting]      = useState(false)
+  const [attachedFile,   setAttachedFile]   = useState(null)
   const chatBottomRef = useRef(null)
   const textareaRef   = useRef(null)
+  const fileInputRef  = useRef(null)
 
   // ── Load tasks ───────────────────────────────────────────────────────────
   const loadTasks = async () => {
@@ -320,16 +360,44 @@ const EmployeeTasks = () => {
   // ── Send message ─────────────────────────────────────────────────────────
   const handleSend = async () => {
     const content = message.trim()
-    if (!content || !selectedTask) return
+    if (!content && !attachedFile) return
+    if (!selectedTask) return
     setSending(true)
     try {
-      const res = await api.post(`/tasks/${selectedTask.id}/comments`, { content })
+      let res
+      if (attachedFile) {
+        const fd = new FormData()
+        if (content) fd.append('content', content)
+        fd.append('attachment', attachedFile.file)
+        const token = localStorage.getItem('epip_token')
+        const apiBase = window.location.hostname === 'localhost'
+          ? `http://localhost:5000/api`
+          : `${window.location.protocol}//${window.location.hostname}:5000/api`
+        const raw = await fetch(`${apiBase}/tasks/${selectedTask.id}/comments`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        })
+        res = await raw.json()
+      } else {
+        res = await api.post(`/tasks/${selectedTask.id}/comments`, { content })
+      }
       if (res.success) {
         setMessage('')
+        setAttachedFile(null)
         await loadComments(selectedTask.id)
       } else toast.error(res.message || 'Failed to send')
     } catch { toast.error('Cannot connect to server') }
     setSending(false)
+  }
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) { toast.error('File too large (max 10 MB)'); return }
+    const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : null
+    setAttachedFile({ file, preview, name: file.name, type: file.type, size: file.size })
+    e.target.value = ''
   }
 
   const handleKeyDown = (e) => {
@@ -367,6 +435,24 @@ const EmployeeTasks = () => {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t))
   }
 
+  // ── Delete task ───────────────────────────────────────────────────────────
+  const handleDeleteTask = async (task) => {
+    if (!window.confirm(`Delete "${task.title}"?`)) return
+    try {
+      const res = await api.delete(`/tasks/${task.id}`)
+      if (res.success) {
+        setTasks(prev => prev.filter(t => t.id !== task.id))
+        if (selectedTask?.id === task.id) {
+          setSelectedTask(null)
+          setComments([])
+        }
+        toast.success('Task deleted')
+      } else {
+        toast.error(res.message || 'Failed to delete')
+      }
+    } catch { toast.error('Cannot connect to server') }
+  }
+
   // Determine if a comment is from the current employee (me)
   // NULL author_id = posted by PM/HR (non-employee) → NOT "me" on employee side → left bubble
   const myEmployeeId = user?.employee?.id
@@ -387,7 +473,9 @@ const EmployeeTasks = () => {
       author_id:   null,
       author_name: 'Project Manager',
       avatar_url:  selectedTask.assigned_by_avatar || null,
-      content:     `${selectedTask.title} task assigned. Please review the requirements and proceed with the work.`,
+      content:     selectedTask.description
+            ? `${selectedTask.title} task assigned.\n\n${selectedTask.description}`
+            : `${selectedTask.title} task assigned. Please review the requirements and proceed with the work.`,
       created_at:  selectedTask.created_at,
       _isFirstPM:  true,
       _synthetic:  true,
@@ -446,6 +534,7 @@ const EmployeeTasks = () => {
                       selectTask(task)
                       setMobileView('chat')
                     }}
+                    onDelete={handleDeleteTask}
                   />
                 </motion.div>
               ))}
@@ -579,6 +668,22 @@ const EmployeeTasks = () => {
             {/* ── Input Box ── */}
             <div className="px-4 sm:px-6 py-4 border-t border-gray-100 dark:border-dark-600 bg-white dark:bg-dark-800">
               <div className="flex flex-col gap-3">
+                {/* File preview */}
+                {attachedFile && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-primary-500/8 border border-primary-500/20">
+                    {attachedFile.preview
+                      ? <img src={attachedFile.preview} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                      : <div className="w-10 h-10 rounded-lg bg-primary-500/20 flex items-center justify-center flex-shrink-0"><Paperclip size={16} className="text-primary-500" /></div>
+                    }
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate">{attachedFile.name}</p>
+                      <p className="text-[10px] text-gray-400">{Math.round(attachedFile.size / 1024)} KB</p>
+                    </div>
+                    <button onClick={() => setAttachedFile(null)} className="p-1 rounded-lg hover:bg-red-100 dark:hover:bg-red-500/10 text-gray-400 hover:text-red-500 transition-colors">
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                    </button>
+                  </div>
+                )}
                 <textarea
                   ref={textareaRef}
                   value={message}
@@ -590,19 +695,18 @@ const EmployeeTasks = () => {
                 />
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1">
-                    <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                      title="Attach file (coming soon)" onClick={() => toast('File attachment coming soon')}>
+                    <input ref={fileInputRef} type="file" className="hidden"
+                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
+                      onChange={handleFileSelect}
+                    />
+                    <button className={`p-2 rounded-lg transition-colors ${attachedFile ? 'bg-primary-500/10 text-primary-500' : 'hover:bg-gray-100 dark:hover:bg-dark-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+                      title="Attach file" onClick={() => fileInputRef.current?.click()}>
                       <Paperclip size={16} />
                     </button>
-                    <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                      title="Emoji">
-                      <Smile size={16} />
-                    </button>
                   </div>
-
                   <motion.button
                     onClick={handleSend}
-                    disabled={!message.trim() || sending}
+                    disabled={(!message.trim() && !attachedFile) || sending}
                     whileHover={{ scale: 1.03 }}
                     whileTap={{ scale: 0.97 }}
                     className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold disabled:opacity-40 transition-all"

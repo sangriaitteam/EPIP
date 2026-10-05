@@ -83,13 +83,17 @@ const dailyCleanup = async () => {
 const midnightFinalize = async () => {
   try {
     const now  = new Date()
-    const h    = now.getHours()
-    const m    = now.getMinutes()
+    // ── Use IST time (UTC+5:30) for midnight check ────────────────────────
+    const istOffset = 5.5 * 60 * 60 * 1000
+    const istNow = new Date(now.getTime() + istOffset)
+    const h    = istNow.getUTCHours()
+    const m    = istNow.getUTCMinutes()
 
-    // Fire at 23:58 (11:58 PM) only
+    // Fire at 23:58 IST only
     if (h !== 23 || m !== 58) return
 
-    const today = now.toISOString().split('T')[0]
+    // Use IST date for today
+    const today = istNow.toISOString().split('T')[0]
     console.log(`[SCHEDULER] Midnight finalize starting for ${today}`)
 
     // 1. Close all open attendance_pauses (end any active screen-off/break)
@@ -133,6 +137,7 @@ const midnightFinalize = async () => {
       await query(
         `UPDATE employee_sessions
          SET logout_at = NOW(),
+             logout_type = 'midnight',
              duration_mins = $1,
              manual_break_mins = $2,
              screen_off_mins = $3

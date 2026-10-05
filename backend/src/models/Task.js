@@ -50,6 +50,8 @@ const Task = {
       FROM tasks t
       LEFT JOIN employees b ON t.assigned_by = b.id
       WHERE t.assigned_to = $1
+        AND t.project_id IS NULL
+        AND (t.project_name IS NULL OR t.project_name = '')
         AND t.created_at >= $2
         AND t.created_at <  $3`
     const params = [employee_id, monthStart, monthEnd]
@@ -92,7 +94,7 @@ const Task = {
   },
 
   async update(id, fields) {
-    const allowed = ['title', 'description', 'priority', 'status', 'due_date', 'completion_percent', 'tags']
+    const allowed = ['title', 'description', 'priority', 'status', 'due_date', 'completion_percent', 'tags', 'start_time', 'end_time']
     const sets = []; const vals = []
     Object.entries(fields).forEach(([k, v]) => {
       if (allowed.includes(k)) { vals.push(v); sets.push(`${k} = $${vals.length}`) }
@@ -110,11 +112,15 @@ const Task = {
     await db.query(`DELETE FROM tasks WHERE id = $1`, [id])
   },
 
-  async addComment(task_id, author_id, content, author_name_override = null) {
+  async addComment(task_id, author_id, content, author_name_override = null, attachment = {}) {
+    const { file_url = null, file_name = null, file_type = null, file_size_kb = null } = attachment
     const { rows } = await db.query(
-      `INSERT INTO task_comments (task_id, author_id, content, author_name_override, is_read, read_at)
-       VALUES ($1, $2, $3, $4, false, NULL) RETURNING *`,
-      [task_id, author_id ?? null, content, author_name_override]
+      `INSERT INTO task_comments
+         (task_id, author_id, content, author_name_override, is_read, read_at,
+          file_url, file_name, file_type, file_size_kb)
+       VALUES ($1, $2, $3, $4, false, NULL, $5, $6, $7, $8) RETURNING *`,
+      [task_id, author_id ?? null, content, author_name_override,
+       file_url, file_name, file_type, file_size_kb]
     )
     await db.query(`UPDATE tasks SET comments_count = comments_count + 1 WHERE id = $1`, [task_id])
     return rows[0]
@@ -130,6 +136,10 @@ const Task = {
          tc.created_at,
          tc.is_read,
          tc.read_at,
+         tc.file_url,
+         tc.file_name,
+         tc.file_type,
+         tc.file_size_kb,
          COALESCE(
            e.first_name || ' ' || e.last_name,
            tc.author_name_override,

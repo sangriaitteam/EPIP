@@ -214,7 +214,7 @@ const EmployeeManagement = () => {
               <p className="text-sm text-gray-400 mt-1">Click "+ Add Employee" to get started</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {filtered.map((emp, i) => {
                   const name   = emp.name || `${emp.first_name || ''} ${emp.last_name || ''}`.trim()
                   const dept   = emp.department_name || emp.department || '—'
@@ -226,22 +226,22 @@ const EmployeeManagement = () => {
                   return (
                     <div
                       key={emp.id}
-                      className="bg-white dark:bg-dark-800 rounded-2xl border border-gray-100 dark:border-dark-600 shadow-md p-4 sm:p-5"
+                      className="bg-white dark:bg-dark-800 rounded-xl border border-gray-100 dark:border-dark-600 shadow-sm p-3"
                     >
                       {/* Top row */}
-                      <div className="flex items-start gap-3 mb-3">
-                        <Avatar name={name} src={emp.avatar_url} size="lg" online={status === 'active'} />
+                      <div className="flex items-start gap-2 mb-2">
+                        <Avatar name={name} src={emp.avatar_url} size="md" online={status === 'active'} />
                         <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-gray-900 dark:text-white truncate text-sm sm:text-base">{name}</p>
-                          <p className="text-xs text-gray-400 truncate">{emp.designation || '—'}</p>
-                          <p className="text-xs text-gray-400 truncate">{dept}</p>
-                          <Badge label={status} color={getStatusColor(status)} dot className="mt-1" />
+                          <p className="font-semibold text-gray-900 dark:text-white truncate text-xs">{name}</p>
+                          <p className="text-[10px] text-gray-400 truncate">{emp.designation || '—'}</p>
+                          <p className="text-[10px] text-gray-400 truncate">{dept}</p>
+                          <Badge label={status} color={getStatusColor(status)} dot className="mt-0.5" />
                         </div>
-                        <span className="text-xs text-gray-400 font-mono flex-shrink-0">{empId}</span>
+                        <span className="text-[10px] text-gray-400 font-mono flex-shrink-0">{empId}</span>
                       </div>
 
                       {/* Details */}
-                      <div className="space-y-1 text-xs text-gray-500 dark:text-gray-400 mb-3">
+                      <div className="space-y-0.5 text-[11px] text-gray-500 dark:text-gray-400 mb-2">
                         <div className="flex justify-between items-center">
                           <span>Mode</span>
                           <Badge label={mode} color="bg-primary-500/10 text-primary-500" />
@@ -259,14 +259,14 @@ const EmployeeManagement = () => {
                       <ProgressBar value={pct} size="sm" />
 
                       {/* Edit / Delete buttons */}
-                      <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-dark-600">
+                      <div className="grid grid-cols-2 gap-1.5 mt-2 pt-2 border-t border-gray-100 dark:border-dark-600">
                         <button type="button" onClick={() => handleEdit(emp)} style={{ cursor: 'pointer' }}
-                          className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-primary-500/10 text-primary-600 dark:text-primary-400 hover:bg-primary-500 hover:text-white transition-colors">
-                          <Edit2 size={13} /> Edit
+                          className="flex items-center justify-center gap-1 py-2 rounded-lg text-[11px] font-semibold bg-primary-500/10 text-primary-600 dark:text-primary-400 hover:bg-primary-500 hover:text-white transition-colors">
+                          <Edit2 size={11} /> Edit
                         </button>
                         <button type="button" onClick={() => setDeleteEmp(emp)} style={{ cursor: 'pointer' }}
-                          className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500 hover:text-white transition-colors">
-                          <Trash2 size={13} /> Delete
+                          className="flex items-center justify-center gap-1 py-2 rounded-lg text-[11px] font-semibold bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500 hover:text-white transition-colors">
+                          <Trash2 size={11} /> Delete
                         </button>
                       </div>
                     </div>

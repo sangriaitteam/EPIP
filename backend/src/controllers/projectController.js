@@ -48,7 +48,7 @@ const getById = async (req, res, next) => {
        LEFT JOIN employees e  ON e.id  = t.assigned_to
        LEFT JOIN employees ab ON ab.id = t.assigned_by
        WHERE t.project_id = $1
-       ORDER BY t.created_at DESC`,
+       ORDER BY t.created_at ASC`,
       [id]
     )
 
