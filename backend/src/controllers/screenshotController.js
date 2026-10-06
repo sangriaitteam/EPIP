@@ -17,18 +17,20 @@ const uploadMy = async (req, res, next) => {
     const employee = await Employee.findByUserId(req.user.id)
     if (!employee) return fail(res, 'Employee profile not found', 404)
 
-    const file_url = resolveFileUrl(req.file, 'screenshots')
+    // memoryStorage gives buffer — convert to base64 for reliable storage
+    // file_url set to placeholder since image is stored as base64 in image_data
+    const image_data = req.file.buffer
+      ? `data:${req.file.mimetype || 'image/png'};base64,${req.file.buffer.toString('base64')}`
+      : null
 
-    // Also store base64 image data for reliable display (no file system dependency)
-    const image_data = `data:${req.file.mimetype || 'image/png'};base64,${req.file.buffer
-      ? req.file.buffer.toString('base64')
-      : ''}`
+    // file_url: use placeholder so NOT NULL constraint is satisfied
+    const file_url = `screenshot:${employee.id}:${Date.now()}`
 
     const screenshot = await Screenshot.create({
       employee_id:          employee.id,
-      file_path:            req.file.path || '',
+      file_path:            '',
       file_url,
-      image_data:           req.file.buffer ? image_data : null,
+      image_data,
       active_window_title:  req.body.active_window_title || null,
       monitor_name:         req.body.monitor_name        || null,
       monitor_count:        req.body.monitor_count       ? parseInt(req.body.monitor_count) : 1,
