@@ -650,7 +650,7 @@ const getTodayAll = async (req, res, next) => {
          -- Screen-lock is tracked separately and does NOT reduce working hours
          GREATEST(0, COALESCE((
            SELECT ROUND(
-             SUM(EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60)
+             SUM(EXTRACT(EPOCH FROM (COALESCE(sess.logout_at, NOW()) - sess.login_at)) / 60)
              - COALESCE((
                  SELECT SUM(
                    LEAST(
@@ -660,7 +660,9 @@ const getTodayAll = async (req, res, next) => {
                        ELSE
                          EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
                      END,
-                     EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
+                     (SELECT SUM(EXTRACT(EPOCH FROM (COALESCE(s2.logout_at, NOW()) - s2.login_at)) / 60)
+                      FROM employee_sessions s2
+                      WHERE s2.employee_id = e.id AND s2.attendance_id = a.id)
                    )
                  )
                  FROM attendance_pauses ap
@@ -668,9 +670,9 @@ const getTodayAll = async (req, res, next) => {
                    AND ap.reason != 'screen_lock'
                ), 0)
            ::numeric, 2)
-           FROM employee_sessions s
-           WHERE s.employee_id = e.id
-             AND s.attendance_id = a.id
+           FROM employee_sessions sess
+           WHERE sess.employee_id = e.id
+             AND sess.attendance_id = a.id
          ), 0)) AS live_hours_mins,
          -- live_screen_off_mins: CLOSED screen_lock pauses only (no open/stuck pauses)
          COALESCE((
