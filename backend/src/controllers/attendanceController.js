@@ -256,42 +256,30 @@ const checkOut = async (req, res, next) => {
     const logoutType = req.body?.tab_close === true ? 'tab_close' : 'manual'
 
     // Close the latest open session
+    // duration_mins = total elapsed (screen-off does NOT reduce working hours)
     await query(
       `UPDATE employee_sessions
        SET logout_at         = NOW(),
-           logout_type       = $4,
+           logout_type       = $3,
            manual_break_mins = $1,
            screen_off_mins   = $2,
            duration_mins     = GREATEST(0, ROUND(
-             EXTRACT(EPOCH FROM (NOW() - login_at)) / 60 - $1 - $2
+             EXTRACT(EPOCH FROM (NOW() - login_at)) / 60
            , 2))
        WHERE id = (
          SELECT id FROM employee_sessions
-         WHERE employee_id = $3 AND logout_at IS NULL
+         WHERE employee_id = $4 AND logout_at IS NULL
          ORDER BY login_at DESC LIMIT 1
        )`,
-      [manualMins, screenMins, employee.id, logoutType]
+      [manualMins, screenMins, logoutType, employee.id]
     )
 
-    // Recalculate total work hours from ALL sessions today using live formula
-    // Work = (logout - login) - all pauses per session
+    // Recalculate total work hours from ALL sessions today
+    // Working Hours = total session elapsed (screen-off does NOT reduce it)
     const { rows: sessionTotals } = await query(
       `SELECT COALESCE(SUM(
          GREATEST(0,
-           EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
-           - COALESCE((
-               SELECT SUM(
-                 CASE
-                   WHEN ap.pause_end IS NOT NULL
-                     THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
-                   ELSE 0
-                 END
-               )
-               FROM attendance_pauses ap
-               WHERE ap.attendance_id = s.attendance_id
-                 AND ap.pause_start >= s.login_at
-                 AND ap.pause_start <= COALESCE(s.logout_at, NOW())
-             ), 0)
+           EXTRACT(EPOCH FROM (s.logout_at - s.login_at)) / 60
          )
        ), 0) AS total_work_mins
        FROM employee_sessions s
@@ -527,33 +515,14 @@ const getSessionsByEmployee = async (req, res, next) => {
          s.login_at,
          s.logout_at,
          s.logout_type,
-         -- Live work duration: total elapsed - screen-off pauses (capped at session elapsed)
+         -- Working Hours = total session elapsed (screen-off does NOT reduce working hours)
+         -- Screen off is tracked separately for admin visibility only
          ROUND(
            GREATEST(0,
-             -- Total elapsed for this session
              EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
-             -- Minus screen-lock pauses only, strictly within THIS session's time window
-             - COALESCE((
-                 SELECT SUM(
-                   LEAST(
-                     CASE
-                       WHEN ap.pause_end IS NOT NULL
-                         THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
-                       ELSE
-                         EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
-                     END,
-                     -- Cap: pause cannot exceed session elapsed time
-                     EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
-                   )
-                 )
-                 FROM attendance_pauses ap
-                 WHERE ap.attendance_id = s.attendance_id
-                   AND ap.pause_start >= s.login_at
-                   AND (s.logout_at IS NULL OR ap.pause_start < s.logout_at)
-               ), 0)
            )::numeric
          , 4) AS duration_mins,
-         -- Manual break: sum of non-screen-lock pauses
+         -- Manual break: sum of non-screen-lock pauses within this session
          ROUND(COALESCE((
            SELECT SUM(
              CASE
@@ -569,8 +538,7 @@ const getSessionsByEmployee = async (req, res, next) => {
              AND ap.pause_start >= s.login_at
              AND (s.logout_at IS NULL OR ap.pause_start <= s.logout_at)
          ), 0)::numeric, 4) AS manual_break_mins,
-         -- Screen-off: CLOSED screen_lock pauses, capped at session elapsed
-         -- Final cap: screen_off can NEVER exceed session duration
+         -- Screen-off: CLOSED screen_lock pauses only, capped at session elapsed
          LEAST(
            ROUND(COALESCE((
              SELECT SUM(
@@ -586,7 +554,6 @@ const getSessionsByEmployee = async (req, res, next) => {
                AND ap.pause_start >= s.login_at
                AND ap.pause_start < COALESCE(s.logout_at, NOW())
            ), 0)::numeric, 4),
-           -- Hard cap: never exceed session elapsed
            ROUND(EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60::numeric, 4)
          ) AS screen_off_mins
        FROM employee_sessions s
@@ -666,29 +633,11 @@ const getTodayAll = async (req, res, next) => {
            FROM attendance_pauses ap
            WHERE ap.attendance_id = a.id
          ), 0) AS live_pause_mins,
-         -- live_hours_mins: SIMPLE formula = total elapsed - MANUAL breaks only
-         -- Screen-lock is tracked separately and does NOT reduce working hours
+         -- live_hours_mins: Working Hours = total session elapsed only
+         -- Manual breaks and screen-off do NOT reduce working hours display
          GREATEST(0, COALESCE((
            SELECT ROUND(
              SUM(EXTRACT(EPOCH FROM (COALESCE(sess.logout_at, NOW()) - sess.login_at)) / 60)
-             - COALESCE((
-                 SELECT SUM(
-                   LEAST(
-                     CASE
-                       WHEN ap.pause_end IS NOT NULL
-                         THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
-                       ELSE
-                         EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
-                     END,
-                     (SELECT SUM(EXTRACT(EPOCH FROM (COALESCE(s2.logout_at, NOW()) - s2.login_at)) / 60)
-                      FROM employee_sessions s2
-                      WHERE s2.employee_id = e.id AND s2.attendance_id = a.id)
-                   )
-                 )
-                 FROM attendance_pauses ap
-                 WHERE ap.attendance_id = a.id
-                   AND ap.reason != 'screen_lock'
-               ), 0)
            ::numeric, 2)
            FROM employee_sessions sess
            WHERE sess.employee_id = e.id
