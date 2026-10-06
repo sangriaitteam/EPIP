@@ -1,16 +1,18 @@
 const db = require('../config/db')
 
 const Screenshot = {
-  async create({ employee_id, file_path, file_url, active_window_title, monitor_name, monitor_count }) {
+  async create({ employee_id, file_path, file_url, image_data, active_window_title, monitor_name, monitor_count }) {
     const { rows } = await db.query(
       `INSERT INTO screenshots
-         (employee_id, file_path, file_url, active_window_title, monitor_name, monitor_count)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *`,
+         (employee_id, file_path, file_url, image_data, active_window_title, monitor_name, monitor_count)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, employee_id, file_path, file_url, captured_at, active_window_title,
+                 CASE WHEN image_data IS NOT NULL THEN true ELSE false END AS has_image`,
       [
         employee_id,
-        file_path,
+        file_path || '',
         file_url,
+        image_data || null,
         active_window_title || null,
         monitor_name        || null,
         monitor_count       || 1,
@@ -20,7 +22,7 @@ const Screenshot = {
   },
 
   async findByEmployee(employee_id, { date, limit = 50 } = {}) {
-    let q = `SELECT * FROM screenshots WHERE employee_id = $1`
+    let q = `SELECT id, employee_id, file_path, file_url, image_data, captured_at, active_window_title FROM screenshots WHERE employee_id = $1`
     const params = [employee_id]
     if (date) {
       params.push(date)
@@ -34,7 +36,9 @@ const Screenshot = {
 
   async findAll({ date, department_id, limit = 100 } = {}) {
     let q = `
-      SELECT s.*, e.first_name || ' ' || e.last_name AS employee_name,
+      SELECT s.id, s.employee_id, s.file_path, s.file_url, s.image_data, s.captured_at,
+             s.active_window_title,
+             e.first_name || ' ' || e.last_name AS employee_name,
              d.name AS department_name
       FROM screenshots s
       JOIN employees   e ON s.employee_id = e.id

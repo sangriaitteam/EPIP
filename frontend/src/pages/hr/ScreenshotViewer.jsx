@@ -202,15 +202,14 @@ const ScreenshotViewer = () => {
                     className="group relative aspect-video bg-gray-100 dark:bg-dark-700 rounded-xl border border-gray-200 dark:border-dark-600 overflow-hidden cursor-pointer hover:border-primary-500 transition-colors hover:shadow-lg"
                   >
                     {/* Real screenshot image */}
-                    {shot.file_url ? (
+                    {(shot.image_data || shot.file_url) ? (
                       <img
                         src={(() => {
+                          // Use base64 image_data if available (reliable, no file system)
+                          if (shot.image_data) return shot.image_data
                           const url = shot.file_url
-                          // Cloudinary or any CDN — use directly
                           if (url.includes('cloudinary.com') || url.includes('res.cloudinary')) return url
-                          // Already a Railway URL — use directly
                           if (url.includes('railway.app')) return url
-                          // Extract /uploads/... path and prepend Railway backend URL
                           const backendBase = import.meta.env.VITE_BACKEND_URL
                             || import.meta.env.VITE_API_URL?.replace(/\/api$/, '')
                             || ''
@@ -289,9 +288,10 @@ const ScreenshotViewer = () => {
                 </button>
               </div>
               <div className="bg-black">
-                {preview.file_url
+                {(preview.image_data || preview.file_url)
                   ? <img
                       src={(() => {
+                        if (preview.image_data) return preview.image_data
                         const url = preview.file_url
                         if (url.includes('cloudinary.com') || url.includes('res.cloudinary')) return url
                         if (url.includes('railway.app')) return url

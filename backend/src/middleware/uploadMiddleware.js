@@ -1,14 +1,21 @@
 const { upload } = require('../config/storage')
+const multer = require('multer')
+
+// Memory storage for screenshots — gives buffer for base64 encoding
+// Works regardless of Cloudinary/local — no file system dependency
+const memoryUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+})
 
 module.exports = {
   uploadAvatar:     upload.single('avatar'),
   uploadDocument:   upload.single('document'),
   uploadEvidence:   upload.single('evidence'),
-  uploadScreenshot: upload.single('screenshot'),
-  uploadAttachment: upload.single('attachment'),   // task comment file attachments
+  uploadScreenshot: memoryUpload.single('screenshot'),  // memory for base64
+  uploadAttachment: upload.single('attachment'),
   uploadMultiple:   upload.array('files', 5),
 
-  // All verification documents in one multipart request
   uploadVerifyDocs: upload.fields([
     { name: 'photo',              maxCount: 1 },
     { name: 'aadhaar_card',       maxCount: 1 },
