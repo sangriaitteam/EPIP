@@ -673,15 +673,11 @@ const getTodayAll = async (req, res, next) => {
              AND s.attendance_id = a.id
          ), 0)) AS live_hours_mins,
          -- live_screen_off_mins: CLOSED screen_lock pauses only (no open/stuck pauses)
-         -- Active screen lock shown separately via active_screen_lock_start
          COALESCE((
            SELECT ROUND(SUM(
              EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
            )::numeric, 2)
            FROM attendance_pauses ap
-           JOIN employee_sessions s ON s.attendance_id = ap.attendance_id
-             AND ap.pause_start >= s.login_at
-             AND ap.pause_start < COALESCE(s.logout_at, NOW())
            WHERE ap.attendance_id = a.id
              AND ap.reason = 'screen_lock'
              AND ap.pause_end IS NOT NULL
