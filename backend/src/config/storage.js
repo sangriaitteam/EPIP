@@ -29,8 +29,11 @@ if (USE_CLOUDINARY) {
       if (file.fieldname === 'evidence')   folder = 'epip/evidence'
       return {
         folder,
+        resource_type: 'image',
         allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf'],
         public_id: `${Date.now()}-${Math.round(Math.random() * 1e9)}`,
+        // Keep original format for screenshots (PNG from Node.js tool)
+        format: file.fieldname === 'screenshot' ? 'png' : undefined,
       }
     },
   })

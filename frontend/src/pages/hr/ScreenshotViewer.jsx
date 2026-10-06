@@ -205,11 +205,16 @@ const ScreenshotViewer = () => {
                     {shot.file_url ? (
                       <img
                         src={(() => {
-                          // Replace stored hostname with current browser host
-                          // so images work on any machine (LAN, WiFi, etc.)
+                          const url = shot.file_url
+                          // Cloudinary or any external CDN URL — use directly
+                          if (url.includes('cloudinary.com') || url.includes('res.cloudinary')) return url
+                          // Railway/production: file_url has correct absolute URL already
+                          if (url.includes('railway.app') || url.includes('vercel.app')) return url
+                          // Local dev: replace hostname with current host, keep /uploads path
                           const { protocol, hostname } = window.location
-                          const host = hostname.includes(':') ? `[${hostname}]` : hostname
-                          return shot.file_url.replace(/^https?:\/\/[^/]+/, `${protocol}//${host}:5000`)
+                          const apiBase = import.meta.env.VITE_API_URL || `${protocol}//${hostname}:5000/api`
+                          const backendBase = apiBase.replace('/api', '')
+                          return url.replace(/^https?:\/\/[^/]+/, backendBase)
                         })()}
                         alt={`Screenshot ${fmtTime(shot.captured_at || shot.created_at)}`}
                         className="w-full h-full object-cover"
@@ -285,9 +290,13 @@ const ScreenshotViewer = () => {
                 {preview.file_url
                   ? <img
                       src={(() => {
+                        const url = preview.file_url
+                        if (url.includes('cloudinary.com') || url.includes('res.cloudinary')) return url
+                        if (url.includes('railway.app') || url.includes('vercel.app')) return url
                         const { protocol, hostname } = window.location
-                        const host = hostname.includes(':') ? `[${hostname}]` : hostname
-                        return preview.file_url.replace(/^https?:\/\/[^/]+/, `${protocol}//${host}:5000`)
+                        const apiBase = import.meta.env.VITE_API_URL || `${protocol}//${hostname}:5000/api`
+                        const backendBase = apiBase.replace('/api', '')
+                        return url.replace(/^https?:\/\/[^/]+/, backendBase)
                       })()}
                       alt="Screenshot"
                       className="w-full max-h-[70vh] object-contain"
