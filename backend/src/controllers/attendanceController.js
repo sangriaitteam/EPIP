@@ -90,15 +90,18 @@ const checkIn = async (req, res, next) => {
          AND attendance_id != $2`,
       [employee.id, record.id]
     )
-    // Also close any open pauses on today's attendance from before this login
+    // Close ALL open pauses on today's attendance — no time guard.
+    // A new login means the employee is at their desk, so any open pause
+    // (screen_lock or otherwise) that is still open must be closed right now.
+    // The old INTERVAL '1 minute' guard was wrong: it left pauses that started
+    // within the last minute open, causing screen-off to keep growing after login.
     await query(
       `UPDATE attendance_pauses
        SET pause_end     = NOW(),
-           duration_mins = ROUND(EXTRACT(EPOCH FROM (NOW() - pause_start)) / 60, 2)
+           duration_mins = GREATEST(0, ROUND(EXTRACT(EPOCH FROM (NOW() - pause_start)) / 60, 2))
        WHERE employee_id = $1
          AND attendance_id = $2
-         AND pause_end IS NULL
-         AND pause_start < NOW() - INTERVAL '1 minute'`,
+         AND pause_end IS NULL`,
       [employee.id, record.id]
     )
 
