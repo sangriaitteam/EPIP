@@ -35,12 +35,24 @@ const getArg = (name) => {
   const i = args.indexOf('--' + name)
   return i !== -1 ? args[i + 1] : null
 }
-const TOKEN_ARG    = getArg('token')
-const SERVER_ARG   = getArg('server')
-const INTERVAL_ARG = getArg('interval')
+const TOKEN_ARG     = getArg('token')
+const TOKEN_FILE_ARG = getArg('tokenfile')
+const SERVER_ARG    = getArg('server')
+const INTERVAL_ARG  = getArg('interval')
 
 if (SERVER_ARG)   cfg.serverUrl       = SERVER_ARG
 if (INTERVAL_ARG) cfg.intervalMinutes = parseInt(INTERVAL_ARG)
+
+// Read token from file if --tokenfile provided
+let TOKEN_FROM_FILE = null
+if (TOKEN_FILE_ARG) {
+  try {
+    TOKEN_FROM_FILE = fs.readFileSync(TOKEN_FILE_ARG, 'utf8').trim()
+    console.log('[config] Token loaded from file:', TOKEN_FILE_ARG)
+  } catch (e) {
+    console.error('[config] Could not read token file:', e.message)
+  }
+}
 
 // ── Token storage file ────────────────────────────────────────────────────────
 const TOKEN_FILE = path.join(os.tmpdir(), 'sangria-token.json')
@@ -59,7 +71,8 @@ function loadToken() {
 }
 
 function getToken() {
-  if (TOKEN_ARG) return TOKEN_ARG
+  if (TOKEN_ARG)        return TOKEN_ARG
+  if (TOKEN_FROM_FILE)  return TOKEN_FROM_FILE
   const saved = loadToken()
   return saved?.token || null
 }

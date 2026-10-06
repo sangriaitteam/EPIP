@@ -3,7 +3,7 @@ title Sangria Screenshot Tool
 cd /d "%~dp0"
 
 echo ================================================
-echo    Sangria Screenshot Tool — Sangria Edutainment
+echo    Sangria Screenshot Tool - Sangria Edutainment
 echo ================================================
 echo.
 
@@ -24,13 +24,12 @@ if not exist "%~dp0node_modules" (
 )
 
 :: Check for saved token
-node -e "try{const d=require('fs').readFileSync(require('os').tmpdir()+'\\sangria-token.json','utf8');const t=JSON.parse(d);if(Date.now()-t.savedAt<7*24*60*60*1000){console.log('TOKEN_FOUND:'+t.user.name||'Employee');}else{console.log('TOKEN_EXPIRED');}}catch(e){console.log('NO_TOKEN');}" > "%TEMP%\sgt_check.txt" 2>&1
-set /p TOKEN_STATUS=<"%TEMP%\sgt_check.txt"
-del "%TEMP%\sgt_check.txt" 2>nul
+node -e "try{const d=require('fs').readFileSync(require('os').tmpdir()+'\\sangria-token.json','utf8');const t=JSON.parse(d);if(Date.now()-t.savedAt<7*24*60*60*1000){process.stdout.write('FOUND');}else{process.stdout.write('EXPIRED');}}catch(e){process.stdout.write('NONE');}" > "%TEMP%\sgt_status.txt" 2>nul
+set /p TSTATUS=<"%TEMP%\sgt_status.txt"
+del "%TEMP%\sgt_status.txt" 2>nul
 
-if "%TOKEN_STATUS:~0,11%"=="TOKEN_FOUND:" (
-    echo Logged in as: %TOKEN_STATUS:~12%
-    echo Starting screenshot capture...
+if "%TSTATUS%"=="FOUND" (
+    echo Saved session found. Starting...
     echo Press Ctrl+C to stop.
     echo.
     node "%~dp0screenshot.js"
@@ -38,27 +37,27 @@ if "%TOKEN_STATUS:~0,11%"=="TOKEN_FOUND:" (
     exit /b 0
 )
 
-:: No saved token — ask user
-echo No saved session found.
-echo.
-echo To get your token:
-echo   1. Open EPIP website in Chrome
-echo   2. Login as Employee
-echo   3. Press F12 ^(DevTools^)
-echo   4. Go to: Application ^> Local Storage ^> epip_token
-echo   5. Copy the token value
-echo.
-set /p USER_TOKEN=Paste your token here: 
-
-if "%USER_TOKEN%"=="" (
-    echo No token entered. Exiting.
+:: Check for token.txt file in same folder
+if exist "%~dp0token.txt" (
+    echo Found token.txt. Using saved token...
+    node "%~dp0screenshot.js" --tokenfile "%~dp0token.txt"
     pause
-    exit /b 1
+    exit /b 0
 )
 
+:: No token — guide user
+echo No saved session found.
 echo.
-echo Starting screenshot capture...
-echo Press Ctrl+C to stop.
+echo STEPS TO START:
 echo.
-node "%~dp0screenshot.js" --token "%USER_TOKEN%"
+echo   1. Open EPIP website in Chrome
+echo   2. Login as Employee
+echo   3. Press F12 - go to Application - Local Storage
+echo   4. Find 'epip_token' - copy the full value
+echo   5. Open Notepad, paste the token, save as:
+echo.
+echo      %~dp0token.txt
+echo.
+echo   6. Run this bat file again
+echo.
 pause
