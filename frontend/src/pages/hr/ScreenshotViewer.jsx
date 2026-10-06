@@ -206,19 +206,16 @@ const ScreenshotViewer = () => {
                       <img
                         src={(() => {
                           const url = shot.file_url
-                          // Cloudinary or any external CDN URL — use directly
+                          // Cloudinary or any CDN — use directly
                           if (url.includes('cloudinary.com') || url.includes('res.cloudinary')) return url
-                          // Already a Railway/production backend URL — use directly
+                          // Already a Railway URL — use directly
                           if (url.includes('railway.app')) return url
-                          // Replace any host (including localhost) with the actual API base
-                          // VITE_API_URL = https://epip-production-1b98.up.railway.app/api
-                          const apiUrl = import.meta.env.VITE_API_URL || ''
-                          if (apiUrl) {
-                            const backendBase = apiUrl.replace(/\/api$/, '')
-                            // Extract just the /uploads/... path from the URL
-                            const match = url.match(/(\/uploads\/.+)$/)
-                            if (match) return `${backendBase}${match[1]}`
-                          }
+                          // Extract /uploads/... path and prepend Railway backend URL
+                          const backendBase = import.meta.env.VITE_BACKEND_URL
+                            || import.meta.env.VITE_API_URL?.replace(/\/api$/, '')
+                            || ''
+                          const match = url.match(/(\/uploads\/.+)$/)
+                          if (backendBase && match) return `${backendBase}${match[1]}`
                           return url
                         })()}
                         alt={`Screenshot ${fmtTime(shot.captured_at || shot.created_at)}`}
@@ -298,12 +295,11 @@ const ScreenshotViewer = () => {
                         const url = preview.file_url
                         if (url.includes('cloudinary.com') || url.includes('res.cloudinary')) return url
                         if (url.includes('railway.app')) return url
-                        const apiUrl = import.meta.env.VITE_API_URL || ''
-                        if (apiUrl) {
-                          const backendBase = apiUrl.replace(/\/api$/, '')
-                          const match = url.match(/(\/uploads\/.+)$/)
-                          if (match) return `${backendBase}${match[1]}`
-                        }
+                        const backendBase = import.meta.env.VITE_BACKEND_URL
+                          || import.meta.env.VITE_API_URL?.replace(/\/api$/, '')
+                          || ''
+                        const match = url.match(/(\/uploads\/.+)$/)
+                        if (backendBase && match) return `${backendBase}${match[1]}`
                         return url
                       })()}
                       alt="Screenshot"
