@@ -375,8 +375,12 @@ const pauseWork = async (req, res, next) => {
     // Close open pauses that started WITHIN this session (e.g. duplicate lock events)
     const existing = await Attendance.getActivePause(employee.id)
     if (existing) {
-      if (existing.reason === 'screen_lock' || resolvedReason === 'screen_lock') {
-        // Close the existing one before inserting new
+      if (resolvedReason === 'screen_lock' && existing.reason === 'screen_lock') {
+        // Duplicate screen_lock from second agent — already on screen lock break, just return existing
+        console.log('[attendance] Duplicate screen_lock pause ignored — already tracking')
+        return ok(res, existing, 'Already on screen lock break')
+      } else if (existing.reason === 'screen_lock' || resolvedReason === 'screen_lock') {
+        // One is screen_lock, other is manual — close existing and start new
         await query(
           `UPDATE attendance_pauses
            SET pause_end = NOW(),
