@@ -210,6 +210,22 @@ const checkOut = async (req, res, next) => {
   try {
     const employee = await Employee.findByUserId(req.user.id)
     if (!employee) return fail(res, 'Employee profile not found', 404)
+
+    // ── Close ALL open screen_lock pauses before checkout ────────────────────
+    // Logout = screen off period ends here
+    await query(
+      `UPDATE attendance_pauses ap
+       SET pause_end = NOW(),
+           duration_mins = GREATEST(0, ROUND(
+             EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60, 2))
+       FROM attendance a
+       WHERE ap.attendance_id = a.id
+         AND a.employee_id = $1
+         AND ap.pause_end IS NULL
+         AND ap.reason = 'screen_lock'`,
+      [employee.id]
+    )
+
     const record = await Attendance.checkOut(employee.id)
 
     // Compute break totals for this session (pauses since last login_at)
