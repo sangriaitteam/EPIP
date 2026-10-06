@@ -230,17 +230,28 @@ async function _syncState() {
   if (!auth.isLoggedIn()) return
   try {
     const record = await attendance.getToday()
-    _isCheckedIn = !!(record?.check_in && !record?.check_out)
-    _checkInTime = record?.check_in || null
 
-    if (_isCheckedIn) {
+    // ── Determine checked-in status from active SESSION, not attendance.check_out
+    // attendance.check_out reflects the LAST session's checkout — if employee
+    // re-logged in (Session 2 active), check_out is still set from Session 1.
+    // We must check whether there is an open session right now.
+    // Use pauses endpoint which only returns data when checked in,
+    // combined with the attendance record's check_in presence.
+    const hasCheckedInToday = !!(record?.check_in)
+
+    if (hasCheckedInToday) {
       const pauses = await attendance.getMyPauses()
+      // getMyPauses returns pauses for today's attendance — if it succeeds,
+      // the employee has an active attendance record (possibly re-logged in)
       const active = pauses.find(p => !p.pause_end)
+      _isCheckedIn    = true   // has attendance today + pauses API succeeded
       _isOnBreak      = !!active
       _breakStartTime = active?.pause_start || null
+      _checkInTime    = record.check_in
       if (!active) _autoBreak = false
     } else {
-      _isOnBreak = false; _autoBreak = false; _breakStartTime = null
+      _isCheckedIn = false
+      _isOnBreak = false; _autoBreak = false; _breakStartTime = null; _checkInTime = null
     }
 
     _buildTrayMenu()

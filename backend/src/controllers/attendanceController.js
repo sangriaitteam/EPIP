@@ -340,12 +340,43 @@ const pauseWork = async (req, res, next) => {
     if (!record?.check_in)  return fail(res, 'You must check in before pausing', 409)
     if (record.check_out)   return fail(res, 'You have already checked out', 409)
 
-    // Only one active pause at a time
-    // Exception: if existing open pause is screen_lock, auto-close it and allow manual break
+    const VALID_REASONS = ['tea_break', 'lunch_break', 'meeting', 'personal', 'other', 'screen_lock']
+    const { reason = 'other', comment } = req.body
+    const resolvedReason = VALID_REASONS.includes(reason) ? reason : 'other'
+
+    // ── Auto-close ALL existing open pauses before inserting a new one ────────
+    // This handles:
+    //   1. screen_lock pause from a previous session that was never resumed
+    //   2. manual break that was never closed
+    //   3. any stale pause from before re-login
+    // Capped at the current session's login_at so stale pauses don't get
+    // inflated durations.
+    const { rows: currentSession } = await query(
+      `SELECT login_at FROM employee_sessions
+       WHERE employee_id = $1 AND logout_at IS NULL
+       ORDER BY login_at DESC LIMIT 1`,
+      [employee.id]
+    )
+    const sessionLoginAt = currentSession[0]?.login_at || record.check_in
+
+    // Close open pauses that started BEFORE this session — cap them at session start
+    await query(
+      `UPDATE attendance_pauses
+       SET pause_end     = $3::timestamptz,
+           duration_mins = GREATEST(0, ROUND(
+             EXTRACT(EPOCH FROM ($3::timestamptz - pause_start)) / 60, 2))
+       WHERE employee_id = $1
+         AND attendance_id = $2
+         AND pause_end IS NULL
+         AND pause_start < $3::timestamptz`,
+      [employee.id, record.id, sessionLoginAt]
+    )
+
+    // Close open pauses that started WITHIN this session (e.g. duplicate lock events)
     const existing = await Attendance.getActivePause(employee.id)
     if (existing) {
-      if (existing.reason === 'screen_lock') {
-        // Auto-close stuck screen_lock pause before allowing manual break
+      if (existing.reason === 'screen_lock' || resolvedReason === 'screen_lock') {
+        // Close the existing one before inserting new
         await query(
           `UPDATE attendance_pauses
            SET pause_end = NOW(),
@@ -357,10 +388,6 @@ const pauseWork = async (req, res, next) => {
         return fail(res, 'Already on a break — resume first', 409)
       }
     }
-
-    const VALID_REASONS = ['tea_break', 'lunch_break', 'meeting', 'personal', 'other', 'screen_lock']
-    const { reason = 'other', comment } = req.body
-    const resolvedReason = VALID_REASONS.includes(reason) ? reason : 'other'
 
     const { rows } = await query(
       `INSERT INTO attendance_pauses (attendance_id, employee_id, pause_start, reason, comment)
@@ -452,6 +479,29 @@ const getToday = async (req, res, next) => {
     if (!employee) return fail(res, 'Employee profile not found', 404)
     const today  = new Date().toISOString().split('T')[0]
     const record = await Attendance.findByDate(employee.id, today)
+
+    // ── Auto-close stale pauses from before current session ───────────────────
+    // If employee re-logged in (Session 2), any open pause from Session 1 that
+    // wasn't closed at checkout must be capped at session 2's login time.
+    // This runs silently on every poll so the timing-agent always gets clean state.
+    if (record?.check_in && !record?.check_out) {
+      await query(
+        `UPDATE attendance_pauses ap
+         SET pause_end     = s.login_at,
+             duration_mins = GREATEST(0, ROUND(
+               EXTRACT(EPOCH FROM (s.login_at - ap.pause_start)) / 60, 2))
+         FROM (
+           SELECT login_at FROM employee_sessions
+           WHERE employee_id = $1 AND logout_at IS NULL
+           ORDER BY login_at DESC LIMIT 1
+         ) s
+         WHERE ap.employee_id = $1
+           AND ap.pause_end IS NULL
+           AND ap.pause_start < s.login_at`,
+        [employee.id]
+      )
+    }
+
     return ok(res, record || { status: 'not_checked_in' })
   } catch (err) { next(err) }
 }
