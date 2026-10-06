@@ -256,7 +256,7 @@ const checkOut = async (req, res, next) => {
     const logoutType = req.body?.tab_close === true ? 'tab_close' : 'manual'
 
     // Close the latest open session
-    // duration_mins = total elapsed (screen-off does NOT reduce working hours)
+    // duration_mins = total elapsed minus screen-off (screen off is not working time)
     await query(
       `UPDATE employee_sessions
        SET logout_at         = NOW(),
@@ -264,7 +264,7 @@ const checkOut = async (req, res, next) => {
            manual_break_mins = $1,
            screen_off_mins   = $2,
            duration_mins     = GREATEST(0, ROUND(
-             EXTRACT(EPOCH FROM (NOW() - login_at)) / 60
+             EXTRACT(EPOCH FROM (NOW() - login_at)) / 60 - $2
            , 2))
        WHERE id = (
          SELECT id FROM employee_sessions
@@ -275,11 +275,25 @@ const checkOut = async (req, res, next) => {
     )
 
     // Recalculate total work hours from ALL sessions today
-    // Working Hours = total session elapsed (screen-off does NOT reduce it)
+    // Working Hours = total session elapsed - screen_off (screen off is NOT working time)
     const { rows: sessionTotals } = await query(
       `SELECT COALESCE(SUM(
          GREATEST(0,
            EXTRACT(EPOCH FROM (s.logout_at - s.login_at)) / 60
+           - COALESCE((
+               SELECT SUM(
+                 CASE
+                   WHEN ap.pause_end IS NOT NULL
+                     THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+                   ELSE 0
+                 END
+               )
+               FROM attendance_pauses ap
+               WHERE ap.attendance_id = s.attendance_id
+                 AND ap.reason = 'screen_lock'
+                 AND ap.pause_start >= s.login_at
+                 AND ap.pause_start < s.logout_at
+             ), 0)
          )
        ), 0) AS total_work_mins
        FROM employee_sessions s
@@ -529,11 +543,31 @@ const getSessionsByEmployee = async (req, res, next) => {
          s.login_at,
          s.logout_at,
          s.logout_type,
-         -- Working Hours = total session elapsed (screen-off does NOT reduce working hours)
-         -- Screen off is tracked separately for admin visibility only
+         -- Working Hours = total session elapsed MINUS screen-off time
+         -- Screen off time is NOT working time
          ROUND(
            GREATEST(0,
              EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
+             -- Subtract screen-off pauses within this session
+             - LEAST(
+                 COALESCE((
+                   SELECT SUM(
+                     CASE
+                       WHEN ap.pause_end IS NOT NULL
+                         THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+                       ELSE
+                         EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - ap.pause_start)) / 60
+                     END
+                   )
+                   FROM attendance_pauses ap
+                   WHERE ap.attendance_id = s.attendance_id
+                     AND ap.reason = 'screen_lock'
+                     AND ap.pause_start >= s.login_at
+                     AND ap.pause_start < COALESCE(s.logout_at, NOW())
+                 ), 0),
+                 -- Cap screen-off at session elapsed (can never exceed session)
+                 EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
+               )
            )::numeric
          , 4) AS duration_mins,
          -- Manual break: sum of non-screen-lock pauses within this session
