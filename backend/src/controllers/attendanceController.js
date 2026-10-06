@@ -586,6 +586,30 @@ const getSessionsByEmployee = async (req, res, next) => {
     const istNow3 = new Date(Date.now() + 5.5 * 60 * 60 * 1000)
     const date = req.query.date || istNow3.toISOString().split('T')[0]
 
+    // ── Auto-close any stale open pause older than the current active session ──
+    // If screen was locked during re-login and resume was never called,
+    // the pause stays open forever. Cap it at the current session's login_at.
+    await query(
+      `UPDATE attendance_pauses ap
+       SET pause_end = s.login_at,
+           duration_mins = GREATEST(0, ROUND(
+             EXTRACT(EPOCH FROM (s.login_at - ap.pause_start)) / 60, 2))
+       FROM (
+         SELECT es.login_at, es.attendance_id
+         FROM employee_sessions es
+         WHERE es.employee_id = $1
+           AND es.logout_at IS NULL
+           AND DATE(es.login_at AT TIME ZONE 'Asia/Kolkata') = $2
+         ORDER BY es.login_at DESC
+         LIMIT 1
+       ) s
+       WHERE ap.employee_id = $1
+         AND ap.attendance_id = s.attendance_id
+         AND ap.pause_end IS NULL
+         AND ap.pause_start < s.login_at`,
+      [employeeId, date]
+    )
+
     const { rows } = await query(
       `SELECT
          s.id,
