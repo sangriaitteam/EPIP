@@ -652,16 +652,6 @@ const getTodayAll = async (req, res, next) => {
            FROM attendance_pauses ap
            WHERE ap.attendance_id = a.id
          ), 0) AS live_pause_mins,
-         -- live_hours_mins: Working Hours = total session elapsed only
-         -- Manual breaks and screen-off do NOT reduce working hours display
-         GREATEST(0, COALESCE((
-           SELECT ROUND(
-             SUM(EXTRACT(EPOCH FROM (COALESCE(sess.logout_at, NOW()) - sess.login_at)) / 60)
-           ::numeric, 2)
-           FROM employee_sessions sess
-           WHERE sess.employee_id = e.id
-             AND sess.attendance_id = a.id
-         ), 0)) AS live_hours_mins,
          -- live_screen_off_mins: screen_lock pauses (closed + active), hard-capped at total session elapsed
          LEAST(
            COALESCE((

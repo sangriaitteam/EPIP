@@ -20,34 +20,6 @@ const fmtTime = (ts) => ts
   ? new Date(ts).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
   : '—'
 
-// Convert decimal hours (e.g. 1.89) to "1h 53m" format
-const fmtHours = (h) => {
-  if (!h && h !== 0) return '—'
-  const totalMins = Math.round(Number(h) * 60)
-  if (totalMins <= 0) return '—'
-  const hrs  = Math.floor(totalMins / 60)
-  const mins = totalMins % 60
-  if (hrs === 0) return `${mins}m`
-  if (mins === 0) return `${hrs}h`
-  return `${hrs}h ${mins}m`
-}
-
-// Live hours — uses backend session-sum formula (matches session panel "Total Work" exactly)
-const getLiveHours = (row) => {
-  if (!row.check_in) return null
-  // If employee is on screen lock / break, work time should be frozen
-  // live_hours_mins already accounts for active pauses in backend
-  const mins = Number(row.live_hours_mins)
-  if (!mins && mins !== 0) return null
-  const h = Math.floor(mins / 60)
-  const m = Math.floor(mins % 60)
-  const s = Math.floor((mins * 60) % 60)
-  if (h === 0 && m === 0) return `${s}s`
-  if (h === 0) return `${m}m`
-  if (m === 0) return `${h}h`
-  return `${h}h ${m}m`
-}
-
 const getLiveScreenOff = (row) => {
   // Only show CLOSED screen-off durations — no live counting of active pauses
   // Active screen lock is handled by timing agent; we show only confirmed completed periods
@@ -402,13 +374,6 @@ const HRTodayAttendance = () => {
   const [attendanceDates, setAttendanceDates] = useState([])
   const [showCalendar,  setShowCalendar]  = useState(true)
   const [expandedRow,   setExpandedRow]   = useState(null)
-  const [nowMs,         setNowMs]         = useState(Date.now())
-
-  // ── 1-second tick for live screen-off timer ────────────────────────────────
-  useEffect(() => {
-    const t = setInterval(() => setNowMs(Date.now()), 1000)
-    return () => clearInterval(t)
-  }, [])
 
   const load = useCallback(async (date, silent = false) => {
     if (!silent) setLoading(true)
@@ -585,7 +550,7 @@ const HRTodayAttendance = () => {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100 dark:border-dark-600 bg-gray-50 dark:bg-dark-700">
-                      {['Employee','Check In','Check Out','Hours','Status','Late',''].map(h => (
+                      {['Employee','Check In','Check Out','Status','Late',''].map(h => (
                         <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                           {h}
                         </th>
@@ -627,32 +592,6 @@ const HRTodayAttendance = () => {
                                   ? <span className="text-xs text-green-500 animate-pulse">In office</span>
                                   : '—'}
                               </span>
-                            </td>
-                            <td className="px-4 py-3 text-xs font-medium text-gray-700 dark:text-gray-300">
-                              {(() => {
-                                const live = getLiveHours(row)
-                                const screenOff = getLiveScreenOff(row)
-                                const isActive = row.check_in && !row.check_out
-                                const isLocked = isActive && !!row.active_screen_lock_start
-                                if (live !== null) {
-                                  return (
-                                    <div className="flex flex-col gap-0.5">
-                                      <span className={
-                                        isLocked ? 'text-slate-400 font-semibold' :
-                                        isActive ? 'text-green-600 dark:text-green-400 font-semibold' : ''
-                                      }>
-                                        {isLocked ? '⏸ ' : ''}{live}
-                                      </span>
-                                      {screenOff && (
-                                        <span className="text-[10px] text-orange-400 flex items-center gap-1 font-semibold">
-                                          🔒 {screenOff} screen off
-                                        </span>
-                                      )}
-                                    </div>
-                                  )
-                                }
-                                return fmtHours(row.hours_worked)
-                              })()}
                             </td>
                             <td className="px-4 py-3">
                               <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${badge.color}`}>
@@ -724,15 +663,6 @@ const HRTodayAttendance = () => {
                         <div className="p-2 rounded-xl bg-red-500/10">
                           <p className="text-xs font-bold text-red-500">{row.check_out ? fmtTime(row.check_out) : '—'}</p>
                           <p className="text-[10px] text-gray-400 mt-0.5">Check Out</p>
-                        </div>
-                        <div className="p-2 rounded-xl bg-blue-500/10">
-                          <p className="text-xs font-bold text-blue-500">
-                            {(() => {
-                              const live = getLiveHours(row)
-                              return live !== null ? live : fmtHours(row.hours_worked)
-                            })()}
-                          </p>
-                          <p className="text-[10px] text-gray-400 mt-0.5">Hours</p>
                         </div>
                       </div>
                     </motion.div>
