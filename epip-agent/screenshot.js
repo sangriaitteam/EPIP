@@ -105,11 +105,42 @@ async function fetchInterval(token) {
 // ── Capture + upload screenshot ───────────────────────────────────────────────
 async function captureAndUpload(token) {
   try {
-    const screenshot = require('screenshot-desktop')
-    const imgBuffer  = await screenshot({ format: 'png' })
+    const os   = require('os')
+    const { execSync } = require('child_process')
+    const tmpFile = path.join(os.tmpdir(), `sangria-sc-${Date.now()}.png`)
 
-    if (!imgBuffer || imgBuffer.length < 500) {
-      console.warn('[capture] Empty screenshot buffer')
+    // Use PowerShell to capture screen — reliable on all Windows versions
+    // Works with DPI scaling, hardware acceleration, multi-monitor setups
+    const psScript = `
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+$screens = [System.Windows.Forms.Screen]::AllScreens
+$top    = ($screens | Measure-Object -Property Bounds.Top    -Minimum).Minimum
+$left   = ($screens | Measure-Object -Property Bounds.Left   -Minimum).Minimum
+$width  = ($screens | Measure-Object -Property Bounds.Right  -Maximum).Maximum - $left
+$height = ($screens | Measure-Object -Property Bounds.Bottom -Maximum).Maximum - $top
+$bitmap = New-Object System.Drawing.Bitmap($width, $height)
+$graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+$graphics.CopyFromScreen($left, $top, 0, 0, $bitmap.Size)
+$bitmap.Save('${tmpFile.replace(/\\/g, '\\\\')}')
+$graphics.Dispose()
+$bitmap.Dispose()
+`
+    execSync(`powershell -NoProfile -NonInteractive -Command "${psScript.replace(/\n/g, ' ')}"`, {
+      timeout: 15000,
+      windowsHide: true,
+    })
+
+    if (!fs.existsSync(tmpFile)) {
+      console.warn('[capture] Screenshot file not created')
+      return false
+    }
+
+    const imgBuffer = fs.readFileSync(tmpFile)
+    fs.unlinkSync(tmpFile) // clean up temp file
+
+    if (!imgBuffer || imgBuffer.length < 1000) {
+      console.warn('[capture] Screenshot too small:', imgBuffer?.length, 'bytes')
       return false
     }
 
