@@ -282,10 +282,10 @@ const LiveWorkTimer = () => {
     } catch { /* silent */ }
   }, [])
 
-  // Poll every 30s for fresh data
+  // Poll every 5s for fresh data — needed so screen-off/resume reflects quickly
   useEffect(() => {
     fetchToday()
-    const poll = setInterval(fetchToday, 30_000)
+    const poll = setInterval(fetchToday, 5_000)
     return () => clearInterval(poll)
   }, [fetchToday])
 

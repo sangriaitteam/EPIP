@@ -381,19 +381,12 @@ const resumeWork = async (req, res, next) => {
       `UPDATE attendance_pauses ap
        SET pause_end     = NOW(),
            duration_mins = ROUND(
-             LEAST(
-               EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60,
-               -- Cap at session elapsed time to prevent inflated values
-               COALESCE((
-                 SELECT EXTRACT(EPOCH FROM (
-                   COALESCE(s.logout_at, NOW()) - s.login_at
-                 )) / 60
-                 FROM employee_sessions s
-                 WHERE s.attendance_id = ap.attendance_id
-                   AND s.login_at <= ap.pause_start
-                 ORDER BY s.login_at DESC LIMIT 1
-               ), EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60)
-             )::numeric, 2)
+             -- Simple: elapsed from pause_start to NOW() — this is always correct
+             -- because we're resuming RIGHT NOW, so NOW() is the exact end time.
+             -- No cap needed: if a pause somehow started before the session that's
+             -- a data integrity issue, not something to silently inflate.
+             GREATEST(0, EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60)::numeric
+           , 2)
        FROM attendance a
        WHERE ap.attendance_id = a.id
          AND a.employee_id = $1
@@ -543,63 +536,30 @@ const getSessionsByEmployee = async (req, res, next) => {
          s.login_at,
          s.logout_at,
          s.logout_type,
-         -- Working Hours = total session elapsed MINUS screen-off time
-         -- Screen off time is NOT working time
-         ROUND(
-           GREATEST(0,
-             EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
-             -- Subtract screen-off pauses within this session
-             - LEAST(
-                 COALESCE((
-                   SELECT SUM(
-                     CASE
-                       WHEN ap.pause_end IS NOT NULL
-                         THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
-                       ELSE
-                         EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - ap.pause_start)) / 60
-                     END
-                   )
-                   FROM attendance_pauses ap
-                   WHERE ap.attendance_id = s.attendance_id
-                     AND ap.reason = 'screen_lock'
-                     AND ap.pause_start >= s.login_at
-                     AND ap.pause_start < COALESCE(s.logout_at, NOW())
-                 ), 0),
-                 -- Cap screen-off at session elapsed (can never exceed session)
-                 EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
-               )
-           )::numeric
-         , 4) AS duration_mins,
-         -- Manual break: sum of non-screen-lock pauses within this session
-         ROUND(COALESCE((
-           SELECT SUM(
-             CASE
-               WHEN ap.pause_end IS NOT NULL
-                 THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
-               ELSE
-                 EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
-             END
-           )
-           FROM attendance_pauses ap
-           WHERE ap.attendance_id = s.attendance_id
-             AND ap.reason != 'screen_lock'
-             AND ap.pause_start >= s.login_at
-             AND (s.logout_at IS NULL OR ap.pause_start <= s.logout_at)
-         ), 0)::numeric, 4) AS manual_break_mins,
-         -- Screen-off: screen_lock pauses (both closed and active), capped at session elapsed
+         -- ── screen_off_mins ────────────────────────────────────────────────
+         -- Only count CLOSED (pause_end IS NOT NULL) screen_lock pauses.
+         -- An open/active pause means the screen is STILL OFF right now — we
+         -- do NOT accumulate it here so the number stays accurate and doesn't
+         -- keep growing after the screen comes back on.
+         -- For an active session (logout_at IS NULL) we also include the
+         -- current open screen_lock pause so the live display ticks correctly,
+         -- but only while logout_at is still NULL (i.e. employee is still in).
          LEAST(
            ROUND(COALESCE((
              SELECT SUM(
-               LEAST(
-                 CASE
-                   WHEN ap.pause_end IS NOT NULL
-                     THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
-                   ELSE
-                     -- Active pause: count up to session end (or now if session still open)
-                     EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - ap.pause_start)) / 60
-                 END,
-                 EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
-               )
+               CASE
+                 -- Closed pause: use exact stored duration
+                 WHEN ap.pause_end IS NOT NULL
+                   THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+                 -- Open pause AND session is still active: count up to NOW()
+                 -- (This is the live "currently locked" counter — only when session is open)
+                 WHEN s.logout_at IS NULL
+                   THEN EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
+                 -- Open pause but session already closed: cap at session end
+                 -- (handles the edge case where pause wasn't closed on logout)
+                 ELSE
+                   GREATEST(0, EXTRACT(EPOCH FROM (s.logout_at - ap.pause_start)) / 60)
+               END
              )
              FROM attendance_pauses ap
              WHERE ap.attendance_id = s.attendance_id
@@ -607,8 +567,72 @@ const getSessionsByEmployee = async (req, res, next) => {
                AND ap.pause_start >= s.login_at
                AND ap.pause_start < COALESCE(s.logout_at, NOW())
            ), 0)::numeric, 4),
+           -- Hard cap: screen_off can never exceed total session elapsed
            ROUND(EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60::numeric, 4)
-         ) AS screen_off_mins
+         ) AS screen_off_mins,
+         -- ── manual_break_mins ──────────────────────────────────────────────
+         -- Only CLOSED manual pauses; open manual pauses use NOW() cap.
+         ROUND(COALESCE((
+           SELECT SUM(
+             CASE
+               WHEN ap.pause_end IS NOT NULL
+                 THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+               WHEN s.logout_at IS NULL
+                 THEN EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
+               ELSE
+                 GREATEST(0, EXTRACT(EPOCH FROM (s.logout_at - ap.pause_start)) / 60)
+             END
+           )
+           FROM attendance_pauses ap
+           WHERE ap.attendance_id = s.attendance_id
+             AND ap.reason != 'screen_lock'
+             AND ap.pause_start >= s.login_at
+             AND ap.pause_start < COALESCE(s.logout_at, NOW())
+         ), 0)::numeric, 4) AS manual_break_mins,
+         -- ── duration_mins (Working Hours) ──────────────────────────────────
+         -- Working Hours = session elapsed − screen_off_mins − manual_break_mins
+         -- Recalculated here using the same capped values above to stay consistent.
+         ROUND(
+           GREATEST(0,
+             EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
+             -- Subtract closed screen_lock pauses
+             - COALESCE((
+                 SELECT SUM(
+                   CASE
+                     WHEN ap.pause_end IS NOT NULL
+                       THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+                     WHEN s.logout_at IS NULL
+                       THEN EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
+                     ELSE
+                       GREATEST(0, EXTRACT(EPOCH FROM (s.logout_at - ap.pause_start)) / 60)
+                   END
+                 )
+                 FROM attendance_pauses ap
+                 WHERE ap.attendance_id = s.attendance_id
+                   AND ap.reason = 'screen_lock'
+                   AND ap.pause_start >= s.login_at
+                   AND ap.pause_start < COALESCE(s.logout_at, NOW())
+               ), 0)
+             -- Subtract closed manual pauses
+             - COALESCE((
+                 SELECT SUM(
+                   CASE
+                     WHEN ap.pause_end IS NOT NULL
+                       THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+                     WHEN s.logout_at IS NULL
+                       THEN EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
+                     ELSE
+                       GREATEST(0, EXTRACT(EPOCH FROM (s.logout_at - ap.pause_start)) / 60)
+                   END
+                 )
+                 FROM attendance_pauses ap
+                 WHERE ap.attendance_id = s.attendance_id
+                   AND ap.reason != 'screen_lock'
+                   AND ap.pause_start >= s.login_at
+                   AND ap.pause_start < COALESCE(s.logout_at, NOW())
+               ), 0)
+           )::numeric
+         , 4) AS duration_mins
        FROM employee_sessions s
        WHERE s.employee_id = $1
          AND DATE(s.login_at AT TIME ZONE 'Asia/Kolkata') = $2
@@ -686,21 +710,31 @@ const getTodayAll = async (req, res, next) => {
            FROM attendance_pauses ap
            WHERE ap.attendance_id = a.id
          ), 0) AS live_pause_mins,
-         -- live_screen_off_mins: screen_lock pauses (closed + active), hard-capped at total session elapsed
+         -- live_screen_off_mins: screen_lock pauses for this attendance record.
+         -- Closed pauses: use exact stored duration.
+         -- Active (open) pause: only count up to NOW() when check_out IS NULL
+         --   (employee still checked in = screen currently OFF).
+         -- When session is already closed (check_out IS NOT NULL), an open pause
+         --   is stale — cap it at check_out so it doesn't keep growing.
          LEAST(
            COALESCE((
              SELECT ROUND(SUM(
                CASE
                  WHEN ap.pause_end IS NOT NULL
                    THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+                 -- Active pause + employee still checked in → live counter
+                 WHEN a.check_out IS NULL
+                   THEN EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
+                 -- Active pause but already checked out → cap at check_out
                  ELSE
-                   EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
+                   GREATEST(0, EXTRACT(EPOCH FROM (a.check_out - ap.pause_start)) / 60)
                END
              )::numeric, 2)
              FROM attendance_pauses ap
              WHERE ap.attendance_id = a.id
                AND ap.reason = 'screen_lock'
            ), 0),
+           -- Hard cap: can never exceed total session elapsed time
            COALESCE((
              SELECT ROUND(SUM(
                EXTRACT(EPOCH FROM (COALESCE(sess.logout_at, NOW()) - sess.login_at)) / 60

@@ -89,12 +89,14 @@ app.whenReady().then(async () => {
   // ── Screen unlock / resume → auto resume ─────────────────────────────────
   powerMonitor.on('unlock-screen', () => {
     console.log('[agent] 🔓 Screen unlocked')
-    // Resume if checked in AND on break (auto OR manual screen_lock)
-    if (_isCheckedIn && _isOnBreak) _autoResumeBreak()
+    // Always try to resume — don't rely only on _isOnBreak in-memory state.
+    // The DB may have an open screen_lock pause even if local state lost sync
+    // (e.g. agent restart, crash, or missed sync cycle).
+    if (_isCheckedIn) _autoResumeBreak()
   })
   powerMonitor.on('resume', () => {
     console.log('[agent] ☀️  System resumed')
-    if (_isCheckedIn && _isOnBreak) _autoResumeBreak()
+    if (_isCheckedIn) _autoResumeBreak()
   })
 
   createTray()
@@ -181,7 +183,18 @@ async function _autoResumeBreak() {
     _buildTrayMenu()
     _pushStatus()
   } catch (err) {
-    console.warn('[agent] Auto resume skipped:', err.response?.data?.message || err.message)
+    // 404 = no active break in DB (already closed or never opened) — still clear local state
+    const status = err.response?.status
+    if (status === 404) {
+      _isOnBreak      = false
+      _autoBreak      = false
+      _breakStartTime = null
+      console.log('[agent] ▶ No active break found — clearing local state')
+      _buildTrayMenu()
+      _pushStatus()
+    } else {
+      console.warn('[agent] Auto resume skipped:', err.response?.data?.message || err.message)
+    }
   }
 }
 
