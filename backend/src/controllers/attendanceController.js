@@ -324,8 +324,22 @@ const pauseWork = async (req, res, next) => {
     if (record.check_out)   return fail(res, 'You have already checked out', 409)
 
     // Only one active pause at a time
+    // Exception: if existing open pause is screen_lock, auto-close it and allow manual break
     const existing = await Attendance.getActivePause(employee.id)
-    if (existing) return fail(res, 'Already on a break — resume first', 409)
+    if (existing) {
+      if (existing.reason === 'screen_lock') {
+        // Auto-close stuck screen_lock pause before allowing manual break
+        await query(
+          `UPDATE attendance_pauses
+           SET pause_end = NOW(),
+               duration_mins = GREATEST(0, ROUND(EXTRACT(EPOCH FROM (NOW() - pause_start)) / 60, 2))
+           WHERE id = $1`,
+          [existing.id]
+        )
+      } else {
+        return fail(res, 'Already on a break — resume first', 409)
+      }
+    }
 
     const VALID_REASONS = ['tea_break', 'lunch_break', 'meeting', 'personal', 'other', 'screen_lock']
     const { reason = 'other', comment } = req.body
@@ -538,19 +552,24 @@ const getSessionsByEmployee = async (req, res, next) => {
              AND ap.pause_start >= s.login_at
              AND (s.logout_at IS NULL OR ap.pause_start <= s.logout_at)
          ), 0)::numeric, 4) AS manual_break_mins,
-         -- Screen-off: CLOSED screen_lock pauses only, capped at session elapsed
+         -- Screen-off: screen_lock pauses (both closed and active), capped at session elapsed
          LEAST(
            ROUND(COALESCE((
              SELECT SUM(
                LEAST(
-                 EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60,
+                 CASE
+                   WHEN ap.pause_end IS NOT NULL
+                     THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+                   ELSE
+                     -- Active pause: count up to session end (or now if session still open)
+                     EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - ap.pause_start)) / 60
+                 END,
                  EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
                )
              )
              FROM attendance_pauses ap
              WHERE ap.attendance_id = s.attendance_id
                AND ap.reason = 'screen_lock'
-               AND ap.pause_end IS NOT NULL
                AND ap.pause_start >= s.login_at
                AND ap.pause_start < COALESCE(s.logout_at, NOW())
            ), 0)::numeric, 4),
@@ -643,18 +662,21 @@ const getTodayAll = async (req, res, next) => {
            WHERE sess.employee_id = e.id
              AND sess.attendance_id = a.id
          ), 0)) AS live_hours_mins,
-         -- live_screen_off_mins: CLOSED screen_lock pauses only, hard-capped at total session elapsed
+         -- live_screen_off_mins: screen_lock pauses (closed + active), hard-capped at total session elapsed
          LEAST(
            COALESCE((
              SELECT ROUND(SUM(
-               EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+               CASE
+                 WHEN ap.pause_end IS NOT NULL
+                   THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+                 ELSE
+                   EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
+               END
              )::numeric, 2)
              FROM attendance_pauses ap
              WHERE ap.attendance_id = a.id
                AND ap.reason = 'screen_lock'
-               AND ap.pause_end IS NOT NULL
            ), 0),
-           -- Hard cap: screen off can never exceed total time employee was logged in
            COALESCE((
              SELECT ROUND(SUM(
                EXTRACT(EPOCH FROM (COALESCE(sess.logout_at, NOW()) - sess.login_at)) / 60
