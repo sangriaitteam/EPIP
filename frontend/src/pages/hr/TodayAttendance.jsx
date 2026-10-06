@@ -48,24 +48,17 @@ const getLiveHours = (row) => {
   return `${h}h ${m}m`
 }
 
-const getLiveScreenOff = (row, nowMs) => {
-  if (!row.check_in) return null
-  let totalMins = Number(row.live_screen_off_mins || 0)
-
-  // If currently screen-locked, add live seconds since lock started
-  if (row.active_screen_lock_start && !row.check_out) {
-    const lockStart = new Date(row.active_screen_lock_start).getTime()
-    const elapsed = (nowMs - lockStart) / 60000 // minutes
-    if (elapsed > 0) totalMins = Math.max(totalMins, elapsed)
-  }
-
+const getLiveScreenOff = (row) => {
+  // Only show CLOSED screen-off durations — no live counting of active pauses
+  // Active screen lock is handled by timing agent; we show only confirmed completed periods
+  const totalMins = Number(row.live_screen_off_mins || 0)
   if (totalMins <= 0) return null
   const h = Math.floor(totalMins / 60)
   const m = Math.floor(totalMins % 60)
   const s = Math.floor((totalMins * 60) % 60)
+  if (h === 0 && m === 0 && s < 1) return null
   if (h === 0 && m === 0) return `${s}s`
   if (h === 0) return `${m}m ${s}s`
-  if (m === 0) return `${h}h`
   return `${h}h ${m}m`
 }
 
@@ -638,7 +631,7 @@ const HRTodayAttendance = () => {
                             <td className="px-4 py-3 text-xs font-medium text-gray-700 dark:text-gray-300">
                               {(() => {
                                 const live = getLiveHours(row)
-                                const screenOff = getLiveScreenOff(row, nowMs)
+                                const screenOff = getLiveScreenOff(row)
                                 const isActive = row.check_in && !row.check_out
                                 const isLocked = isActive && !!row.active_screen_lock_start
                                 if (live !== null) {

@@ -89,11 +89,12 @@ app.whenReady().then(async () => {
   // ── Screen unlock / resume → auto resume ─────────────────────────────────
   powerMonitor.on('unlock-screen', () => {
     console.log('[agent] 🔓 Screen unlocked')
-    if (_isCheckedIn && _isOnBreak && _autoBreak) _autoResumeBreak()
+    // Resume if checked in AND on break (auto OR manual screen_lock)
+    if (_isCheckedIn && _isOnBreak) _autoResumeBreak()
   })
   powerMonitor.on('resume', () => {
     console.log('[agent] ☀️  System resumed')
-    if (_isCheckedIn && _isOnBreak && _autoBreak) _autoResumeBreak()
+    if (_isCheckedIn && _isOnBreak) _autoResumeBreak()
   })
 
   createTray()
