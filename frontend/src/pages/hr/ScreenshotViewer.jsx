@@ -208,13 +208,18 @@ const ScreenshotViewer = () => {
                           const url = shot.file_url
                           // Cloudinary or any external CDN URL — use directly
                           if (url.includes('cloudinary.com') || url.includes('res.cloudinary')) return url
-                          // Railway/production: file_url has correct absolute URL already
-                          if (url.includes('railway.app') || url.includes('vercel.app')) return url
-                          // Local dev: replace hostname with current host, keep /uploads path
-                          const { protocol, hostname } = window.location
-                          const apiBase = import.meta.env.VITE_API_URL || `${protocol}//${hostname}:5000/api`
-                          const backendBase = apiBase.replace('/api', '')
-                          return url.replace(/^https?:\/\/[^/]+/, backendBase)
+                          // Already a Railway/production backend URL — use directly
+                          if (url.includes('railway.app')) return url
+                          // Replace any host (including localhost) with the actual API base
+                          // VITE_API_URL = https://epip-production-1b98.up.railway.app/api
+                          const apiUrl = import.meta.env.VITE_API_URL || ''
+                          if (apiUrl) {
+                            const backendBase = apiUrl.replace(/\/api$/, '')
+                            // Extract just the /uploads/... path from the URL
+                            const match = url.match(/(\/uploads\/.+)$/)
+                            if (match) return `${backendBase}${match[1]}`
+                          }
+                          return url
                         })()}
                         alt={`Screenshot ${fmtTime(shot.captured_at || shot.created_at)}`}
                         className="w-full h-full object-cover"
@@ -292,11 +297,14 @@ const ScreenshotViewer = () => {
                       src={(() => {
                         const url = preview.file_url
                         if (url.includes('cloudinary.com') || url.includes('res.cloudinary')) return url
-                        if (url.includes('railway.app') || url.includes('vercel.app')) return url
-                        const { protocol, hostname } = window.location
-                        const apiBase = import.meta.env.VITE_API_URL || `${protocol}//${hostname}:5000/api`
-                        const backendBase = apiBase.replace('/api', '')
-                        return url.replace(/^https?:\/\/[^/]+/, backendBase)
+                        if (url.includes('railway.app')) return url
+                        const apiUrl = import.meta.env.VITE_API_URL || ''
+                        if (apiUrl) {
+                          const backendBase = apiUrl.replace(/\/api$/, '')
+                          const match = url.match(/(\/uploads\/.+)$/)
+                          if (match) return `${backendBase}${match[1]}`
+                        }
+                        return url
                       })()}
                       alt="Screenshot"
                       className="w-full max-h-[70vh] object-contain"
