@@ -1,10 +1,12 @@
-// main.js — EPIP Timing Agent v2
+// main.js — Screen Lock Tracker v5.0.0
+// Sangria Edutainment Pvt Ltd
+//
 // Flow:
 //   Website employee login → fires epip-timing://launch?token=<jwt>&user=<b64>
-//   Agent receives deep-link → stores token → opens status popup
-//   Screen lock / sleep  → auto pause attendance
-//   Screen unlock/resume → auto resume attendance
-//   Works on localhost, LAN (WiFi/Ethernet/Mobile hotspot) via auto-discovery
+//   Agent receives deep-link → stores token → starts tracking
+//   Screen lock / sleep  → POST /api/attendance/pause (reason: screen_lock)
+//   Screen unlock/resume → POST /api/attendance/resume
+//   Polls backend every 30s to stay in sync
 'use strict'
 
 const {
@@ -33,7 +35,7 @@ let _pollTimer = null
 
 let _isCheckedIn       = false
 let _isOnBreak         = false
-let _autoBreak         = false   // true when break was triggered by screen lock
+let _autoBreak         = false   // true when break triggered by screen lock
 let _checkInTime       = null
 let _breakStartTime    = null
 
@@ -60,7 +62,7 @@ app.on('open-url', (_e, url) => _handleDeepLink(url))
 
 // ── App ready ─────────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
-  app.setAppUserModelId('com.sangria.epip-timing')
+  app.setAppUserModelId('com.sangria.screen-lock-tracker')
 
   // Windows auto-start on boot
   if (process.platform === 'win32') {
@@ -71,31 +73,29 @@ app.whenReady().then(async () => {
     })
   }
 
-  // ── Auto-discover server URL (works for any network) ─────────────────────
-  console.log('[agent] Starting server discovery...')
+  console.log('[tracker] Starting server discovery...')
   await config.discoverServerUrl()
-  console.log('[agent] Using server:', config.getServerUrl())
+  console.log('[tracker] Using server:', config.getServerUrl())
 
   // ── Screen lock / sleep → auto start break ────────────────────────────────
   powerMonitor.on('lock-screen', () => {
-    console.log('[agent] 🔒 Screen locked')
+    console.log('[tracker] 🔒 Screen locked')
     if (_isCheckedIn && !_isOnBreak) _autoStartBreak()
   })
   powerMonitor.on('suspend', () => {
-    console.log('[agent] 💤 System suspended')
+    console.log('[tracker] 💤 System suspended')
     if (_isCheckedIn && !_isOnBreak) _autoStartBreak()
   })
 
-  // ── Screen unlock / resume → auto resume ─────────────────────────────────
+  // ── Screen unlock / resume → ALWAYS try to resume ────────────────────────
+  // Do NOT rely on _isOnBreak in-memory state — call resume unconditionally
+  // when checked in. Backend handles the case where there is no active pause.
   powerMonitor.on('unlock-screen', () => {
-    console.log('[agent] 🔓 Screen unlocked')
-    // Always try to resume — don't rely only on _isOnBreak in-memory state.
-    // The DB may have an open screen_lock pause even if local state lost sync
-    // (e.g. agent restart, crash, or missed sync cycle).
+    console.log('[tracker] 🔓 Screen unlocked')
     if (_isCheckedIn) _autoResumeBreak()
   })
   powerMonitor.on('resume', () => {
-    console.log('[agent] ☀️  System resumed')
+    console.log('[tracker] ☀️  System resumed')
     if (_isCheckedIn) _autoResumeBreak()
   })
 
@@ -105,7 +105,7 @@ app.whenReady().then(async () => {
   // Check if launched via deep-link on first start
   const deepLinkUrl = process.argv.find(a => a.startsWith('epip-timing://'))
   if (deepLinkUrl) {
-    console.log('[agent] Launched via deep-link')
+    console.log('[tracker] Launched via deep-link')
     await _handleDeepLink(deepLinkUrl)
   } else {
     // Restore previous session
@@ -116,7 +116,7 @@ app.whenReady().then(async () => {
       if (!process.argv.includes('--hidden')) showStatusWindow()
     } else {
       auth.logout()
-      console.log('[agent] Waiting for website login deep-link...')
+      console.log('[tracker] Waiting for website login deep-link...')
     }
   }
 })
@@ -128,7 +128,7 @@ app.on('before-quit', () => _stopPoller())
 // URL: epip-timing://launch?token=<jwt>&user=<base64-json>
 async function _handleDeepLink(url) {
   try {
-    console.log('[agent] Processing deep-link:', url.substring(0, 60) + '...')
+    console.log('[tracker] Processing deep-link:', url.substring(0, 60) + '...')
     const parsed  = new URL(url)
     if (parsed.hostname !== 'launch') return
 
@@ -139,7 +139,7 @@ async function _handleDeepLink(url) {
     let user = null
     if (userB64) {
       try { user = JSON.parse(Buffer.from(decodeURIComponent(userB64), 'base64').toString('utf8')) }
-      catch (e) { console.warn('[agent] Could not decode user:', e.message) }
+      catch (e) { console.warn('[tracker] Could not decode user:', e.message) }
     }
 
     auth.loginWithToken(token, user)
@@ -151,9 +151,9 @@ async function _handleDeepLink(url) {
     _startPoller()
     _buildTrayMenu()
     showStatusWindow()
-    console.log('[agent] ✅ Ready for:', user?.name || 'Employee')
+    console.log('[tracker] ✅ Ready for:', user?.name || 'Employee')
   } catch (err) {
-    console.error('[agent] Deep-link error:', err.message)
+    console.error('[tracker] Deep-link error:', err.message)
     showLoginWindow()
   }
 }
@@ -165,35 +165,48 @@ async function _autoStartBreak() {
     _isOnBreak      = true
     _autoBreak      = true
     _breakStartTime = rec?.pause_start || new Date().toISOString()
-    console.log('[agent] ⏸ Auto break started (screen_lock)')
+    console.log('[tracker] ⏸ Screen lock break started')
     _buildTrayMenu()
     _pushStatus()
   } catch (err) {
-    console.warn('[agent] Auto break skipped:', err.response?.data?.message || err.message)
+    const msg = err.response?.data?.message || err.message
+    // Already on break = that's fine, update local state
+    if (msg?.includes('Already on a break')) {
+      _isOnBreak  = true
+      _autoBreak  = true
+      console.log('[tracker] ⏸ Already on break — state synced')
+    } else {
+      console.warn('[tracker] Auto break skipped:', msg)
+    }
+    _buildTrayMenu()
+    _pushStatus()
   }
 }
 
+// ── Auto resume (screen unlock) ───────────────────────────────────────────────
 async function _autoResumeBreak() {
   try {
     await attendance.resumeWork()
     _isOnBreak      = false
     _autoBreak      = false
     _breakStartTime = null
-    console.log('[agent] ▶ Auto break resumed')
+    console.log('[tracker] ▶ Screen unlock — break resumed')
     _buildTrayMenu()
     _pushStatus()
   } catch (err) {
-    // 404 = no active break in DB (already closed or never opened) — still clear local state
     const status = err.response?.status
+    const msg    = err.response?.data?.message || err.message
+
     if (status === 404) {
+      // No active break in DB — still clear local state, was out of sync
       _isOnBreak      = false
       _autoBreak      = false
       _breakStartTime = null
-      console.log('[agent] ▶ No active break found — clearing local state')
+      console.log('[tracker] ▶ No active break found — local state cleared')
       _buildTrayMenu()
       _pushStatus()
     } else {
-      console.warn('[agent] Auto resume skipped:', err.response?.data?.message || err.message)
+      console.warn('[tracker] Auto resume skipped:', msg)
     }
   }
 }
@@ -226,38 +239,38 @@ async function _doManualResume() {
 }
 
 // ── State sync from backend ───────────────────────────────────────────────────
+// Uses check_in + pauses API to derive state.
+// Does NOT use attendance.check_out — it's stale after re-login (Session 2).
 async function _syncState() {
   if (!auth.isLoggedIn()) return
   try {
     const record = await attendance.getToday()
 
-    // ── Determine checked-in status from active SESSION, not attendance.check_out
-    // attendance.check_out reflects the LAST session's checkout — if employee
-    // re-logged in (Session 2 active), check_out is still set from Session 1.
-    // We must check whether there is an open session right now.
-    // Use pauses endpoint which only returns data when checked in,
-    // combined with the attendance record's check_in presence.
-    const hasCheckedInToday = !!(record?.check_in)
+    // Employee has checked in today if check_in is present
+    const hasCheckedIn = !!(record?.check_in)
 
-    if (hasCheckedInToday) {
+    if (hasCheckedIn) {
+      // Fetch pauses to check for active break
       const pauses = await attendance.getMyPauses()
-      // getMyPauses returns pauses for today's attendance — if it succeeds,
-      // the employee has an active attendance record (possibly re-logged in)
       const active = pauses.find(p => !p.pause_end)
-      _isCheckedIn    = true   // has attendance today + pauses API succeeded
+
+      _isCheckedIn    = true
       _isOnBreak      = !!active
+      _autoBreak      = active?.reason === 'screen_lock'
       _breakStartTime = active?.pause_start || null
       _checkInTime    = record.check_in
-      if (!active) _autoBreak = false
     } else {
-      _isCheckedIn = false
-      _isOnBreak = false; _autoBreak = false; _breakStartTime = null; _checkInTime = null
+      _isCheckedIn    = false
+      _isOnBreak      = false
+      _autoBreak      = false
+      _breakStartTime = null
+      _checkInTime    = null
     }
 
     _buildTrayMenu()
     _pushStatus()
   } catch (err) {
-    console.warn('[agent] Sync error:', err.message)
+    console.warn('[tracker] Sync error:', err.message)
   }
 }
 
@@ -266,7 +279,7 @@ function _startPoller() {
   if (_pollTimer) return
   _syncState()
   _pollTimer = setInterval(_syncState, POLL_MS)
-  console.log(`[agent] Poller started — every ${POLL_MS / 1000}s`)
+  console.log(`[tracker] Poller started — every ${POLL_MS / 1000}s`)
 }
 function _stopPoller() {
   if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null }
@@ -279,7 +292,7 @@ function _doLogout() {
   _isCheckedIn = false; _isOnBreak = false; _autoBreak = false; _checkInTime = null
   _buildTrayMenu()
   if (statusWin && !statusWin.isDestroyed()) statusWin.close()
-  console.log('[agent] Signed out — waiting for website login')
+  console.log('[tracker] Signed out — waiting for website login')
 }
 
 // ── Tray ──────────────────────────────────────────────────────────────────────
@@ -287,7 +300,7 @@ function createTray() {
   const iconPath = path.join(ICON_DIR, 'icon.ico')
   const img      = nativeImage.createFromPath(iconPath)
   tray = new Tray(img.isEmpty() ? nativeImage.createEmpty() : img)
-  tray.setToolTip('EPIP Timing Agent')
+  tray.setToolTip('Screen Lock Tracker')
   tray.on('click', () => auth.isLoggedIn() ? showStatusWindow() : showLoginWindow())
   _buildTrayMenu()
 }
@@ -302,11 +315,12 @@ function _buildTrayMenu() {
     !loggedIn     ? '⚪  Waiting for website login…'
     : _isCheckedIn
       ? _isOnBreak
-        ? _autoBreak ? '⏸  On Break (screen locked)' : '⏸  On Break'
+        ? _autoBreak ? '🔒  Screen Locked (break active)' : '⏸  On Break'
         : '🟢  Working'
       : '⚪  Not checked in'
 
   tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Screen Lock Tracker 5.0.0', enabled: false },
     { label: loggedIn ? `👤  ${user?.name || 'Employee'}` : '❌  Not logged in', enabled: false },
     { label: statusLine, enabled: false },
     { label: `🔗  ${server}`, enabled: false },
@@ -337,11 +351,11 @@ function _buildTrayMenu() {
   ]))
 
   tray.setToolTip(
-    !loggedIn    ? 'EPIP Timing Agent — Waiting for login'
+    !loggedIn    ? 'Screen Lock Tracker — Waiting for login'
     : _isCheckedIn
-      ? _isOnBreak ? 'EPIP Timing Agent — On Break'
-                   : 'EPIP Timing Agent — Working'
-      : 'EPIP Timing Agent — Not checked in'
+      ? _isOnBreak ? 'Screen Lock Tracker — On Break'
+                   : 'Screen Lock Tracker — Working'
+      : 'Screen Lock Tracker — Not checked in'
   )
 }
 
