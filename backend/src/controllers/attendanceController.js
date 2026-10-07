@@ -586,25 +586,26 @@ const getSessionsByEmployee = async (req, res, next) => {
     const istNow3 = new Date(Date.now() + 5.5 * 60 * 60 * 1000)
     const date = req.query.date || istNow3.toISOString().split('T')[0]
 
-    // ── Auto-close stale open pauses for current active session ──────────────
-    // When HR views session log, close any open screen_lock pause that has been
-    // open for more than 5 minutes without a resume call from timing-agent.
-    // This handles: screen unlocked but resume API was never called (state desync).
-    // 5 min grace period avoids closing a legitimately active screen lock.
+    // ── Close pre-session stale open pauses ──────────────────────────────────
+    // Only close pauses that started BEFORE current session login.
+    // In-session open pauses (screen currently locked) are left open.
     await query(
       `UPDATE attendance_pauses ap
-       SET pause_end     = NOW(),
+       SET pause_end     = s.login_at,
            duration_mins = GREATEST(0, ROUND(
-             EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60, 2))
-       FROM employee_sessions es
-       WHERE ap.attendance_id = es.attendance_id
-         AND es.employee_id   = $1
-         AND es.logout_at IS NULL
-         AND DATE(es.login_at AT TIME ZONE 'Asia/Kolkata') = $2
+             EXTRACT(EPOCH FROM (s.login_at - ap.pause_start)) / 60, 2))
+       FROM (
+         SELECT es.login_at, es.attendance_id
+         FROM employee_sessions es
+         WHERE es.employee_id = $1
+           AND es.logout_at IS NULL
+           AND DATE(es.login_at AT TIME ZONE 'Asia/Kolkata') = $2
+         ORDER BY es.login_at DESC LIMIT 1
+       ) s
+       WHERE ap.employee_id = $1
+         AND ap.attendance_id = s.attendance_id
          AND ap.pause_end IS NULL
-         AND ap.reason = 'screen_lock'
-         AND ap.pause_start >= es.login_at
-         AND ap.pause_start < NOW() - INTERVAL '5 minutes'`,
+         AND ap.pause_start < s.login_at`,
       [employeeId, date]
     )
 
@@ -621,9 +622,12 @@ const getSessionsByEmployee = async (req, res, next) => {
          , 4)) AS session_elapsed_mins,
 
          -- ── screen_off_mins ──────────────────────────────────────────────
-         -- Only CLOSED pauses count. Open pause auto-closed above by 5-min rule.
-         -- If an open pause still exists (screen genuinely locked right now),
-         -- show it live. Hard cap at session elapsed.
+         -- Closed pauses: exact stored duration within session window.
+         -- Open pause in current session:
+         --   If duration_mins already set by resumeWork → use that (screen unlocked, resume came)
+         --   Else → NOW() - pause_start (screen genuinely still locked)
+         -- Pre-session open pauses: 0 (closed above by pre-session cleanup).
+         -- Hard cap: never exceed session elapsed.
          LEAST(
            GREATEST(0, ROUND(COALESCE((
              SELECT SUM(
@@ -635,7 +639,10 @@ const getSessionsByEmployee = async (req, res, next) => {
                    )) / 60)
                  WHEN ap.pause_end IS NULL AND ap.pause_start >= s.login_at
                       AND s.logout_at IS NULL THEN
-                   GREATEST(0, EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60)
+                   COALESCE(
+                     ap.duration_mins,
+                     GREATEST(0, EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60)
+                   )
                  ELSE 0
                END
              )
@@ -687,7 +694,10 @@ const getSessionsByEmployee = async (req, res, next) => {
                        )) / 60)
                      WHEN ap.pause_end IS NULL AND ap.pause_start >= s.login_at
                           AND s.logout_at IS NULL THEN
-                       GREATEST(0, EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60)
+                       COALESCE(
+                         ap.duration_mins,
+                         GREATEST(0, EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60)
+                       )
                      ELSE 0
                    END
                  )
