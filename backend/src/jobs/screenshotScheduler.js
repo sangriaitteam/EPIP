@@ -157,12 +157,15 @@ const midnightFinalize = async () => {
         `SELECT COALESCE(SUM(
            GREATEST(0,
              EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
+             -- subtract screen_lock pauses only (screen off = not working time)
+             -- manual breaks are intentional breaks, still count toward session elapsed
              - COALESCE((
                  SELECT SUM(CASE WHEN ap.pause_end IS NOT NULL
                    THEN EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
                    ELSE 0 END)
                  FROM attendance_pauses ap
                  WHERE ap.attendance_id = s.attendance_id
+                   AND ap.reason = 'screen_lock'
                    AND ap.pause_start >= s.login_at
                ), 0)
            )
