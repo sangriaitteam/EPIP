@@ -150,12 +150,9 @@ const TodayBreaksPanel = () => {
     <p className="text-xs text-gray-400 text-center py-6">No breaks recorded today</p>
   )
 
-  // Split into manual vs screen-off breaks
+  // Split into manual breaks only — screen-off is hidden from employee view
   const manualBreaks = pauses.filter(p => p.reason !== 'screen_lock')
-  const screenBreaks = pauses.filter(p => p.reason === 'screen_lock')
-  const totalMins    = pauses.reduce((s, p) => s + (p.duration_mins || 0), 0)
-  const manualMins   = manualBreaks.reduce((s, p) => s + (p.duration_mins || 0), 0)
-  const screenMins   = screenBreaks.reduce((s, p) => s + (p.duration_mins || 0), 0)
+  const totalMins    = manualBreaks.reduce((s, p) => s + (p.duration_mins || 0), 0)
 
   const BreakItem = ({ p }) => {
     const meta   = PAUSE_REASON_MAP[p.reason] || PAUSE_REASON_MAP.other
@@ -191,22 +188,22 @@ const TodayBreaksPanel = () => {
   return (
     <div className="space-y-5">
 
-      {/* ── Section 1: Manual Breaks ── */}
+      {/* Manual Breaks only — screen-off hidden from employee */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <PauseCircle size={14} className="text-primary-500" />
-            <span className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Manual Breaks</span>
+            <span className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Breaks</span>
             <span className="text-[10px] text-gray-400">({manualBreaks.length})</span>
           </div>
-          {manualMins > 0 && (
-            <span className="text-xs font-semibold text-primary-500">{fmtDuration(manualMins)}</span>
+          {totalMins > 0 && (
+            <span className="text-xs font-semibold text-primary-500">{fmtDuration(totalMins)}</span>
           )}
         </div>
 
         {manualBreaks.length === 0 ? (
           <p className="text-xs text-gray-400 text-center py-3 bg-gray-50 dark:bg-dark-700 rounded-xl border border-dashed border-gray-200 dark:border-dark-600">
-            No manual breaks today
+            No breaks today
           </p>
         ) : (
           <div className="space-y-2">
@@ -215,43 +212,10 @@ const TodayBreaksPanel = () => {
         )}
       </div>
 
-      {/* ── Section 2: Screen-Off Breaks ── */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <Lock size={13} className="text-slate-500 dark:text-slate-400" />
-            <span className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Screen-Off Breaks</span>
-            <span className="text-[10px] text-gray-400">({screenBreaks.length})</span>
-          </div>
-          {screenMins > 0 && (
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">{fmtDuration(screenMins)}</span>
-          )}
-        </div>
-
-        {screenBreaks.length === 0 ? (
-          <p className="text-xs text-gray-400 text-center py-3 bg-gray-50 dark:bg-dark-700 rounded-xl border border-dashed border-gray-200 dark:border-dark-600">
-            No screen-off breaks today
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {screenBreaks.map((p, i) => <BreakItem key={p.id || i} p={p} />)}
-          </div>
-        )}
-      </div>
-
-      {/* ── Total summary ── */}
       {totalMins > 0 && (
-        <div className="grid grid-cols-3 gap-3 pt-1">
-          {[
-            { label: 'Manual',    val: fmtDuration(manualMins), color: 'text-primary-500' },
-            { label: 'Screen Off',val: fmtDuration(screenMins), color: 'text-slate-500 dark:text-slate-400' },
-            { label: 'Total',     val: fmtDuration(totalMins),  color: 'text-gray-800 dark:text-white' },
-          ].map(s => (
-            <div key={s.label} className="flex flex-col items-center gap-0.5 py-2 rounded-xl bg-gray-50 dark:bg-dark-700 border border-gray-100 dark:border-dark-600">
-              <span className={`text-sm font-bold ${s.color}`}>{s.val}</span>
-              <span className="text-[10px] text-gray-400">{s.label}</span>
-            </div>
-          ))}
+        <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-primary-500/5 border border-primary-500/10">
+          <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">Total break time</span>
+          <span className="text-xs font-bold text-primary-600 dark:text-primary-400">{fmtDuration(totalMins)}</span>
         </div>
       )}
     </div>
@@ -836,8 +800,7 @@ const EmployeeAttendance = () => {
   // Tick every second so today's live hours updates in the table
   const [tick, setTick] = useState(0)
   useEffect(() => {
-    const iv = setInterval(() => setTick(t => t + 1), 1000)
-    return () => clearInterval(iv)
+    // No live tick needed — Hours show only after checkout from DB
   }, [])
 
   const loadAttendance = async (year, month) => {
@@ -1040,33 +1003,16 @@ const EmployeeAttendance = () => {
                           const isExpanded = sessionDate === dateKey
                           const isActive = r.check_in && !r.check_out  // currently logged in
 
-                          // Live hours: tick-based for today's active session
-                          const liveHoursStr = (() => {
+                          // Hours — only show stored hours_worked from DB (no live update)
+                          const hoursStr = (() => {
                             if (!r.check_in) return '—'
-                            // Helper: decimal hours → "Xh Ym"
-                            const fmtDecHours = (dh) => {
-                              const totalMins = Math.round(Number(dh) * 60)
-                              if (totalMins <= 0) return '—'
-                              const hrs  = Math.floor(totalMins / 60)
-                              const mins = totalMins % 60
-                              if (hrs === 0) return `${mins}m`
-                              if (mins === 0) return `${hrs}h`
-                              return `${hrs}h ${mins}m`
-                            }
-                            // Past day with stored value — show formatted
-                            if (!isToday && r.hours_worked) return fmtDecHours(r.hours_worked)
-                            // Completed today — show stored formatted
-                            if (r.check_out && r.hours_worked) return fmtDecHours(r.hours_worked)
-                            // Live — calc from check_in to now minus pauses
-                            const endMs      = r.check_out ? new Date(r.check_out).getTime() : Date.now()
-                            const elapsedSec = Math.max(0, Math.floor((endMs - new Date(r.check_in).getTime()) / 1000))
-                            const pauseSec   = Math.round((r.total_pause_mins || 0) * 60)
-                            const workSec    = Math.max(0, elapsedSec - pauseSec)
-                            const h = Math.floor(workSec / 3600)
-                            const m = Math.floor((workSec % 3600) / 60)
-                            const s = workSec % 60
-                            if (isActive) return `${h > 0 ? h + 'h ' : ''}${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`
-                            return `${h > 0 ? h + 'h ' : ''}${String(m).padStart(2,'0')}m`
+                            if (!r.hours_worked || Number(r.hours_worked) <= 0) return '—'
+                            const totalMins = Math.round(Number(r.hours_worked) * 60)
+                            const h = Math.floor(totalMins / 60)
+                            const m = totalMins % 60
+                            if (h === 0) return `${m}m`
+                            if (m === 0) return `${h}h`
+                            return `${h}h ${m}m`
                           })()
 
                           return (
@@ -1094,15 +1040,10 @@ const EmployeeAttendance = () => {
                                   ? <span className="text-xs text-green-500 animate-pulse">In office</span>
                                   : '—'}
                               </td>
-                              {/* Hours — live for active, stored for past */}
+                              {/* Hours — stored value only, no live update */}
                               <td className="px-3 py-2.5 whitespace-nowrap">
-                                <span className={`font-mono font-semibold flex items-center gap-1 ${
-                                  isActive && isToday ? 'text-green-600 dark:text-green-400' : 'text-gray-700 dark:text-gray-300'
-                                }`}>
-                                  {isActive && isToday && (
-                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
-                                  )}
-                                  {liveHoursStr}
+                                <span className="font-mono font-semibold text-gray-700 dark:text-gray-300">
+                                  {hoursStr}
                                 </span>
                               </td>
                               {/* Mode */}
