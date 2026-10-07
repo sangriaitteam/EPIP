@@ -586,27 +586,25 @@ const getSessionsByEmployee = async (req, res, next) => {
     const istNow3 = new Date(Date.now() + 5.5 * 60 * 60 * 1000)
     const date = req.query.date || istNow3.toISOString().split('T')[0]
 
-    // ── Auto-close any stale open pause older than the current active session ──
-    // If screen was locked during re-login and resume was never called,
-    // the pause stays open forever. Cap it at the current session's login_at.
+    // ── Auto-close stale open pauses for current active session ──────────────
+    // When HR views session log, close any open screen_lock pause that has been
+    // open for more than 5 minutes without a resume call from timing-agent.
+    // This handles: screen unlocked but resume API was never called (state desync).
+    // 5 min grace period avoids closing a legitimately active screen lock.
     await query(
       `UPDATE attendance_pauses ap
-       SET pause_end = s.login_at,
+       SET pause_end     = NOW(),
            duration_mins = GREATEST(0, ROUND(
-             EXTRACT(EPOCH FROM (s.login_at - ap.pause_start)) / 60, 2))
-       FROM (
-         SELECT es.login_at, es.attendance_id
-         FROM employee_sessions es
-         WHERE es.employee_id = $1
-           AND es.logout_at IS NULL
-           AND DATE(es.login_at AT TIME ZONE 'Asia/Kolkata') = $2
-         ORDER BY es.login_at DESC
-         LIMIT 1
-       ) s
-       WHERE ap.employee_id = $1
-         AND ap.attendance_id = s.attendance_id
+             EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60, 2))
+       FROM employee_sessions es
+       WHERE ap.attendance_id = es.attendance_id
+         AND es.employee_id   = $1
+         AND es.logout_at IS NULL
+         AND DATE(es.login_at AT TIME ZONE 'Asia/Kolkata') = $2
          AND ap.pause_end IS NULL
-         AND ap.pause_start < s.login_at`,
+         AND ap.reason = 'screen_lock'
+         AND ap.pause_start >= es.login_at
+         AND ap.pause_start < NOW() - INTERVAL '5 minutes'`,
       [employeeId, date]
     )
 
@@ -623,33 +621,21 @@ const getSessionsByEmployee = async (req, res, next) => {
          , 4)) AS session_elapsed_mins,
 
          -- ── screen_off_mins ──────────────────────────────────────────────
-         -- RULE: Only count CLOSED pauses (pause_end IS NOT NULL).
-         -- For an active screen lock (screen currently OFF, pause still open),
-         -- count it ONLY if it started within this session (pause_start >= s.login_at).
-         -- Use STORED duration_mins if available (set by resumeWork), else live NOW().
-         -- A stale open pause from a previous session is IGNORED completely.
-         -- Hard cap: screen_off can never exceed session elapsed.
+         -- Only CLOSED pauses count. Open pause auto-closed above by 5-min rule.
+         -- If an open pause still exists (screen genuinely locked right now),
+         -- show it live. Hard cap at session elapsed.
          LEAST(
            GREATEST(0, ROUND(COALESCE((
              SELECT SUM(
                CASE
-                 -- Closed pause within this session window — use exact stored duration
                  WHEN ap.pause_end IS NOT NULL THEN
                    GREATEST(0, EXTRACT(EPOCH FROM (
                      LEAST(ap.pause_end, COALESCE(s.logout_at, NOW()))
                      - GREATEST(ap.pause_start, s.login_at)
                    )) / 60)
-                 -- Active open pause that started IN this session:
-                 -- Use stored duration_mins if available (already calculated by resumeWork)
-                 -- If duration_mins is NULL, cap at a reasonable limit (30 min max per lock event)
-                 -- to prevent unbounded growth when resume was missed
                  WHEN ap.pause_end IS NULL AND ap.pause_start >= s.login_at
                       AND s.logout_at IS NULL THEN
-                   LEAST(
-                     GREATEST(0, EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60),
-                     30  -- max 30 minutes per individual screen lock event
-                   )
-                 -- Stale open pause from before this session — SKIP (count as 0)
+                   GREATEST(0, EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60)
                  ELSE 0
                END
              )
@@ -663,7 +649,6 @@ const getSessionsByEmployee = async (req, res, next) => {
          ) AS screen_off_mins,
 
          -- ── manual_break_mins ────────────────────────────────────────────
-         -- Same logic: closed pauses only, active ones capped at 30 min
          LEAST(
            GREATEST(0, ROUND(COALESCE((
              SELECT SUM(
@@ -675,10 +660,7 @@ const getSessionsByEmployee = async (req, res, next) => {
                    )) / 60)
                  WHEN ap.pause_end IS NULL AND ap.pause_start >= s.login_at
                       AND s.logout_at IS NULL THEN
-                   LEAST(
-                     GREATEST(0, EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60),
-                     60  -- max 60 min per manual break event
-                   )
+                   GREATEST(0, EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60)
                  ELSE 0
                END
              )
@@ -692,11 +674,8 @@ const getSessionsByEmployee = async (req, res, next) => {
          ) AS manual_break_mins,
 
          -- ── duration_mins (Working Hours) ────────────────────────────────
-         -- Working Hours = session elapsed − screen_off − manual_breaks
-         -- Always >= 0. Uses same capped values as above.
          GREATEST(0, ROUND((
            EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
-           -- subtract screen_lock (closed + capped active-in-session)
            - LEAST(
                GREATEST(0, COALESCE((
                  SELECT SUM(
@@ -708,7 +687,7 @@ const getSessionsByEmployee = async (req, res, next) => {
                        )) / 60)
                      WHEN ap.pause_end IS NULL AND ap.pause_start >= s.login_at
                           AND s.logout_at IS NULL THEN
-                       LEAST(GREATEST(0, EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60), 30)
+                       GREATEST(0, EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60)
                      ELSE 0
                    END
                  )
@@ -718,7 +697,6 @@ const getSessionsByEmployee = async (req, res, next) => {
                ), 0)),
                EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
              )
-           -- subtract manual breaks (closed + capped active-in-session)
            - LEAST(
                GREATEST(0, COALESCE((
                  SELECT SUM(
@@ -730,7 +708,7 @@ const getSessionsByEmployee = async (req, res, next) => {
                        )) / 60)
                      WHEN ap.pause_end IS NULL AND ap.pause_start >= s.login_at
                           AND s.logout_at IS NULL THEN
-                       LEAST(GREATEST(0, EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60), 60)
+                       GREATEST(0, EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60)
                      ELSE 0
                    END
                  )
