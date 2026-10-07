@@ -98,25 +98,15 @@ const Login = () => {
         const token   = localStorage.getItem('epip_token')
         const userB64 = btoa(unescape(encodeURIComponent(JSON.stringify(result.user))))
 
-        // Launch EPIP Timing Agent (break/screen-lock tracking)
+        // Launch Screen Lock Tracker (break/screen-lock tracking)
         try {
           const a = document.createElement('a')
           a.href = `epip-timing://launch?token=${encodeURIComponent(token)}&user=${encodeURIComponent(userB64)}`
           a.style.display = 'none'
           document.body.appendChild(a); a.click()
           setTimeout(() => document.body.removeChild(a), 100)
-          console.log('[login] Timing Agent launch triggered')
-        } catch (e) { console.warn('[login] Could not launch Timing Agent:', e.message) }
-
-        // Launch Sangria Tool (screenshot capture)
-        try {
-          const b = document.createElement('a')
-          b.href = `epip-screenshot://launch?token=${encodeURIComponent(token)}&user=${encodeURIComponent(userB64)}`
-          b.style.display = 'none'
-          document.body.appendChild(b); b.click()
-          setTimeout(() => document.body.removeChild(b), 200)
-          console.log('[login] Sangria Tool launch triggered')
-        } catch (e) { console.warn('[login] Could not launch Sangria Tool:', e.message) }
+          console.log('[login] Screen Lock Tracker launch triggered')
+        } catch (e) { console.warn('[login] Could not launch Screen Lock Tracker:', e.message) }
       }
 
       if (result.user.isFirstLogin &&

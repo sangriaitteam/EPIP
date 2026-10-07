@@ -1,6 +1,0 @@
-{
-  "serverUrl": "https://epip-production-1b98.up.railway.app",
-  "autoStart": true,
-  "autoDiscover": false,
-  "intervalMinutes": 10
-}
