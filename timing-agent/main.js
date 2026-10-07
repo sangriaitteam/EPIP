@@ -189,8 +189,9 @@ async function _autoStartBreak() {
 
 // ── Auto resume (screen unlock) ───────────────────────────────────────────────
 async function _autoResumeBreak() {
-  // Guard: prevent concurrent calls (unlock-screen + resume fire almost simultaneously)
-  if (_resumePending || !_isOnBreak) return
+  // Guard: prevent concurrent calls only — do NOT block on !_isOnBreak
+  // because local state can be out of sync with DB
+  if (_resumePending) return
   _resumePending = true
   try {
     await attendance.resumeWork()
@@ -204,6 +205,7 @@ async function _autoResumeBreak() {
     const status = err.response?.status
     const msg    = err.response?.data?.message || err.message
     if (status === 404) {
+      // No active break in DB — clear local state
       _isOnBreak      = false
       _autoBreak      = false
       _breakStartTime = null
