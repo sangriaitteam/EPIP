@@ -614,28 +614,33 @@ const getSessionsByEmployee = async (req, res, next) => {
          , 4)) AS session_elapsed_mins,
 
          -- ── screen_off_mins ──────────────────────────────────────────────
-         -- Closed pauses: exact stored duration.
-         -- Currently open pause (screen still locked): live NOW()-pause_start.
-         -- Hard cap: screen_off can never exceed session elapsed.
+         -- Only count screen_lock pauses within this SESSION window.
+         -- LEAST(pause_end, logout) - GREATEST(pause_start, login) ensures
+         -- cross-session pauses only count the portion in this session.
          LEAST(
            GREATEST(0, ROUND(COALESCE((
              SELECT SUM(
                CASE
-                 -- Closed: use exact stored duration
+                 -- Closed pause: count only overlap with this session
                  WHEN ap.pause_end IS NOT NULL THEN
-                   EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
-                 -- Open: screen currently locked → live counter
+                   GREATEST(0, EXTRACT(EPOCH FROM (
+                     LEAST(ap.pause_end, COALESCE(s.logout_at, NOW()))
+                     - GREATEST(ap.pause_start, s.login_at)
+                   )) / 60)
+                 -- Open: screen currently locked → live (active session only)
                  WHEN ap.pause_end IS NULL AND s.logout_at IS NULL THEN
-                   EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
+                   GREATEST(0, EXTRACT(EPOCH FROM (
+                     NOW() - GREATEST(ap.pause_start, s.login_at)
+                   )) / 60)
                  ELSE 0
                END
              )
              FROM attendance_pauses ap
              WHERE ap.attendance_id = s.attendance_id
                AND ap.reason = 'screen_lock'
-               AND ap.pause_start >= s.login_at
+               AND ap.pause_start < COALESCE(s.logout_at, NOW())
+               AND (ap.pause_end IS NULL OR ap.pause_end > s.login_at)
            ), 0)::numeric, 4)),
-           -- Hard cap: screen_off cannot exceed session elapsed
            GREATEST(0, ROUND(
              EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60::numeric
            , 4))
@@ -675,16 +680,22 @@ const getSessionsByEmployee = async (req, res, next) => {
                  SELECT SUM(
                    CASE
                      WHEN ap.pause_end IS NOT NULL THEN
-                       EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+                       GREATEST(0, EXTRACT(EPOCH FROM (
+                         LEAST(ap.pause_end, COALESCE(s.logout_at, NOW()))
+                         - GREATEST(ap.pause_start, s.login_at)
+                       )) / 60)
                      WHEN ap.pause_end IS NULL AND s.logout_at IS NULL THEN
-                       EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
+                       GREATEST(0, EXTRACT(EPOCH FROM (
+                         NOW() - GREATEST(ap.pause_start, s.login_at)
+                       )) / 60)
                      ELSE 0
                    END
                  )
                  FROM attendance_pauses ap
                  WHERE ap.attendance_id = s.attendance_id
                    AND ap.reason = 'screen_lock'
-                   AND ap.pause_start >= s.login_at
+                   AND ap.pause_start < COALESCE(s.logout_at, NOW())
+                   AND (ap.pause_end IS NULL OR ap.pause_end > s.login_at)
                ), 0)),
                EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
              )
