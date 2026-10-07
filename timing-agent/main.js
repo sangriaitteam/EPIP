@@ -35,9 +35,11 @@ let _pollTimer = null
 
 let _isCheckedIn       = false
 let _isOnBreak         = false
-let _autoBreak         = false   // true when break triggered by screen lock
+let _autoBreak         = false
 let _checkInTime       = null
 let _breakStartTime    = null
+let _breakPending      = false   // true while pauseWork API call is in-flight
+let _resumePending     = false   // true while resumeWork API call is in-flight
 
 const isDev    = process.argv.includes('--dev')
 const ICON_DIR = path.join(__dirname, 'assets')
@@ -80,16 +82,14 @@ app.whenReady().then(async () => {
   // ── Screen lock / sleep → auto start break ────────────────────────────────
   powerMonitor.on('lock-screen', () => {
     console.log('[tracker] 🔒 Screen locked')
-    if (_isCheckedIn && !_isOnBreak) _autoStartBreak()
+    if (_isCheckedIn) _autoStartBreak()
   })
   powerMonitor.on('suspend', () => {
     console.log('[tracker] 💤 System suspended')
-    if (_isCheckedIn && !_isOnBreak) _autoStartBreak()
+    if (_isCheckedIn) _autoStartBreak()
   })
 
   // ── Screen unlock / resume → ALWAYS try to resume ────────────────────────
-  // Do NOT rely on _isOnBreak in-memory state — call resume unconditionally
-  // when checked in. Backend handles the case where there is no active pause.
   powerMonitor.on('unlock-screen', () => {
     console.log('[tracker] 🔓 Screen unlocked')
     if (_isCheckedIn) _autoResumeBreak()
@@ -160,6 +160,9 @@ async function _handleDeepLink(url) {
 
 // ── Auto break (screen lock) ──────────────────────────────────────────────────
 async function _autoStartBreak() {
+  // Guard: prevent concurrent calls (lock-screen + suspend fire almost simultaneously)
+  if (_breakPending || _isOnBreak) return
+  _breakPending = true
   try {
     const rec       = await attendance.pauseWork('screen_lock', 'Screen locked automatically')
     _isOnBreak      = true
@@ -170,8 +173,7 @@ async function _autoStartBreak() {
     _pushStatus()
   } catch (err) {
     const msg = err.response?.data?.message || err.message
-    // Already on break = that's fine, update local state
-    if (msg?.includes('Already on a break')) {
+    if (msg?.includes('Already on a break') || err.response?.status === 200) {
       _isOnBreak  = true
       _autoBreak  = true
       console.log('[tracker] ⏸ Already on break — state synced')
@@ -180,11 +182,16 @@ async function _autoStartBreak() {
     }
     _buildTrayMenu()
     _pushStatus()
+  } finally {
+    _breakPending = false
   }
 }
 
 // ── Auto resume (screen unlock) ───────────────────────────────────────────────
 async function _autoResumeBreak() {
+  // Guard: prevent concurrent calls (unlock-screen + resume fire almost simultaneously)
+  if (_resumePending || !_isOnBreak) return
+  _resumePending = true
   try {
     await attendance.resumeWork()
     _isOnBreak      = false
@@ -196,9 +203,7 @@ async function _autoResumeBreak() {
   } catch (err) {
     const status = err.response?.status
     const msg    = err.response?.data?.message || err.message
-
     if (status === 404) {
-      // No active break in DB — still clear local state, was out of sync
       _isOnBreak      = false
       _autoBreak      = false
       _breakStartTime = null
@@ -208,6 +213,8 @@ async function _autoResumeBreak() {
     } else {
       console.warn('[tracker] Auto resume skipped:', msg)
     }
+  } finally {
+    _resumePending = false
   }
 }
 
