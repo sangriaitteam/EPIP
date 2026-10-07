@@ -96,12 +96,23 @@ const midnightFinalize = async () => {
     const today = istNow.toISOString().split('T')[0]
     console.log(`[SCHEDULER] Midnight finalize starting for ${today}`)
 
-    // 1. Close all open attendance_pauses (end any active screen-off/break)
+    // 1. Delete all open screen_lock pauses (no resume = we don't know actual unlock time)
+    // Keeping them and closing at midnight would inflate screen_off with wrong data.
+    await query(
+      `DELETE FROM attendance_pauses
+       WHERE pause_end IS NULL
+         AND reason = 'screen_lock'
+         AND DATE(pause_start AT TIME ZONE 'Asia/Kolkata') = $1`,
+      [today]
+    )
+
+    // 2. Close all other open manual pauses (tea/lunch etc) at midnight
     await query(
       `UPDATE attendance_pauses
        SET pause_end     = NOW(),
            duration_mins = ROUND(EXTRACT(EPOCH FROM (NOW() - pause_start)) / 60, 2)
        WHERE pause_end IS NULL
+         AND reason != 'screen_lock'
          AND DATE(pause_start AT TIME ZONE 'Asia/Kolkata') = $1`,
       [today]
     )

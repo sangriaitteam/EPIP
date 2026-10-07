@@ -52,29 +52,11 @@ const checkIn = async (req, res, next) => {
          AND DATE(login_at AT TIME ZONE 'Asia/Kolkata') < $2`,
       [employee.id, today]
     )
-    // Close ALL stuck open screen_lock pauses — cap duration at actual pause time
+    // Delete ALL stuck open screen_lock pauses — no resume = unknown unlock time
+    // Deleting prevents inflated screen_off on re-login sessions
     await query(
-      `UPDATE attendance_pauses ap
-       SET pause_end = COALESCE(
-             (SELECT LEAST(s.logout_at, NOW())
-              FROM employee_sessions s
-              WHERE s.attendance_id = ap.attendance_id
-                AND s.login_at <= ap.pause_start
-              ORDER BY s.login_at DESC LIMIT 1),
-             NOW()
-           ),
-           duration_mins = ROUND(
-             EXTRACT(EPOCH FROM (
-               COALESCE(
-                 (SELECT LEAST(s.logout_at, NOW())
-                  FROM employee_sessions s
-                  WHERE s.attendance_id = ap.attendance_id
-                    AND s.login_at <= ap.pause_start
-                  ORDER BY s.login_at DESC LIMIT 1),
-                 NOW()
-               ) - ap.pause_start
-             )) / 60, 2)
-       FROM attendance a
+      `DELETE FROM attendance_pauses ap
+       USING attendance a
        WHERE ap.attendance_id = a.id
          AND a.employee_id = $1
          AND ap.pause_end IS NULL
@@ -214,14 +196,14 @@ const checkOut = async (req, res, next) => {
     const employee = await Employee.findByUserId(req.user.id)
     if (!employee) return fail(res, 'Employee profile not found', 404)
 
-    // ── Close ALL open screen_lock pauses before checkout ────────────────────
-    // Logout = screen off period ends here
+    // ── Handle open screen_lock pauses at checkout ───────────────────────────
+    // If screen was locked when employee logs out (and timing agent didn't resume),
+    // DELETE the open pause — we don't know when screen actually turned ON.
+    // Keeping it and closing at logout would inflate screen_off with invalid data.
+    // The only accurate screen_off entries are those closed by resumeWork (exact timing).
     await query(
-      `UPDATE attendance_pauses ap
-       SET pause_end = NOW(),
-           duration_mins = GREATEST(0, ROUND(
-             EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60, 2))
-       FROM attendance a
+      `DELETE FROM attendance_pauses ap
+       USING attendance a
        WHERE ap.attendance_id = a.id
          AND a.employee_id = $1
          AND ap.pause_end IS NULL
