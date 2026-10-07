@@ -254,15 +254,6 @@ async function _syncState() {
       _isOnBreak      = !!active
       _autoBreak      = active?.reason === 'screen_lock'
       _breakStartTime = active?.pause_start || null
-
-      // If DB says on break but we know screen is ON (app is responding),
-      // and this is a screen_lock break, call resume to close the stale pause.
-      // Guard: only do this if _autoBreak was previously true in memory,
-      // meaning unlock-screen already fired but resume failed silently.
-      if (active && active.reason === 'screen_lock' && !_isScreenLocked()) {
-        console.log('[tracker] 🔄 Stale screen_lock pause — auto-resuming')
-        await _autoResumeBreak()
-      }
     } else {
       _isCheckedIn    = false
       _isOnBreak      = false
@@ -275,24 +266,6 @@ async function _syncState() {
     _pushStatus()
   } catch (err) {
     console.warn('[tracker] Sync error:', err.message)
-  }
-}
-
-// ── Screen lock state helper ──────────────────────────────────────────────────
-// Returns true if the screen is currently locked.
-// On Windows, we detect this by checking if the system is currently locked
-// using a lightweight PowerShell command.
-function _isScreenLocked() {
-  try {
-    const { execSync } = require('child_process')
-    // Query the session state — "Disc" or "Listen" means locked/disconnected
-    const out = execSync(
-      'powershell -NoProfile -Command "(Get-Process logonui -ErrorAction SilentlyContinue) -ne $null"',
-      { timeout: 3000, windowsHide: true }
-    ).toString().trim()
-    return out === 'True'
-  } catch {
-    return false
   }
 }
 
