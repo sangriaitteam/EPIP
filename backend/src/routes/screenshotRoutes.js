@@ -11,6 +11,7 @@ router.post('/upload',                uploadScreenshot, ctrl.upload)
 router.get('/',                       authorize('admin','hr','superadmin'), ctrl.getAll)
 router.get('/employee/:id',           authorize('admin','hr','superadmin'), ctrl.getByEmployee)
 router.get('/count/today/:employeeId',authorize('admin','hr','superadmin'), ctrl.countToday)
+router.delete('/:id',                  authorize('admin','hr','superadmin'), ctrl.deleteScreenshot)
 
 module.exports = router
 

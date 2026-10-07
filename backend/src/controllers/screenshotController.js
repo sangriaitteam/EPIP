@@ -86,4 +86,17 @@ const countToday = async (req, res, next) => {
   } catch (err) { next(err) }
 }
 
-module.exports = { uploadMy, upload, getByEmployee, getAll, countToday }
+// DELETE /api/screenshots/:id  (HR/Admin only)
+const deleteScreenshot = async (req, res, next) => {
+  try {
+    const { id } = req.params
+    const { rows } = await require('../config/db').query(
+      'DELETE FROM screenshots WHERE id = $1 RETURNING id',
+      [id]
+    )
+    if (!rows[0]) return fail(res, 'Screenshot not found', 404)
+    return ok(res, { id: rows[0].id }, 'Screenshot deleted')
+  } catch (err) { next(err) }
+}
+
+module.exports = { uploadMy, upload, getByEmployee, getAll, countToday, deleteScreenshot }
