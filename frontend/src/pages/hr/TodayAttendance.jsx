@@ -550,7 +550,7 @@ const HRTodayAttendance = () => {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100 dark:border-dark-600 bg-gray-50 dark:bg-dark-700">
-                      {['Employee','Check In','Check Out','Status','Late',''].map(h => (
+                      {['Employee','Check In','Check Out','Total Hours','Status','Late',''].map(h => (
                         <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                           {h}
                         </th>
@@ -592,6 +592,23 @@ const HRTodayAttendance = () => {
                                   ? <span className="text-xs text-green-500 animate-pulse">In office</span>
                                   : '—'}
                               </span>
+                            </td>
+                            {/* Total Hours — only show after checkout, no live updates */}
+                            <td className="px-4 py-3">
+                              {row.check_out && row.hours_worked > 0 ? (
+                                <span className="font-semibold text-sm text-blue-600 dark:text-blue-400">
+                                  {(() => {
+                                    const totalMins = Math.round(Number(row.hours_worked) * 60)
+                                    const h = Math.floor(totalMins / 60)
+                                    const m = totalMins % 60
+                                    if (h === 0) return `${m}m`
+                                    if (m === 0) return `${h}h`
+                                    return `${h}h ${m}m`
+                                  })()}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-gray-400">—</span>
+                              )}
                             </td>
                             <td className="px-4 py-3">
                               <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${badge.color}`}>
