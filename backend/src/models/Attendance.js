@@ -41,14 +41,24 @@ const Attendance = {
   async checkOut(employee_id) {
     const today = new Date().toISOString().split('T')[0]
 
-    // Auto-close any open pause before checking out
+    // Delete any open screen_lock pauses — we don't know actual unlock time
+    // so closing them with NOW() would give wrong screen_off duration
+    await db.query(
+      `DELETE FROM attendance_pauses
+       WHERE attendance_id = (
+         SELECT id FROM attendance WHERE employee_id = $1 AND date = $2
+       ) AND pause_end IS NULL AND reason = 'screen_lock'`,
+      [employee_id, today]
+    )
+
+    // Auto-close any other open manual pauses (tea/lunch etc) before checking out
     await db.query(
       `UPDATE attendance_pauses
        SET pause_end     = NOW(),
            duration_mins = ROUND(EXTRACT(EPOCH FROM (NOW() - pause_start)) / 60, 2)
        WHERE attendance_id = (
          SELECT id FROM attendance WHERE employee_id = $1 AND date = $2
-       ) AND pause_end IS NULL`,
+       ) AND pause_end IS NULL AND reason != 'screen_lock'`,
       [employee_id, today]
     )
 
