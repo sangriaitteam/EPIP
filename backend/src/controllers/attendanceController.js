@@ -623,26 +623,30 @@ const getSessionsByEmployee = async (req, res, next) => {
 
          -- ── screen_off_mins ──────────────────────────────────────────────
          -- Closed pauses: exact stored duration within session window.
-         -- Open pause in current session:
-         --   If duration_mins already set by resumeWork → use that (screen unlocked, resume came)
-         --   Else → NOW() - pause_start (screen genuinely still locked)
-         -- Pre-session open pauses: 0 (closed above by pre-session cleanup).
-         -- Hard cap: never exceed session elapsed.
+         -- Open pause: use STORED duration_mins only (set by resumeWork on unlock).
+         --   If duration_mins is NULL, screen is still locked → show live NOW()-start.
+         --   This means: after unlock, as soon as resumeWork stores duration_mins,
+         --   the value freezes to the exact lock duration. No more growing after unlock.
          LEAST(
            GREATEST(0, ROUND(COALESCE((
              SELECT SUM(
                CASE
+                 -- Closed pause: exact duration within session window
                  WHEN ap.pause_end IS NOT NULL THEN
                    GREATEST(0, EXTRACT(EPOCH FROM (
                      LEAST(ap.pause_end, COALESCE(s.logout_at, NOW()))
                      - GREATEST(ap.pause_start, s.login_at)
                    )) / 60)
+                 -- Open pause in current session:
                  WHEN ap.pause_end IS NULL AND ap.pause_start >= s.login_at
                       AND s.logout_at IS NULL THEN
-                   COALESCE(
-                     ap.duration_mins,
-                     GREATEST(0, EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60)
-                   )
+                   CASE
+                     -- duration_mins set = resumeWork already called = screen unlocked, use exact value
+                     WHEN ap.duration_mins IS NOT NULL THEN ap.duration_mins
+                     -- duration_mins NULL = screen still locked = live counter
+                     ELSE GREATEST(0, EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60)
+                   END
+                 -- Pre-session open pause: ignore
                  ELSE 0
                END
              )
@@ -694,10 +698,10 @@ const getSessionsByEmployee = async (req, res, next) => {
                        )) / 60)
                      WHEN ap.pause_end IS NULL AND ap.pause_start >= s.login_at
                           AND s.logout_at IS NULL THEN
-                       COALESCE(
-                         ap.duration_mins,
-                         GREATEST(0, EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60)
-                       )
+                       CASE
+                         WHEN ap.duration_mins IS NOT NULL THEN ap.duration_mins
+                         ELSE GREATEST(0, EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60)
+                       END
                      ELSE 0
                    END
                  )
