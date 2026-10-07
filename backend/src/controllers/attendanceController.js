@@ -614,18 +614,28 @@ const getSessionsByEmployee = async (req, res, next) => {
          , 4)) AS session_elapsed_mins,
 
          -- ── screen_off_mins ──────────────────────────────────────────────
-         -- Only CLOSED screen_lock pauses within this session window.
+         -- Closed pauses: exact stored duration.
+         -- Currently open pause (screen still locked): live NOW()-pause_start.
+         -- Hard cap: screen_off can never exceed session elapsed.
          LEAST(
            GREATEST(0, ROUND(COALESCE((
              SELECT SUM(
-               EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+               CASE
+                 -- Closed: use exact stored duration
+                 WHEN ap.pause_end IS NOT NULL THEN
+                   EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+                 -- Open: screen currently locked → live counter
+                 WHEN ap.pause_end IS NULL AND s.logout_at IS NULL THEN
+                   EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
+                 ELSE 0
+               END
              )
              FROM attendance_pauses ap
              WHERE ap.attendance_id = s.attendance_id
                AND ap.reason = 'screen_lock'
-               AND ap.pause_end IS NOT NULL
                AND ap.pause_start >= s.login_at
            ), 0)::numeric, 4)),
+           -- Hard cap: screen_off cannot exceed session elapsed
            GREATEST(0, ROUND(
              EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60::numeric
            , 4))
@@ -657,17 +667,23 @@ const getSessionsByEmployee = async (req, res, next) => {
          ) AS manual_break_mins,
 
          -- ── duration_mins (Working Hours) ────────────────────────────────
+         -- elapsed - screen_off - manual_breaks
          GREATEST(0, ROUND((
            EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
            - LEAST(
                GREATEST(0, COALESCE((
                  SELECT SUM(
-                   EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+                   CASE
+                     WHEN ap.pause_end IS NOT NULL THEN
+                       EXTRACT(EPOCH FROM (ap.pause_end - ap.pause_start)) / 60
+                     WHEN ap.pause_end IS NULL AND s.logout_at IS NULL THEN
+                       EXTRACT(EPOCH FROM (NOW() - ap.pause_start)) / 60
+                     ELSE 0
+                   END
                  )
                  FROM attendance_pauses ap
                  WHERE ap.attendance_id = s.attendance_id
                    AND ap.reason = 'screen_lock'
-                   AND ap.pause_end IS NOT NULL
                    AND ap.pause_start >= s.login_at
                ), 0)),
                EXTRACT(EPOCH FROM (COALESCE(s.logout_at, NOW()) - s.login_at)) / 60
