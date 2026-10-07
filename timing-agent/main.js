@@ -245,20 +245,35 @@ async function _syncState() {
   if (!auth.isLoggedIn()) return
   try {
     const record = await attendance.getToday()
-
-    // Employee has checked in today if check_in is present
     const hasCheckedIn = !!(record?.check_in)
 
     if (hasCheckedIn) {
-      // Fetch pauses to check for active break
       const pauses = await attendance.getMyPauses()
       const active = pauses.find(p => !p.pause_end)
 
-      _isCheckedIn    = true
-      _isOnBreak      = !!active
-      _autoBreak      = active?.reason === 'screen_lock'
-      _breakStartTime = active?.pause_start || null
-      _checkInTime    = record.check_in
+      _isCheckedIn = true
+      _checkInTime = record.check_in
+
+      if (active) {
+        _isOnBreak      = true
+        _autoBreak      = active.reason === 'screen_lock'
+        _breakStartTime = active.pause_start
+
+        // ── Auto-resume if screen is ON but screen_lock pause is open ────────
+        // powerMonitor doesn't expose current lock state directly, but we
+        // know if the system is currently locked because the app would not
+        // be responding to sync polls while locked. If _syncState is running,
+        // the screen is ON. So if we see an open screen_lock pause AND the
+        // screen is demonstrably ON (we're executing), call resume.
+        if (active.reason === 'screen_lock') {
+          console.log('[tracker] 🔄 Open screen_lock pause detected during sync — auto-resuming')
+          await _autoResumeBreak()
+        }
+      } else {
+        _isOnBreak      = false
+        _autoBreak      = false
+        _breakStartTime = null
+      }
     } else {
       _isCheckedIn    = false
       _isOnBreak      = false
