@@ -1004,10 +1004,12 @@ const EmployeeAttendance = () => {
                           const isActive = r.check_in && !r.check_out  // currently logged in
 
                           // Hours — only show stored hours_worked from DB (no live update)
+                          // Show if hours_worked > 0 (set at checkout or midnight auto-checkout)
                           const hoursStr = (() => {
                             if (!r.check_in) return '—'
-                            if (!r.hours_worked || Number(r.hours_worked) <= 0) return '—'
-                            const totalMins = Math.round(Number(r.hours_worked) * 60)
+                            const hw = Number(r.hours_worked)
+                            if (!hw || hw <= 0) return '—'
+                            const totalMins = Math.round(hw * 60)
                             const h = Math.floor(totalMins / 60)
                             const m = totalMins % 60
                             if (h === 0) return `${m}m`

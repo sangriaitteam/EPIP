@@ -593,9 +593,9 @@ const HRTodayAttendance = () => {
                                   : '—'}
                               </span>
                             </td>
-                            {/* Total Hours — only show after checkout, no live updates */}
+                            {/* Total Hours — show after checkout (manual or midnight auto) */}
                             <td className="px-4 py-3">
-                              {row.check_out && row.hours_worked > 0 ? (
+                              {row.hours_worked > 0 ? (
                                 <span className="font-semibold text-sm text-blue-600 dark:text-blue-400">
                                   {(() => {
                                     const totalMins = Math.round(Number(row.hours_worked) * 60)
