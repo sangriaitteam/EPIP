@@ -40,10 +40,16 @@ let _checkInTime       = null
 let _breakStartTime    = null
 let _breakPending      = false   // true while pauseWork API call is in-flight
 let _resumePending     = false   // true while resumeWork API call is in-flight
+let _idleTimer         = null    // interval for idle screen-off detection
+let _isIdle            = false   // true when system is idle (screen auto-off)
 
 const isDev    = process.argv.includes('--dev')
 const ICON_DIR = path.join(__dirname, 'assets')
 const POLL_MS  = 30 * 1000   // sync with backend every 30s
+
+// Idle threshold — screen auto-off after this many seconds of inactivity
+// Default Windows screen off = 5 min = 300 sec. We use 120s (2 min) to catch it early.
+const IDLE_THRESHOLD_SECS = 120
 
 // ── Single instance lock ──────────────────────────────────────────────────────
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0) }
@@ -101,6 +107,7 @@ app.whenReady().then(async () => {
 
   createTray()
   setupIPC()
+  _startIdleDetection()
 
   // Check if launched via deep-link on first start
   const deepLinkUrl = process.argv.find(a => a.startsWith('epip-timing://'))
@@ -122,7 +129,7 @@ app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', e => e.preventDefault())
-app.on('before-quit', () => _stopPoller())
+app.on('before-quit', () => { _stopPoller(); _stopIdleDetection() })
 
 // ── Deep-link handler ─────────────────────────────────────────────────────────
 // URL: epip-timing://launch?token=<jwt>&user=<base64-json>
@@ -289,9 +296,47 @@ function _stopPoller() {
   if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null }
 }
 
+// ── Idle Detection — screen auto-off tracking ─────────────────────────────────
+// Polls every 30s to check if system is idle (no keyboard/mouse activity).
+// When idle time >= IDLE_THRESHOLD_SECS, treat as screen-off (start break).
+// When user returns (idle time resets), treat as screen-on (resume).
+function _startIdleDetection() {
+  if (_idleTimer) return
+  _idleTimer = setInterval(() => {
+    if (!_isCheckedIn) return
+    const idleSecs = powerMonitor.getSystemIdleTime()
+    const state    = powerMonitor.getSystemIdleState(IDLE_THRESHOLD_SECS)
+
+    if (state === 'idle' || state === 'locked') {
+      // System idle / screen auto-off → start break if not already on one
+      if (!_isIdle && !_isOnBreak) {
+        _isIdle = true
+        console.log(`[tracker] 💤 Idle detected (${idleSecs}s) — starting screen-off break`)
+        _autoStartBreak()
+      }
+    } else {
+      // User is active → resume if we started an idle break
+      if (_isIdle && _isOnBreak && _autoBreak) {
+        _isIdle = false
+        console.log('[tracker] ⚡ Activity detected — resuming from idle break')
+        _autoResumeBreak()
+      } else if (_isIdle) {
+        _isIdle = false
+      }
+    }
+  }, 30 * 1000)
+  console.log(`[tracker] Idle detection started — threshold: ${IDLE_THRESHOLD_SECS}s`)
+}
+
+function _stopIdleDetection() {
+  if (_idleTimer) { clearInterval(_idleTimer); _idleTimer = null }
+}
+
 // ── Logout ────────────────────────────────────────────────────────────────────
 function _doLogout() {
   _stopPoller()
+  _stopIdleDetection()
+  _isIdle = false
   auth.logout()
   _isCheckedIn = false; _isOnBreak = false; _autoBreak = false; _checkInTime = null
   _buildTrayMenu()
