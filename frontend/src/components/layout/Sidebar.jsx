@@ -39,9 +39,9 @@ const navConfig = {
   project_manager: [
     { label: 'Home',         icon: LayoutDashboard, path: '/pm/dashboard'    },
     { label: 'Tasks',        icon: CheckSquare,     path: '/pm/reports'      },
-    { label: 'Projects',     icon: FolderOpen,      path: '/pm/projects'     },
-    { label: 'Task Updates', icon: TrendingUp,      path: '/pm/updates'      },
     { label: 'Chats',        icon: MessageSquare,   path: '/pm/chats'        },
+    { label: 'Task Updates', icon: TrendingUp,      path: '/pm/updates'      },
+    { label: 'Projects',     icon: FolderOpen,      path: '/pm/projects'     },
     { label: 'Group Chats',  icon: Hash,            path: '/pm/group-chats'  },
   ],
 }
@@ -67,7 +67,13 @@ const Sidebar = ({ collapsed, onToggle, onClose }) => {
     )
   }
 
-  const handleLogout = async () => { await logout(); navigate('/login') }
+  const [loggingOut, setLoggingOut] = React.useState(false)
+  const handleLogout = async () => {
+    if (loggingOut) return
+    setLoggingOut(true)
+    try { await logout(); navigate('/login') }
+    finally { setLoggingOut(false) }
+  }
 
   // Recent Projects — only for project_manager role
   const [recentProjects, setRecentProjects] = React.useState(() => {
@@ -289,19 +295,25 @@ const Sidebar = ({ collapsed, onToggle, onClose }) => {
       <div className="px-2 py-3 border-t border-gray-100 dark:border-dark-600">
         <motion.button
           onClick={handleLogout}
-          whileHover={{ x: 4 }}
-          whileTap={{ scale: 0.97 }}
+          disabled={loggingOut}
+          whileHover={loggingOut ? {} : { x: 4 }}
+          whileTap={loggingOut ? {} : { scale: 0.97 }}
           className={cn(
             'w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-red-500 hover:bg-red-500/10 transition-colors',
-            collapsed && 'justify-center'
+            collapsed && 'justify-center',
+            loggingOut && 'opacity-60 cursor-not-allowed'
           )}
           title={collapsed ? 'Logout' : undefined}
         >
-          <LogOut size={18} className="flex-shrink-0" />
+          {loggingOut
+            ? <motion.div animate={{ rotate: 360 }} transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
+                className="w-[18px] h-[18px] border-2 border-red-400/30 border-t-red-500 rounded-full flex-shrink-0" />
+            : <LogOut size={18} className="flex-shrink-0" />
+          }
           <AnimatePresence>
             {!collapsed && (
               <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-sm font-medium">
-                Logout
+                {loggingOut ? 'Logging out…' : 'Logout'}
               </motion.span>
             )}
           </AnimatePresence>
