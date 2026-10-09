@@ -51,10 +51,12 @@ const Employee = {
       SELECT e.id, e.employee_id, e.first_name, e.last_name, e.email, e.phone,
              e.designation, e.work_mode, e.status, e.join_date, e.profile_completion,
              e.avatar_url, d.name AS department_name,
-             m.first_name || ' ' || m.last_name AS manager_name
+             m.first_name || ' ' || m.last_name AS manager_name,
+             ev.company_provided_id
       FROM employees e
       LEFT JOIN departments d ON e.department_id = d.id
       LEFT JOIN employees   m ON e.manager_id    = m.id
+      LEFT JOIN employee_verifications ev ON ev.employee_id = e.id
       WHERE 1=1`
     const params = []
     if (department_id) { params.push(department_id); q += ` AND e.department_id = $${params.length}` }
@@ -64,7 +66,7 @@ const Employee = {
       params.push(`%${search}%`)
       q += ` AND (e.first_name ILIKE $${params.length} OR e.last_name ILIKE $${params.length} OR e.email ILIKE $${params.length})`
     }
-    q += ` ORDER BY e.created_at DESC`
+    q += ` ORDER BY e.id ASC`
     const { rows } = await db.query(q, params)
     return rows
   },

@@ -221,7 +221,7 @@ const EmployeeManagement = () => {
                   const status = emp.status || 'active'
                   const mode   = emp.work_mode || emp.workMode || '—'
                   const joined = emp.join_date || emp.joinDate
-                  const empId  = emp.employee_id || emp.id
+                  const empId  = emp.company_provided_id || emp.employee_id || emp.id
                   const pct    = emp.profile_completion ?? emp.profileCompletion ?? 0
                   return (
                     <div
