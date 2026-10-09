@@ -228,38 +228,24 @@ const remove = async (req, res, next) => {
 const addComment = async (req, res, next) => {
   try {
     const { content } = req.body
-    const fs = require('fs')
 
     let file_url     = null
     let file_name    = null
     let file_type    = null
     let file_size_kb = null
-    let file_data    = null   // base64 — avoids Railway ephemeral disk issue
+    let file_data    = null
 
     if (req.file) {
       file_name    = req.file.originalname
       file_type    = req.file.mimetype
       file_size_kb = Math.round(req.file.size / 1024)
-
-      // ── Store as base64 in DB (Railway ephemeral disk safe) ────────────────
-      // Only encode files ≤ 5 MB as base64 (larger files need file_url)
-      const MAX_BASE64_KB = 5 * 1024
-      if (file_size_kb <= MAX_BASE64_KB && req.file.path) {
-        try {
-          const buf = fs.readFileSync(req.file.path)
-          file_data = `data:${file_type};base64,${buf.toString('base64')}`
-          // Still keep file_url as fallback for local/Docker deployments
-          file_url = getFileUrl('attachments', req.file.filename)
-        } catch {
-          file_url = getFileUrl('attachments', req.file.filename)
-        }
-      } else {
-        file_url = getFileUrl('attachments', req.file.filename)
+      // Memory storage gives req.file.buffer — encode to base64
+      if (req.file.buffer) {
+        file_data = `data:${file_type};base64,${req.file.buffer.toString('base64')}`
       }
     }
 
-    // Must have content OR a file
-    if (!content && !file_url && !file_data) return fail(res, 'Comment content or file is required', 400)
+    if (!content && !file_data) return fail(res, 'Comment content or file is required', 400)
 
     const employee   = await Employee.findByUserId(req.user.id)
     const authorId   = employee?.id ?? null

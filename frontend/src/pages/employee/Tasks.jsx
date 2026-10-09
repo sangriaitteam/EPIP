@@ -236,28 +236,21 @@ const ChatMessage = ({ msg, isMe }) => (
 
         {/* File attachment */}
         {(msg.file_url || msg.file_data) && (() => {
-          // ── Prefer base64 (Railway-safe), fallback to URL ────────────────
           const absUrl = msg.file_data || resolveFileUrl(msg.file_url)
           if (!absUrl) return (
-            <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-600/40 bg-gray-700/30 text-gray-500 text-[11px]">
-              <span>📎</span>
-              <span className="truncate">{msg.file_name || 'Attachment'}</span>
-              <span className="text-[10px] text-gray-600 ml-auto flex-shrink-0">Unavailable</span>
+            <div className="mt-2 flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-600/30 text-gray-500 text-[11px]">
+              <span>📎</span><span className="truncate">{msg.file_name}</span>
+              <span className="ml-auto text-[10px]">Unavailable</span>
             </div>
           )
+
           const isImage = msg.file_type?.startsWith('image/')
           const isVideo = msg.file_type?.startsWith('video/')
-          const isPdf   = msg.file_type === 'application/pdf' || msg.file_name?.endsWith('.pdf')
 
-          const handleOpen = (e) => {
-            e.stopPropagation(); e.preventDefault()
-            window.open(absUrl, '_blank', 'noopener,noreferrer')
-          }
-          const handleDownload = (e) => {
-            e.stopPropagation(); e.preventDefault()
+          const doDownload = (e) => {
+            e.stopPropagation()
             const a = document.createElement('a')
             a.href = absUrl; a.download = msg.file_name || 'attachment'
-            a.target = '_blank'; a.rel = 'noopener noreferrer'
             document.body.appendChild(a); a.click(); document.body.removeChild(a)
           }
 
@@ -265,58 +258,35 @@ const ChatMessage = ({ msg, isMe }) => (
             <div className="mt-2">
               {isImage ? (
                 <div className="space-y-1">
-                  <button onClick={handleOpen} className="block">
-                    <img src={absUrl} alt={msg.file_name}
-                      className="max-w-[220px] rounded-lg border border-white/20 mt-1 hover:opacity-90 cursor-pointer" />
-                  </button>
-                  <div className="flex gap-1.5 mt-1">
-                    <button onClick={handleOpen}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-medium ${isMe ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-white dark:bg-dark-600 text-primary-600 hover:bg-gray-50'} transition-colors`}>
-                      🔍 View
-                    </button>
-                    <button onClick={handleDownload}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-medium ${isMe ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-white dark:bg-dark-600 text-primary-600 hover:bg-gray-50'} transition-colors`}>
-                      ⬇ Download
-                    </button>
-                  </div>
+                  <img src={absUrl} alt={msg.file_name} onClick={doDownload}
+                    className="max-w-[220px] rounded-xl border border-white/20 cursor-pointer hover:opacity-90 mt-1" />
+                  <p className={`text-[10px] ${isMe ? 'text-white/60' : 'text-gray-400'}`}>Tap to download</p>
                 </div>
               ) : isVideo ? (
-                <div className="space-y-1">
-                  <video src={absUrl} controls className="max-w-[240px] rounded-lg border border-white/20" style={{ maxHeight: 150 }} />
-                  <button onClick={handleDownload}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-medium ${isMe ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-white dark:bg-dark-600 text-primary-600 hover:bg-gray-50'} transition-colors`}>
-                    <Paperclip size={10} /> {msg.file_name} · ⬇ Download
+                <div className="space-y-1.5">
+                  <video src={absUrl} controls className="max-w-[240px] rounded-xl border border-white/20" style={{ maxHeight: 150 }} />
+                  <button onClick={doDownload}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium w-full justify-center ${isMe ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-gray-100 dark:bg-dark-600 text-gray-700 dark:text-gray-300 hover:bg-gray-200'} transition-colors`}>
+                    ⬇ Download video
                   </button>
                 </div>
               ) : (
-                <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border mt-1 ${isMe ? 'border-white/20 bg-white/10' : 'border-gray-200 dark:border-dark-500 bg-white dark:bg-dark-600'}`}>
-                  <span className="text-base flex-shrink-0">
-                    {isPdf ? '📄' : msg.file_name?.match(/\.(xlsx?|csv)$/i) ? '📊'
-                      : msg.file_name?.match(/\.(zip|rar|7z)$/i) ? '🗜️'
-                      : msg.file_name?.match(/\.(docx?)$/i) ? '📝'
-                      : msg.file_name?.match(/\.(mp4|mov|avi)$/i) ? '🎥' : '📎'}
+                <button onClick={doDownload}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border w-full text-left transition-colors mt-1 ${isMe ? 'border-white/20 bg-white/10 hover:bg-white/20' : 'border-gray-200 dark:border-dark-500 bg-white dark:bg-dark-600 hover:bg-gray-50 dark:hover:bg-dark-500'}`}>
+                  <span className="text-2xl flex-shrink-0">
+                    {msg.file_name?.match(/\.pdf$/i) ? '📄' : msg.file_name?.match(/\.(xlsx?|csv)$/i) ? '📊'
+                      : msg.file_name?.match(/\.(zip|rar|7z)$/i) ? '🗜️' : msg.file_name?.match(/\.(docx?)$/i) ? '📝' : '📎'}
                   </span>
                   <div className="flex-1 min-w-0">
                     <p className={`text-[11px] font-semibold truncate ${isMe ? 'text-white' : 'text-gray-800 dark:text-gray-200'}`}>
                       {msg.file_name || 'Attachment'}
                     </p>
-                    {msg.file_size_kb && (
-                      <p className={`text-[9px] ${isMe ? 'text-white/60' : 'text-gray-400'}`}>
-                        {msg.file_size_kb >= 1024 ? `${(msg.file_size_kb / 1024).toFixed(1)} MB` : `${msg.file_size_kb} KB`}
-                      </p>
-                    )}
+                    <p className={`text-[9px] mt-0.5 ${isMe ? 'text-white/60' : 'text-gray-400'}`}>
+                      {msg.file_size_kb ? msg.file_size_kb >= 1024 ? `${(msg.file_size_kb / 1024).toFixed(1)} MB` : `${msg.file_size_kb} KB` : ''} · Tap to download
+                    </p>
                   </div>
-                  <div className="flex gap-1 flex-shrink-0">
-                    <button onClick={handleOpen} title="Open in new tab"
-                      className={`p-1.5 rounded-lg text-xs ${isMe ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-primary-500/10 text-primary-500 hover:bg-primary-500 hover:text-white'} transition-colors`}>
-                      🔍
-                    </button>
-                    <button onClick={handleDownload} title="Download"
-                      className={`p-1.5 rounded-lg text-xs ${isMe ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-green-500/10 text-green-600 hover:bg-green-500 hover:text-white'} transition-colors`}>
-                      ⬇
-                    </button>
-                  </div>
-                </div>
+                  <span className={`text-lg flex-shrink-0 ${isMe ? 'text-white/80' : 'text-gray-400'}`}>⬇</span>
+                </button>
               )}
             </div>
           )
