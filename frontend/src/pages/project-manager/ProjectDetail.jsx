@@ -1,15 +1,17 @@
 ﻿// ProjectDetail.jsx — Full project detail page (Overview / Tasks / Team / Reports)
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, FolderOpen, Users, Calendar, Flag, CheckCircle2,
   Circle, Loader2, Clock, MoreHorizontal, RefreshCw, Search, Plus, X,
   BarChart2, ListTodo, UserCheck, FileBarChart, AlertCircle,
-  TrendingUp, Briefcase, Download, ChevronLeft, ChevronRight
+  TrendingUp, Briefcase, Download, ChevronLeft, ChevronRight,
+  MessageSquare, Send, Paperclip, ThumbsUp
 } from 'lucide-react'
 import Avatar from '../../components/common/Avatar'
 import { api } from '../../services/api'
+import { useAuth } from '../../context/AuthContext'
 import toast from 'react-hot-toast'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -415,20 +417,282 @@ const TaskCard = ({ task, onStatusChange, onDelete }) => {
   )
 }
 
+// ── Task Chat Modal ───────────────────────────────────────────────────────────
+const TaskChatModal = ({ task, onClose }) => {
+  const { user } = useAuth()
+  const [comments,  setComments]  = useState([])
+  const [loading,   setLoading]   = useState(true)
+  const [message,   setMessage]   = useState('')
+  const [sending,   setSending]   = useState(false)
+  const [attached,  setAttached]  = useState(null)  // { file, name, type, preview }
+  const [feedbackMode, setFeedbackMode] = useState(false)
+  const bottomRef  = useRef(null)
+  const fileRef    = useRef(null)
+
+  const fmtTs = (d) => d
+    ? new Date(d).toLocaleString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit', hour12:true })
+    : ''
+
+  const loadComments = async () => {
+    try {
+      const res = await api.get(`/tasks/${task.id}/comments`)
+      if (res.success) {
+        setComments(res.data || [])
+        // Mark messages from employee side as read (PM is viewing)
+        api.patch(`/tasks/${task.id}/comments/read`, {}).catch(() => {})
+      }
+    } catch {}
+    setLoading(false)
+  }
+
+  useEffect(() => { loadComments() }, [task.id])
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [comments])
+
+  const handleSend = async () => {
+    const text = feedbackMode ? `[Feedback] ${message.trim()}` : message.trim()
+    if (!text && !attached) return
+    setSending(true)
+    try {
+      let res
+      const token = localStorage.getItem('epip_token')
+      const apiBase = window.location.hostname === 'localhost'
+        ? 'http://localhost:5000/api'
+        : `${window.location.protocol}//${window.location.hostname}:5000/api`
+
+      if (attached) {
+        const fd = new FormData()
+        if (text) fd.append('content', text)
+        fd.append('attachment', attached.file)
+        const raw = await fetch(`${apiBase}/tasks/${task.id}/comments`, {
+          method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
+        })
+        res = await raw.json()
+      } else {
+        res = await api.post(`/tasks/${task.id}/comments`, { content: text })
+      }
+      if (res.success) {
+        setMessage('')
+        setAttached(null)
+        setFeedbackMode(false)
+        await loadComments()
+      } else toast.error(res.message || 'Send failed')
+    } catch { toast.error('Cannot connect') }
+    setSending(false)
+  }
+
+  const handleFile = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) { toast.error('Max 10 MB'); return }
+    const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : null
+    setAttached({ file, name: file.name, type: file.type, preview })
+    e.target.value = ''
+  }
+
+  // ── Who is "me"? PM = messages with author_id null ─────────────────────
+  // PM comments have author_id = null (or author_name_override = PM name)
+  const isMyMsg = (msg) => msg.author_id === null || msg.author_id === undefined
+
+  const STATUS_COLORS = {
+    done: 'bg-green-500/15 text-green-400', in_progress: 'bg-blue-500/15 text-blue-400',
+    review: 'bg-yellow-500/15 text-yellow-400', todo: 'bg-gray-500/15 text-gray-400',
+  }
+  const STATUS_LABELS = { done: 'Done', in_progress: 'In Progress', review: 'Review', todo: 'Pending' }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+      onClick={onClose}>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+
+      <motion.div
+        initial={{ y: '100%', opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: '100%', opacity: 0 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+        className="relative w-full sm:max-w-2xl bg-white dark:bg-dark-800 rounded-t-3xl sm:rounded-2xl shadow-2xl border border-gray-100 dark:border-dark-600 flex flex-col"
+        style={{ maxHeight: '88vh' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start gap-3 px-4 py-3.5 border-b border-gray-100 dark:border-dark-600">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white truncate">{task.title}</h3>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${STATUS_COLORS[task.status] || STATUS_COLORS.todo}`}>
+                {STATUS_LABELS[task.status] || task.status}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 mt-0.5 text-[11px] text-gray-400">
+              {task.assignee_name && <span>👤 {task.assignee_name}</span>}
+              {task.due_date && <span>📅 Due: {new Date(task.due_date).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })}</span>}
+              <span className="flex items-center gap-0.5"><MessageSquare size={10} /> {comments.length} messages</span>
+            </div>
+          </div>
+          <button onClick={onClose}
+            className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-dark-700 text-gray-400 transition-colors flex-shrink-0">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+          {loading ? (
+            <div className="flex items-center justify-center py-10">
+              <motion.div animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
+                className="w-6 h-6 border-2 border-primary-500/30 border-t-primary-500 rounded-full" />
+            </div>
+          ) : comments.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <MessageSquare size={28} className="text-gray-300 mb-2" />
+              <p className="text-sm text-gray-400">No messages yet</p>
+              <p className="text-xs text-gray-400 mt-1">Start the conversation about this task</p>
+            </div>
+          ) : (
+            comments.map((msg) => {
+              const mine = isMyMsg(msg)
+              const isFeedback = msg.content?.startsWith('[Feedback]')
+              const displayContent = isFeedback
+                ? msg.content.replace('[Feedback] ', '')
+                : msg.content
+
+              return (
+                <motion.div key={msg.id}
+                  initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                  className={`flex items-end gap-2 ${mine ? 'flex-row-reverse' : 'flex-row'}`}
+                >
+                  {!mine && <Avatar name={msg.author_name || 'Employee'} src={msg.avatar_url} size="sm" />}
+
+                  <div className={`max-w-[72%] flex flex-col gap-1 ${mine ? 'items-end' : 'items-start'}`}>
+                    {!mine && (
+                      <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 ml-1">
+                        {msg.author_name}
+                      </span>
+                    )}
+                    <div className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                      mine
+                        ? isFeedback
+                          ? 'bg-amber-500 text-white rounded-br-sm'
+                          : 'bg-primary-500 text-white rounded-br-sm'
+                        : 'bg-gray-100 dark:bg-dark-700 text-gray-800 dark:text-gray-200 rounded-bl-sm'
+                    }`}>
+                      {isFeedback && (
+                        <div className={`flex items-center gap-1 text-[10px] font-bold mb-1.5 ${mine ? 'text-amber-100' : 'text-amber-600'}`}>
+                          <ThumbsUp size={10} /> FEEDBACK
+                        </div>
+                      )}
+                      {displayContent && <p>{displayContent}</p>}
+                      {msg.file_url && (
+                        <div className="mt-2">
+                          {msg.file_type?.startsWith('image/') ? (
+                            <a href={msg.file_url} target="_blank" rel="noreferrer">
+                              <img src={msg.file_url} alt={msg.file_name}
+                                className="max-w-[200px] rounded-lg border border-white/20" />
+                            </a>
+                          ) : (
+                            <a href={msg.file_url} target="_blank" rel="noreferrer"
+                              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                                mine ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-white dark:bg-dark-600 text-primary-600 hover:bg-gray-50'
+                              }`}>
+                              <Paperclip size={11} />
+                              {msg.file_name || 'Attachment'}
+                              {msg.file_size_kb && <span className="opacity-60">({msg.file_size_kb} KB)</span>}
+                            </a>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-gray-400 mx-1">{fmtTs(msg.created_at)}</span>
+                  </div>
+                </motion.div>
+              )
+            })
+          )}
+          <div ref={bottomRef} />
+        </div>
+
+        {/* Attached file preview */}
+        {attached && (
+          <div className="px-4 py-2 border-t border-gray-100 dark:border-dark-600">
+            <div className="flex items-center gap-2 p-2 rounded-xl bg-primary-500/10 border border-primary-500/20">
+              {attached.preview
+                ? <img src={attached.preview} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                : <Paperclip size={16} className="text-primary-500 flex-shrink-0" />
+              }
+              <span className="text-xs text-gray-700 dark:text-gray-300 flex-1 truncate">{attached.name}</span>
+              <button onClick={() => setAttached(null)} className="text-gray-400 hover:text-red-500 transition-colors">
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Feedback mode banner */}
+        {feedbackMode && (
+          <div className="px-4 py-1.5 bg-amber-500/10 border-t border-amber-500/20">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                <ThumbsUp size={12} /> Feedback mode — message will be tagged as feedback
+              </span>
+              <button onClick={() => setFeedbackMode(false)} className="text-amber-500 hover:text-amber-700 text-xs">Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {/* Input bar */}
+        <div className="px-4 py-3 border-t border-gray-100 dark:border-dark-600 bg-gray-50 dark:bg-dark-700 rounded-b-2xl">
+          <div className="flex items-end gap-2">
+            <div className="flex-1 flex items-end gap-2 bg-white dark:bg-dark-800 rounded-2xl border border-gray-200 dark:border-dark-600 px-3 py-2">
+              <textarea
+                value={message}
+                onChange={e => setMessage(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
+                placeholder={feedbackMode ? 'Write feedback...' : 'Type a message...'}
+                rows={1}
+                className="flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-200 placeholder-gray-400 resize-none focus:outline-none max-h-24 overflow-y-auto"
+                style={{ lineHeight: '1.5' }}
+              />
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {/* File attach */}
+              <input ref={fileRef} type="file" className="hidden" onChange={handleFile}
+                accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.txt,.csv" />
+              <button onClick={() => fileRef.current?.click()}
+                className="p-2 rounded-xl text-gray-400 hover:text-primary-500 hover:bg-primary-500/10 transition-colors"
+                title="Attach file">
+                <Paperclip size={18} />
+              </button>
+
+              {/* Feedback */}
+              <button onClick={() => setFeedbackMode(f => !f)}
+                className={`p-2 rounded-xl transition-colors ${feedbackMode ? 'text-amber-500 bg-amber-500/10' : 'text-gray-400 hover:text-amber-500 hover:bg-amber-500/10'}`}
+                title="Send as feedback">
+                <ThumbsUp size={18} />
+              </button>
+
+              {/* Send */}
+              <button onClick={handleSend} disabled={sending || (!message.trim() && !attached)}
+                className="p-2 rounded-xl bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-40 transition-colors"
+                title="Send">
+                {sending
+                  ? <motion.div animate={{ rotate: 360 }} transition={{ duration: 0.6, repeat: Infinity, ease: 'linear' }}
+                      className="w-[18px] h-[18px] border-2 border-white/30 border-t-white rounded-full" />
+                  : <Send size={18} />
+                }
+              </button>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
 const TasksTab = ({ tasks, projectId, project, memberStats, weekStart, setWeekStart }) => {
   const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
   const DAY_SHORT = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
-
-  // weekStart / setWeekStart come from ProjectDetail (shared with header date picker)
-  const weekEnd = new Date(weekStart)
-  weekEnd.setDate(weekStart.getDate() + 6)
-
-  const prevWeek = () => {
-    const d = new Date(weekStart); d.setDate(d.getDate() - 7); setWeekStart(d)
-  }
-  const nextWeek = () => {
-    const d = new Date(weekStart); d.setDate(d.getDate() + 7); setWeekStart(d)
-  }
 
   const DAY_COLORS = {
     Monday:    { bg: 'bg-blue-500',    text: 'text-white', bar: '#3b82f6' },
@@ -447,54 +711,9 @@ const TasksTab = ({ tasks, projectId, project, memberStats, weekStart, setWeekSt
     todo:        { label: 'Pending',     dot: 'bg-gray-500',   pill: 'bg-gray-500/15 text-gray-400 border border-gray-500/30' },
   }
 
-  // ── Build display rows — real tasks line-by-line, or default placeholders ──
-  const defaultRows = [
-    { seq: 0, day: 'Monday',    taskName: 'Project Setup & Requirements', start: '09:00 AM', end: '11:00 AM', duration: '2h',  status: 'todo', pct: 0, hasTask: false },
-    { seq: 1, day: 'Tuesday',   taskName: 'Design & Planning',            start: '09:00 AM', end: '12:00 PM', duration: '3h',  status: 'todo', pct: 0, hasTask: false },
-    { seq: 2, day: 'Wednesday', taskName: 'Development',                  start: '09:00 AM', end: '01:00 PM', duration: '4h',  status: 'todo', pct: 0, hasTask: false },
-    { seq: 3, day: 'Thursday',  taskName: 'Testing & QA',                 start: '10:00 AM', end: '02:00 PM', duration: '4h',  status: 'todo', pct: 0, hasTask: false },
-    { seq: 4, day: 'Friday',    taskName: 'Content & Documentation',      start: '09:00 AM', end: '12:00 PM', duration: '3h',  status: 'todo', pct: 0, hasTask: false },
-    { seq: 5, day: 'Saturday',  taskName: 'Review & Feedback',            start: '10:00 AM', end: '01:00 PM', duration: '3h',  status: 'todo', pct: 0, hasTask: false },
-    { seq: 6, day: 'Sunday',    taskName: 'Final Submission',             start: '09:00 AM', end: '11:00 AM', duration: '2h',  status: 'todo', pct: 0, hasTask: false },
-  ]
-
-  // Parse duration hint from description "(N min)" → "Xh" or "Xm"
-  // Also can calculate from start_time/end_time
-  const parseDuration = (desc, startTime, endTime) => {
-    // If both start and end times exist, calculate duration
-    if (startTime && endTime) {
-      try {
-        const parseTime = (t) => {
-          const [time, period] = t.trim().split(' ')
-          let [h, m] = time.split(':').map(Number)
-          if (period?.toUpperCase() === 'PM' && h !== 12) h += 12
-          if (period?.toUpperCase() === 'AM' && h === 12) h = 0
-          return h * 60 + (m || 0)
-        }
-        const diff = parseTime(endTime) - parseTime(startTime)
-        if (diff > 0) {
-          const hrs = Math.floor(diff / 60)
-          const mins = diff % 60
-          if (hrs > 0 && mins > 0) return `${hrs}h ${mins}m`
-          if (hrs > 0) return `${hrs}h`
-          return `${mins}m`
-        }
-      } catch {}
-    }
-    // Fallback: parse from description
-    if (!desc) return '—'
-    const m = desc.match(/\((\d+)\s*min\)/)
-    if (!m) return '—'
-    const mins = parseInt(m[1])
-    if (mins === 0) return '—'
-    if (mins >= 60) return `${Math.round(mins / 60)}h`
-    return `${mins}m`
-  }
-
-  // Real tasks → render ALL of them line-by-line (no 7-row limit)
-  // Day color cycles through DAYS array by index
-  const [editingTime, setEditingTime] = useState(null) // { taskId, field: 'start'|'end', value }
+  const [editingTime, setEditingTime] = useState(null)
   const [savingTime,  setSavingTime]  = useState(null)
+  const [chatTask,    setChatTask]    = useState(null) // task to open chat for
 
   const handleTimeSave = async (taskId, field, value) => {
     if (!value?.trim()) { setEditingTime(null); return }
@@ -507,170 +726,289 @@ const TasksTab = ({ tasks, projectId, project, memberStats, weekStart, setWeekSt
     setEditingTime(null)
   }
 
-  const displayRows = tasks.length > 0
+  const parseDuration = (desc, startTime, endTime) => {
+    if (startTime && endTime) {
+      try {
+        const parseTime = (t) => {
+          const [time, period] = t.trim().split(' ')
+          let [h, m] = time.split(':').map(Number)
+          if (period?.toUpperCase() === 'PM' && h !== 12) h += 12
+          if (period?.toUpperCase() === 'AM' && h === 12) h = 0
+          return h * 60 + (m || 0)
+        }
+        const diff = parseTime(endTime) - parseTime(startTime)
+        if (diff > 0) {
+          const hrs = Math.floor(diff / 60); const mins = diff % 60
+          if (hrs > 0 && mins > 0) return `${hrs}h ${mins}m`
+          if (hrs > 0) return `${hrs}h`
+          return `${mins}m`
+        }
+      } catch {}
+    }
+    if (!desc) return '—'
+    const m = desc.match(/\((\d+)\s*min\)/)
+    if (!m) return '—'
+    const mins = parseInt(m[1])
+    if (mins === 0) return '—'
+    if (mins >= 60) return `${Math.round(mins / 60)}h`
+    return `${mins}m`
+  }
+
+  // ── Group tasks by due_date (date-wise) ────────────────────────────────────
+  const fmtGroupDate = (d) => {
+    if (!d) return 'No Due Date'
+    const date = new Date(d)
+    const today = new Date(); today.setHours(0,0,0,0)
+    const tom   = new Date(today); tom.setDate(today.getDate() + 1)
+    const yest  = new Date(today); yest.setDate(today.getDate() - 1)
+    const dateOnly = new Date(d); dateOnly.setHours(0,0,0,0)
+    if (dateOnly.getTime() === today.getTime()) return 'Today'
+    if (dateOnly.getTime() === tom.getTime())   return 'Tomorrow'
+    if (dateOnly.getTime() === yest.getTime())  return 'Yesterday'
+    return date.toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+  }
+
+  const groupedTasks = tasks.reduce((acc, t) => {
+    const key = t.due_date ? t.due_date.toString().split('T')[0] : '__nodate__'
+    if (!acc[key]) acc[key] = []
+    acc[key].push(t)
+    return acc
+  }, {})
+
+  // Sort groups: tasks with dates first (ascending), then no-date
+  const sortedKeys = Object.keys(groupedTasks).sort((a, b) => {
+    if (a === '__nodate__') return 1
+    if (b === '__nodate__') return -1
+    return a.localeCompare(b)
+  })
+
+  const defaultRows = [
+    { seq: 0, day: 'Monday',    taskName: 'Project Setup & Requirements', start: '09:00 AM', end: '11:00 AM', duration: '2h',  status: 'todo', pct: 0, hasTask: false },
+    { seq: 1, day: 'Tuesday',   taskName: 'Design & Planning',            start: '09:00 AM', end: '12:00 PM', duration: '3h',  status: 'todo', pct: 0, hasTask: false },
+    { seq: 2, day: 'Wednesday', taskName: 'Development',                  start: '09:00 AM', end: '01:00 PM', duration: '4h',  status: 'todo', pct: 0, hasTask: false },
+    { seq: 3, day: 'Thursday',  taskName: 'Testing & QA',                 start: '10:00 AM', end: '02:00 PM', duration: '4h',  status: 'todo', pct: 0, hasTask: false },
+    { seq: 4, day: 'Friday',    taskName: 'Content & Documentation',      start: '09:00 AM', end: '12:00 PM', duration: '3h',  status: 'todo', pct: 0, hasTask: false },
+    { seq: 5, day: 'Saturday',  taskName: 'Review & Feedback',            start: '10:00 AM', end: '01:00 PM', duration: '3h',  status: 'todo', pct: 0, hasTask: false },
+    { seq: 6, day: 'Sunday',    taskName: 'Final Submission',             start: '09:00 AM', end: '11:00 AM', duration: '2h',  status: 'todo', pct: 0, hasTask: false },
+  ]
+
+  const allRows = tasks.length > 0
     ? tasks.map((t, i) => ({
-        seq:      i,
-        day:      DAYS[i % 7],
-        taskName: t.title,
-        taskId:   t.id,
-        start:    t.start_time || '09:00 AM',
-        end:      t.end_time   || '05:00 PM',
+        seq: i, day: DAYS[i % 7], taskName: t.title, taskId: t.id, taskObj: t,
+        start: t.start_time || '09:00 AM', end: t.end_time || '05:00 PM',
         duration: parseDuration(t.description, t.start_time, t.end_time),
-        status:   t.status || 'todo',
-        pct:      t.completion_percent || 0,
-        hasTask:  true,
+        status: t.status || 'todo', pct: t.completion_percent || 0, hasTask: true,
+        due_date: t.due_date, groupKey: t.due_date ? t.due_date.toString().split('T')[0] : '__nodate__',
       }))
-    : defaultRows
+    : defaultRows.map((r, i) => ({ ...r, groupKey: '__nodate__' }))
 
   return (
-    <div className="space-y-3">
-      {/* Gantt table */}
-      <div className="overflow-x-auto rounded-2xl border border-gray-100 dark:border-dark-600 shadow-sm bg-white dark:bg-dark-800">
-      <table className="w-full text-sm" style={{ minWidth: 900 }}>
-        <thead>
-          <tr className="border-b border-gray-100 dark:border-dark-600">
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide w-28">Day</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">
-              <span className="flex items-center gap-1.5"><ListTodo size={12} /> Task</span>
-            </th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Start Timing</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">End Timing</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Duration</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">
-              <span className="flex items-center gap-1.5"><Circle size={10} /> Status</span>
-            </th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">
-              <span className="flex items-center gap-1.5"><TrendingUp size={11} /> Completion</span>
-            </th>
-            {/* Day columns */}
-            {DAY_SHORT.map(d => (
-              <th key={d} className="px-2 py-3 text-center text-xs font-semibold text-gray-400 uppercase tracking-wide w-12">{d}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-50 dark:divide-dark-700">
-          {displayRows.map((row, i) => {
-            const col      = DAY_COLORS[row.day]
-            const st       = STATUS_MAP[row.status] || STATUS_MAP.todo
-            const taskName = row.taskName || row.task
-            // Gantt bar column = day-of-week index (0=Mon … 6=Sun), cycling for >7 tasks
-            const ganttCol = i % 7
-            return (
-              <motion.tr
-                key={row.taskId ? `task-${row.taskId}` : `default-${i}`}
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: Math.min(i * 0.04, 0.5) }}
-                className="hover:bg-gray-50/50 dark:hover:bg-dark-700/30 transition-colors"
-              >
-                {/* Seq / Day badge */}
-                <td className="px-4 py-3.5">
-                  <div className="flex flex-col items-start gap-1">
-                    {row.hasTask && (
-                      <span className="text-[9px] font-mono text-gray-400">#{String(i).padStart(2,'0')}</span>
-                    )}
-                    <span className={`inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-xs font-bold ${col.bg} ${col.text} min-w-[90px]`}>
-                      {row.day}
-                    </span>
-                  </div>
-                </td>
+    <div className="space-y-4">
+      {/* Chat modal */}
+      <AnimatePresence>
+        {chatTask && (
+          <TaskChatModal task={chatTask} onClose={() => setChatTask(null)} />
+        )}
+      </AnimatePresence>
 
-                {/* Task name */}
-                <td className="px-4 py-3.5">
-                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200 max-w-[220px] leading-snug">{taskName}</p>
-                </td>
+      {tasks.length === 0 ? (
+        /* No tasks — show default placeholder table */
+        <div className="overflow-x-auto rounded-2xl border border-gray-100 dark:border-dark-600 shadow-sm bg-white dark:bg-dark-800">
+          <table className="w-full text-sm" style={{ minWidth: 900 }}>
+            <thead>
+              <tr className="border-b border-gray-100 dark:border-dark-600">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide w-28">Day</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide"><span className="flex items-center gap-1.5"><ListTodo size={12}/> Task</span></th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Start</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">End</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Duration</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Completion</th>
+                {DAY_SHORT.map(d => <th key={d} className="px-2 py-3 text-center text-xs font-semibold text-gray-400 uppercase w-12">{d}</th>)}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50 dark:divide-dark-700">
+              {defaultRows.map((row, i) => {
+                const col = DAY_COLORS[row.day]; const st = STATUS_MAP[row.status]
+                return (
+                  <tr key={i} className="opacity-40">
+                    <td className="px-4 py-3.5"><span className={`inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-xs font-bold ${col.bg} ${col.text} min-w-[90px]`}>{row.day}</span></td>
+                    <td className="px-4 py-3.5"><p className="text-sm text-gray-400 max-w-[220px]">{row.taskName}</p></td>
+                    <td className="px-4 py-3.5 text-sm text-gray-400">{row.start}</td>
+                    <td className="px-4 py-3.5 text-sm text-gray-400">{row.end}</td>
+                    <td className="px-4 py-3.5 text-sm text-gray-400">{row.duration}</td>
+                    <td className="px-4 py-3.5"><span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${st.pill}`}><span className={`w-1.5 h-1.5 rounded-full ${st.dot}`}/>{st.label}</span></td>
+                    <td className="px-4 py-3.5 min-w-[120px]"><div className="flex items-center gap-2"><div className="flex-1 h-1.5 bg-gray-100 dark:bg-dark-600 rounded-full"/><span className="text-xs text-gray-400 w-8 text-right">0%</span></div></td>
+                    {DAY_SHORT.map((d, di) => <td key={d} className="px-1.5 py-3.5 text-center">{di === i % 7 ? <div className="h-5 rounded-md mx-auto" style={{ background: col.bar, width: 36 }}/> : null}</td>)}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        /* Real tasks — grouped by due_date */
+        sortedKeys.map(groupKey => {
+          const groupTasks = groupedTasks[groupKey]
+          const groupLabel = groupKey === '__nodate__' ? 'No Due Date' : fmtGroupDate(groupKey)
+          const isNodDate  = groupKey === '__nodate__'
+          const groupDate  = groupKey !== '__nodate__' ? new Date(groupKey) : null
+          const isOverdueGroup = groupDate && groupDate < new Date() && groupDate.setHours(0,0,0,0) < new Date().setHours(0,0,0,0)
 
-                {/* Start — inline editable */}
-                <td className="px-4 py-3.5 whitespace-nowrap">
-                  {row.hasTask && editingTime?.taskId === row.taskId && editingTime?.field === 'start' ? (
-                    <input
-                      autoFocus
-                      defaultValue={row.start}
-                      onBlur={e => handleTimeSave(row.taskId, 'start', e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') setEditingTime(null) }}
-                      className="w-24 px-2 py-1 text-xs rounded-lg border border-primary-500 bg-dark-700 text-white focus:outline-none"
-                      placeholder="09:00 AM"
-                    />
-                  ) : (
-                    <span
-                      onClick={() => row.hasTask && setEditingTime({ taskId: row.taskId, field: 'start', value: row.start })}
-                      className={`text-sm text-gray-500 dark:text-gray-400 ${row.hasTask ? 'cursor-pointer hover:text-primary-400 hover:underline' : ''}`}
-                      title={row.hasTask ? 'Click to edit' : ''}
-                    >
-                      {savingTime === `${row.taskId}-start` ? '...' : row.start}
-                    </span>
-                  )}
-                </td>
+          return (
+            <div key={groupKey} className="space-y-1">
+              {/* Date group header */}
+              <div className="flex items-center gap-3 px-1">
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold ${
+                  groupLabel === 'Today'     ? 'bg-primary-500/15 text-primary-500' :
+                  groupLabel === 'Tomorrow'  ? 'bg-green-500/15 text-green-500' :
+                  isOverdueGroup             ? 'bg-red-500/15 text-red-500' :
+                  isNodDate                  ? 'bg-gray-500/15 text-gray-400' :
+                                              'bg-gray-100 dark:bg-dark-700 text-gray-500 dark:text-gray-400'
+                }`}>
+                  <Calendar size={12} />
+                  {groupLabel}
+                </div>
+                <div className="flex-1 h-px bg-gray-100 dark:bg-dark-600" />
+                <span className="text-[11px] text-gray-400 font-medium">{groupTasks.length} task{groupTasks.length !== 1 ? 's' : ''}</span>
+              </div>
 
-                {/* End — inline editable */}
-                <td className="px-4 py-3.5 whitespace-nowrap">
-                  {row.hasTask && editingTime?.taskId === row.taskId && editingTime?.field === 'end' ? (
-                    <input
-                      autoFocus
-                      defaultValue={row.end}
-                      onBlur={e => handleTimeSave(row.taskId, 'end', e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') setEditingTime(null) }}
-                      className="w-24 px-2 py-1 text-xs rounded-lg border border-primary-500 bg-dark-700 text-white focus:outline-none"
-                      placeholder="05:00 PM"
-                    />
-                  ) : (
-                    <span
-                      onClick={() => row.hasTask && setEditingTime({ taskId: row.taskId, field: 'end', value: row.end })}
-                      className={`text-sm text-gray-500 dark:text-gray-400 ${row.hasTask ? 'cursor-pointer hover:text-primary-400 hover:underline' : ''}`}
-                      title={row.hasTask ? 'Click to edit' : ''}
-                    >
-                      {savingTime === `${row.taskId}-end` ? '...' : row.end}
-                    </span>
-                  )}
-                </td>
+              {/* Task rows */}
+              <div className="overflow-x-auto rounded-2xl border border-gray-100 dark:border-dark-600 shadow-sm bg-white dark:bg-dark-800">
+                <table className="w-full text-sm" style={{ minWidth: 900 }}>
+                  <thead>
+                    <tr className="border-b border-gray-100 dark:border-dark-600">
+                      <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wide w-28">Day</th>
+                      <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wide"><span className="flex items-center gap-1.5"><ListTodo size={11}/> Task</span></th>
+                      <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Start</th>
+                      <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wide">End</th>
+                      <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Duration</th>
+                      <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Status</th>
+                      <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Completion</th>
+                      {DAY_SHORT.map(d => <th key={d} className="px-2 py-2.5 text-center text-[11px] font-semibold text-gray-400 uppercase w-10">{d}</th>)}
+                      <th className="px-3 py-2.5 text-center text-[11px] font-semibold text-gray-400 uppercase w-16">Chat</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50 dark:divide-dark-700">
+                    {groupTasks.map((t, i) => {
+                      const globalIdx = allRows.findIndex(r => r.taskId === t.id)
+                      const col = DAY_COLORS[DAYS[globalIdx % 7]]
+                      const st  = STATUS_MAP[t.status] || STATUS_MAP.todo
+                      const ganttCol = globalIdx % 7
+                      const startTime = t.start_time || '09:00 AM'
+                      const endTime   = t.end_time   || '05:00 PM'
+                      const dur = parseDuration(t.description, t.start_time, t.end_time)
 
-                {/* Duration */}
-                <td className="px-4 py-3.5 text-sm font-semibold text-gray-700 dark:text-gray-300">{row.duration}</td>
+                      return (
+                        <motion.tr key={t.id}
+                          initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: Math.min(i * 0.04, 0.3) }}
+                          className="hover:bg-gray-50/50 dark:hover:bg-dark-700/30 transition-colors"
+                        >
+                          {/* Day badge */}
+                          <td className="px-4 py-3">
+                            <div className="flex flex-col items-start gap-0.5">
+                              <span className="text-[9px] font-mono text-gray-400">#{String(globalIdx + 1).padStart(2,'0')}</span>
+                              <span className={`inline-flex items-center justify-center px-2.5 py-1 rounded-lg text-[11px] font-bold ${col.bg} ${col.text} min-w-[80px]`}>
+                                {DAYS[globalIdx % 7]}
+                              </span>
+                            </div>
+                          </td>
 
-                {/* Status */}
-                <td className="px-4 py-3.5">
-                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${st.pill}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
-                    {st.label}
-                  </span>
-                </td>
+                          {/* Task name */}
+                          <td className="px-4 py-3">
+                            <p className="text-sm font-medium text-gray-800 dark:text-gray-200 max-w-[200px] leading-snug">{t.title}</p>
+                            {t.assignee_name && (
+                              <p className="text-[10px] text-gray-400 mt-0.5">👤 {t.assignee_name}</p>
+                            )}
+                          </td>
 
-                {/* Completion */}
-                <td className="px-4 py-3.5 min-w-[120px]">
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-1.5 bg-gray-100 dark:bg-dark-600 rounded-full overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: row.pct + '%' }}
-                        transition={{ duration: 0.8, delay: Math.min(i * 0.04, 0.5) }}
-                        className="h-full rounded-full"
-                        style={{ background: col.bar }}
-                      />
-                    </div>
-                    <span className="text-xs font-bold text-gray-500 dark:text-gray-400 w-8 text-right">{row.pct}%</span>
-                  </div>
-                </td>
+                          {/* Start — inline editable */}
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {editingTime?.taskId === t.id && editingTime?.field === 'start' ? (
+                              <input autoFocus defaultValue={startTime}
+                                onBlur={e => handleTimeSave(t.id, 'start', e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') setEditingTime(null) }}
+                                className="w-24 px-2 py-1 text-xs rounded-lg border border-primary-500 bg-dark-700 text-white focus:outline-none" />
+                            ) : (
+                              <span onClick={() => setEditingTime({ taskId: t.id, field: 'start' })}
+                                className="text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:text-primary-400 hover:underline"
+                                title="Click to edit">
+                                {savingTime === `${t.id}-start` ? '...' : startTime}
+                              </span>
+                            )}
+                          </td>
 
-                {/* Day Gantt bars — bar appears in the column matching this row's day-of-week */}
-                {DAY_SHORT.map((d, di) => (
-                  <td key={d} className="px-1.5 py-3.5 text-center">
-                    {di === ganttCol ? (
-                      <motion.div
-                        initial={{ scaleX: 0 }}
-                        animate={{ scaleX: 1 }}
-                        transition={{ duration: 0.4, delay: Math.min(i * 0.04, 0.5) }}
-                        className="h-5 rounded-md mx-auto"
-                        style={{ background: col.bar, width: 36, transformOrigin: 'left' }}
-                      />
-                    ) : null}
-                  </td>
-                ))}
-              </motion.tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
+                          {/* End — inline editable */}
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {editingTime?.taskId === t.id && editingTime?.field === 'end' ? (
+                              <input autoFocus defaultValue={endTime}
+                                onBlur={e => handleTimeSave(t.id, 'end', e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') setEditingTime(null) }}
+                                className="w-24 px-2 py-1 text-xs rounded-lg border border-primary-500 bg-dark-700 text-white focus:outline-none" />
+                            ) : (
+                              <span onClick={() => setEditingTime({ taskId: t.id, field: 'end' })}
+                                className="text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:text-primary-400 hover:underline"
+                                title="Click to edit">
+                                {savingTime === `${t.id}-end` ? '...' : endTime}
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Duration */}
+                          <td className="px-4 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300">{dur}</td>
+
+                          {/* Status */}
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${st.pill}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}
+                            </span>
+                          </td>
+
+                          {/* Completion */}
+                          <td className="px-4 py-3 min-w-[100px]">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 h-1.5 bg-gray-100 dark:bg-dark-600 rounded-full overflow-hidden">
+                                <motion.div initial={{ width: 0 }} animate={{ width: (t.completion_percent || 0) + '%' }}
+                                  transition={{ duration: 0.8 }} className="h-full rounded-full"
+                                  style={{ background: col.bar }} />
+                              </div>
+                              <span className="text-[11px] font-bold text-gray-400 w-8 text-right">{t.completion_percent || 0}%</span>
+                            </div>
+                          </td>
+
+                          {/* Gantt bars */}
+                          {DAY_SHORT.map((d, di) => (
+                            <td key={d} className="px-1.5 py-3 text-center">
+                              {di === ganttCol ? (
+                                <motion.div initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
+                                  transition={{ duration: 0.4 }} className="h-4 rounded-md mx-auto"
+                                  style={{ background: col.bar, width: 28, transformOrigin: 'left' }} />
+                              ) : null}
+                            </td>
+                          ))}
+
+                          {/* Chat button */}
+                          <td className="px-3 py-3 text-center">
+                            <motion.button
+                              onClick={() => setChatTask(t)}
+                              whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                              className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-primary-500/10 text-primary-500 hover:bg-primary-500 hover:text-white transition-colors"
+                              title={`Chat about: ${t.title}`}
+                            >
+                              <MessageSquare size={14} />
+                            </motion.button>
+                          </td>
+                        </motion.tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )
+        })
+      )}
     </div>
   )
 }
