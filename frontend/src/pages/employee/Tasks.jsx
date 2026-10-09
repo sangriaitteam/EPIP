@@ -235,8 +235,9 @@ const ChatMessage = ({ msg, isMe }) => (
         <p>{msg.content}</p>
 
         {/* File attachment */}
-        {msg.file_url && (() => {
-          const absUrl = resolveFileUrl(msg.file_url)
+        {(msg.file_url || msg.file_data) && (() => {
+          // ── Prefer base64 (Railway-safe), fallback to URL ────────────────
+          const absUrl = msg.file_data || resolveFileUrl(msg.file_url)
           const isImage = msg.file_type?.startsWith('image/')
           const isVideo = msg.file_type?.startsWith('video/')
           const isPdf   = msg.file_type === 'application/pdf' || msg.file_name?.endsWith('.pdf')

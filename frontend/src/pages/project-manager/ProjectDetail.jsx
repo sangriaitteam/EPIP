@@ -582,9 +582,9 @@ const TaskChatModal = ({ task, onClose }) => {
                         </div>
                       )}
                       {displayContent && <p>{displayContent}</p>}
-                      {msg.file_url && (() => {
-                        // ── Use shared resolveFileUrl from api.js ──────────────
-                        const absUrl  = resolveFileUrl(msg.file_url)
+                      {(msg.file_url || msg.file_data) && (() => {
+                        // ── Prefer base64 (Railway-safe), fallback to URL ──────
+                        const absUrl  = msg.file_data || resolveFileUrl(msg.file_url)
                         const isImage = msg.file_type?.startsWith('image/')
                         const isVideo = msg.file_type?.startsWith('video/')
                         const isPdf   = msg.file_type === 'application/pdf' || msg.file_name?.endsWith('.pdf')

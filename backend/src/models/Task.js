@@ -113,14 +113,14 @@ const Task = {
   },
 
   async addComment(task_id, author_id, content, author_name_override = null, attachment = {}) {
-    const { file_url = null, file_name = null, file_type = null, file_size_kb = null } = attachment
+    const { file_url = null, file_name = null, file_type = null, file_size_kb = null, file_data = null } = attachment
     const { rows } = await db.query(
       `INSERT INTO task_comments
          (task_id, author_id, content, author_name_override, is_read, read_at,
-          file_url, file_name, file_type, file_size_kb)
-       VALUES ($1, $2, $3, $4, false, NULL, $5, $6, $7, $8) RETURNING *`,
+          file_url, file_name, file_type, file_size_kb, file_data)
+       VALUES ($1, $2, $3, $4, false, NULL, $5, $6, $7, $8, $9) RETURNING *`,
       [task_id, author_id ?? null, content, author_name_override,
-       file_url, file_name, file_type, file_size_kb]
+       file_url, file_name, file_type, file_size_kb, file_data]
     )
     await db.query(`UPDATE tasks SET comments_count = comments_count + 1 WHERE id = $1`, [task_id])
     return rows[0]
@@ -129,17 +129,10 @@ const Task = {
   async getComments(task_id) {
     const { rows } = await db.query(
       `SELECT
-         tc.id,
-         tc.task_id,
-         tc.author_id,
-         tc.content,
-         tc.created_at,
-         tc.is_read,
-         tc.read_at,
-         tc.file_url,
-         tc.file_name,
-         tc.file_type,
-         tc.file_size_kb,
+         tc.id, tc.task_id, tc.author_id, tc.content, tc.created_at,
+         tc.is_read, tc.read_at,
+         tc.file_url, tc.file_name, tc.file_type, tc.file_size_kb,
+         tc.file_data,
          COALESCE(
            e.first_name || ' ' || e.last_name,
            tc.author_name_override,

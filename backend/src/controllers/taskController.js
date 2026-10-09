@@ -228,25 +228,40 @@ const remove = async (req, res, next) => {
 const addComment = async (req, res, next) => {
   try {
     const { content } = req.body
+    const fs = require('fs')
 
-    // Build file attachment info if a file was uploaded
-    let file_url   = null
-    let file_name  = null
-    let file_type  = null
+    let file_url     = null
+    let file_name    = null
+    let file_type    = null
     let file_size_kb = null
+    let file_data    = null   // base64 — avoids Railway ephemeral disk issue
 
     if (req.file) {
-      file_url     = getFileUrl('attachments', req.file.filename)
       file_name    = req.file.originalname
       file_type    = req.file.mimetype
       file_size_kb = Math.round(req.file.size / 1024)
+
+      // ── Store as base64 in DB (Railway ephemeral disk safe) ────────────────
+      // Only encode files ≤ 5 MB as base64 (larger files need file_url)
+      const MAX_BASE64_KB = 5 * 1024
+      if (file_size_kb <= MAX_BASE64_KB && req.file.path) {
+        try {
+          const buf = fs.readFileSync(req.file.path)
+          file_data = `data:${file_type};base64,${buf.toString('base64')}`
+          // Still keep file_url as fallback for local/Docker deployments
+          file_url = getFileUrl('attachments', req.file.filename)
+        } catch {
+          file_url = getFileUrl('attachments', req.file.filename)
+        }
+      } else {
+        file_url = getFileUrl('attachments', req.file.filename)
+      }
     }
 
     // Must have content OR a file
-    if (!content && !file_url) return fail(res, 'Comment content or file is required', 400)
+    if (!content && !file_url && !file_data) return fail(res, 'Comment content or file is required', 400)
 
-    // Try to find employee record — PM / HR may not have one, that's OK
-    const employee = await Employee.findByUserId(req.user.id)
+    const employee   = await Employee.findByUserId(req.user.id)
     const authorId   = employee?.id ?? null
     const authorName = employee
       ? `${employee.first_name} ${employee.last_name}`
@@ -254,7 +269,7 @@ const addComment = async (req, res, next) => {
 
     const comment = await Task.addComment(
       req.params.id, authorId, content || '', authorName,
-      { file_url, file_name, file_type, file_size_kb }
+      { file_url, file_name, file_type, file_size_kb, file_data }
     )
     return created(res, comment, 'Comment added')
   } catch (err) { next(err) }
