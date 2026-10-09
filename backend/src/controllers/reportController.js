@@ -306,7 +306,13 @@ const allEmployeesAttendance = async (req, res, next) => {
        LEFT JOIN departments d ON e.department_id = d.id
        LEFT JOIN employee_verifications ev ON ev.employee_id = e.id
        WHERE e.status = 'active'
-       ORDER BY e.id ASC`
+       ORDER BY
+         CASE
+           WHEN ev.company_provided_id IS NOT NULL AND ev.company_provided_id ~ '[0-9]+$'
+             THEN LPAD(regexp_replace(ev.company_provided_id, '^.*?([0-9]+)$', '\\1'), 20, '0')
+           ELSE LPAD(regexp_replace(e.employee_id, '^.*?([0-9]+)$', '\\1'), 20, '0')
+         END ASC,
+         e.id ASC`
     )
 
     // Fetch all attendance records for this month in one query

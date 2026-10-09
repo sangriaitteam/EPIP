@@ -66,7 +66,13 @@ const Employee = {
       params.push(`%${search}%`)
       q += ` AND (e.first_name ILIKE $${params.length} OR e.last_name ILIKE $${params.length} OR e.email ILIKE $${params.length})`
     }
-    q += ` ORDER BY e.id ASC`
+    q += ` ORDER BY
+      CASE
+        WHEN ev.company_provided_id IS NOT NULL AND ev.company_provided_id ~ '[0-9]+$'
+          THEN LPAD(regexp_replace(ev.company_provided_id, '^.*?([0-9]+)$', '\\1'), 20, '0')
+        ELSE LPAD(regexp_replace(e.employee_id, '^.*?([0-9]+)$', '\\1'), 20, '0')
+      END ASC,
+      e.id ASC`
     const { rows } = await db.query(q, params)
     return rows
   },
