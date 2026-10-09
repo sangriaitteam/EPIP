@@ -28,15 +28,17 @@ const _resolveBaseUrl = () => {
 const BASE_URL = _resolveBaseUrl()
 
 const getToken = () => localStorage.getItem('epip_token')
-// Works for: localhost dev, LAN, Railway production, Docker nginx
+
+// ── File URL resolver ─────────────────────────────────────────────────────────
+// Returns null for stale Cloudinary paths (old DB entries), proper URL otherwise
 export const resolveFileUrl = (url) => {
-  if (!url) return url
-  // Already absolute URL (Railway/Cloudinary/external) → use as-is
+  if (!url) return null
+  // Absolute URL → use as-is
   if (url.startsWith('http://') || url.startsWith('https://')) return url
-  // Relative path like /uploads/... → prepend backend base (strip /api from BASE_URL)
-  const backendBase = BASE_URL.endsWith('/api')
-    ? BASE_URL.slice(0, -4)       // remove /api
-    : BASE_URL.replace(/\/api$/, '')
+  // Stale Cloudinary public_id paths — no longer retrievable
+  if (url.includes('/epip/') || url.startsWith('epip/')) return null
+  // Relative /uploads/... → prepend backend base
+  const backendBase = BASE_URL.replace(/\/api\/?$/, '')
   return `${backendBase}${url.startsWith('/') ? '' : '/'}${url}`
 }
 

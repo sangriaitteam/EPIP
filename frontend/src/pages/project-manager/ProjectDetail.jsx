@@ -585,6 +585,14 @@ const TaskChatModal = ({ task, onClose }) => {
                       {(msg.file_url || msg.file_data) && (() => {
                         // ── Prefer base64 (Railway-safe), fallback to URL ──────
                         const absUrl  = msg.file_data || resolveFileUrl(msg.file_url)
+                        // Stale Cloudinary path — file no longer available
+                        if (!absUrl && !msg.file_data) return (
+                          <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-600/40 bg-gray-700/30 text-gray-500 text-[11px]">
+                            <span>📎</span>
+                            <span className="truncate">{msg.file_name || 'Attachment'}</span>
+                            <span className="text-[10px] text-gray-600 ml-auto flex-shrink-0">Unavailable</span>
+                          </div>
+                        )
                         const isImage = msg.file_type?.startsWith('image/')
                         const isVideo = msg.file_type?.startsWith('video/')
                         const isPdf   = msg.file_type === 'application/pdf' || msg.file_name?.endsWith('.pdf')
