@@ -455,18 +455,13 @@ const TaskChatModal = ({ task, onClose }) => {
     try {
       let res
       const token = localStorage.getItem('epip_token')
-      const apiBase = window.location.hostname === 'localhost'
-        ? 'http://localhost:5000/api'
-        : `${window.location.protocol}//${window.location.hostname}:5000/api`
 
       if (attached) {
         const fd = new FormData()
         if (text) fd.append('content', text)
         fd.append('attachment', attached.file)
-        const raw = await fetch(`${apiBase}/tasks/${task.id}/comments`, {
-          method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
-        })
-        res = await raw.json()
+        // ── Use api.js upload() which resolves the correct BASE_URL ──────────
+        res = await api.upload(`/tasks/${task.id}/comments`, fd)
       } else {
         res = await api.post(`/tasks/${task.id}/comments`, { content: text })
       }
