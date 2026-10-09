@@ -23,6 +23,10 @@ build/
 *.log
 npm-debug.log*
 
+# Agent token files — sensitive, never commit
+epip-agent/token.txt
+timing-agent/token.txt
+
 # OS
 .DS_Store
 Thumbs.db
