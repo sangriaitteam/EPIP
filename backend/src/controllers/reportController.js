@@ -280,6 +280,112 @@ const employeeKPI = async (req, res, next) => {
   } catch (err) { next(err) }
 }
 
+// ── 5. All Employees Monthly Attendance Grid ───────────────────────────────
+// GET /api/reports/all-employees/attendance?year=&month=
+const allEmployeesAttendance = async (req, res, next) => {
+  try {
+    const { year = new Date().getFullYear(), month = new Date().getMonth() + 1 } = req.query
+    const { from, to, label } = monthRange(year, month)
+
+    // All days in the month
+    const y = parseInt(year), m = parseInt(month)
+    const daysInMonth = new Date(y, m, 0).getDate()
+    const allDays = Array.from({ length: daysInMonth }, (_, i) => {
+      const d = String(i + 1).padStart(2, '0')
+      const dateStr = `${y}-${String(m).padStart(2, '0')}-${d}`
+      const dayOfWeek = new Date(dateStr).getDay() // 0=Sun, 6=Sat
+      return { day: i + 1, date: dateStr, isSunday: dayOfWeek === 0, isSaturday: dayOfWeek === 6 }
+    })
+
+    // Fetch all employees
+    const { rows: employees } = await query(
+      `SELECT e.id, e.first_name || ' ' || e.last_name AS name,
+              COALESCE(ev.company_provided_id, e.employee_id) AS emp_code,
+              e.designation, d.name AS department_name
+       FROM employees e
+       LEFT JOIN departments d ON e.department_id = d.id
+       LEFT JOIN employee_verifications ev ON ev.employee_id = e.id
+       WHERE e.status = 'active'
+       ORDER BY e.id ASC`
+    )
+
+    // Fetch all attendance records for this month in one query
+    const { rows: attRows } = await query(
+      `SELECT employee_id, date::text, status, check_in, check_out,
+              hours_worked, overtime, is_late, work_mode
+       FROM attendance
+       WHERE date BETWEEN $1 AND $2
+       ORDER BY employee_id, date ASC`,
+      [from, to]
+    )
+
+    // Build lookup: empId → { dateStr → record }
+    const attMap = {}
+    for (const r of attRows) {
+      if (!attMap[r.employee_id]) attMap[r.employee_id] = {}
+      attMap[r.employee_id][r.date] = r
+    }
+
+    // Build result per employee
+    const result = employees.map(emp => {
+      const days = allDays.map(d => {
+        const rec = attMap[emp.id]?.[d.date] || null
+        let cellStatus = 'nodata'
+        if (d.isSunday) {
+          // Sunday — check if they worked (overtime)
+          cellStatus = rec && rec.status === 'present' ? 'sunday_ot' : 'sunday'
+        } else {
+          if (rec) {
+            cellStatus = rec.status // 'present', 'absent', 'leave', 'holiday'
+          } else {
+            // Future dates → nodata, past dates → absent
+            const today = new Date().toISOString().split('T')[0]
+            cellStatus = d.date > today ? 'future' : 'absent'
+          }
+        }
+        return {
+          day:          d.day,
+          date:         d.date,
+          isSunday:     d.isSunday,
+          isSaturday:   d.isSaturday,
+          status:       cellStatus,
+          check_in:     rec?.check_in  || null,
+          check_out:    rec?.check_out || null,
+          hours_worked: rec?.hours_worked || null,
+          overtime:     rec?.overtime || null,
+          is_late:      rec?.is_late || false,
+        }
+      })
+
+      const workDays = allDays.filter(d => !d.isSunday)
+      const present  = days.filter(d => d.status === 'present').length
+      const absent   = days.filter(d => d.status === 'absent').length
+      const leave    = days.filter(d => d.status === 'leave').length
+      const sundayOT = days.filter(d => d.status === 'sunday_ot').length
+
+      return {
+        id:          emp.id,
+        name:        emp.name,
+        emp_code:    emp.emp_code,
+        designation: emp.designation,
+        department:  emp.department_name,
+        days,
+        summary: { present, absent, leave, sunday_ot: sundayOT, work_days: workDays.length },
+      }
+    })
+
+    return ok(res, {
+      period:      label,
+      year:        y,
+      month:       m,
+      days_in_month: daysInMonth,
+      all_days:    allDays,
+      employees:   result,
+      total_employees: result.length,
+    })
+  } catch (err) { next(err) }
+}
+
 // ── Legacy APIs (kept for compatibility) ──────────────────────────────────
 const attendanceReport = async (req, res, next) => {
   try {
@@ -318,5 +424,6 @@ const companySummary = async (req, res, next) => {
 
 module.exports = {
   employeeAttendance, employeePerformance, employeeTasks, employeeKPI,
+  allEmployeesAttendance,
   attendanceReport, companySummary,
 }

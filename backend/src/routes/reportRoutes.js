@@ -12,6 +12,9 @@ router.get('/employee/:id/performance', ctrl.employeePerformance)
 router.get('/employee/:id/tasks',       ctrl.employeeTasks)
 router.get('/employee/:id/kpi',         ctrl.employeeKPI)
 
+// All employees attendance grid
+router.get('/all-employees/attendance', ctrl.allEmployeesAttendance)
+
 // Legacy
 router.get('/attendance',  ctrl.attendanceReport)
 router.get('/summary',     ctrl.companySummary)
