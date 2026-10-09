@@ -6,7 +6,7 @@ import {
   ArrowLeft, Paperclip, Smile, Send, CheckCircle2,
   FolderOpen, Calendar, AlertTriangle, Clock, ChevronDown, Trash2
 } from 'lucide-react'
-import { api } from '../../services/api'
+import { api, resolveFileUrl } from '../../services/api'
 import { useAuth } from '../../context/AuthContext'
 import Avatar from '../../components/common/Avatar'
 import toast from 'react-hot-toast'
@@ -236,15 +236,7 @@ const ChatMessage = ({ msg, isMe }) => (
 
         {/* File attachment */}
         {msg.file_url && (() => {
-          const resolveUrl = (url) => {
-            if (!url) return url
-            if (url.startsWith('http://') || url.startsWith('https://')) {
-              // Replace origin with current backend host (handles Railway/Vercel redirects)
-              return url.replace(/^https?:\/\/[^/]+/, `${window.location.protocol}//${window.location.hostname}:5000`)
-            }
-            return `${window.location.protocol}//${window.location.hostname}:5000${url.startsWith('/') ? '' : '/'}${url}`
-          }
-          const absUrl = resolveUrl(msg.file_url)
+          const absUrl = resolveFileUrl(msg.file_url)
           const isImage = msg.file_type?.startsWith('image/')
           const isVideo = msg.file_type?.startsWith('video/')
           const isPdf   = msg.file_type === 'application/pdf' || msg.file_name?.endsWith('.pdf')

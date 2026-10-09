@@ -10,7 +10,7 @@ import {
   MessageSquare, Send, Paperclip, ThumbsUp
 } from 'lucide-react'
 import Avatar from '../../components/common/Avatar'
-import { api } from '../../services/api'
+import { api, resolveFileUrl } from '../../services/api'
 import { useAuth } from '../../context/AuthContext'
 import toast from 'react-hot-toast'
 
@@ -583,17 +583,8 @@ const TaskChatModal = ({ task, onClose }) => {
                       )}
                       {displayContent && <p>{displayContent}</p>}
                       {msg.file_url && (() => {
-                        // ── Always use absolute URL so React Router doesn't intercept ──
-                        const resolveUrl = (url) => {
-                          if (!url) return url
-                          if (url.startsWith('http://') || url.startsWith('https://')) return url
-                          // Relative path → prepend backend origin
-                          const base = window.location.hostname === 'localhost'
-                            ? 'http://localhost:5000'
-                            : `${window.location.protocol}//${window.location.hostname}:5000`
-                          return `${base}${url.startsWith('/') ? '' : '/'}${url}`
-                        }
-                        const absUrl = resolveUrl(msg.file_url)
+                        // ── Use shared resolveFileUrl from api.js ──────────────
+                        const absUrl  = resolveFileUrl(msg.file_url)
                         const isImage = msg.file_type?.startsWith('image/')
                         const isVideo = msg.file_type?.startsWith('video/')
                         const isPdf   = msg.file_type === 'application/pdf' || msg.file_name?.endsWith('.pdf')
