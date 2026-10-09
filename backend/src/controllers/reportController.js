@@ -375,69 +375,119 @@ const allEmployeesAttendance = async (req, res, next) => {
     })
 
     if (format === 'excel') {
-      // Build Excel rows: Employee | Day1 | Day2 | ... | P | A | OT
-      const XLSX = require('xlsx')
-      const wb   = XLSX.utils.book_new()
+      const XLSXStyle = require('xlsx-js-style')
 
-      // Header row: "Employee", "EmpID", 1..daysInMonth day headers, "P", "A", "SunOT"
-      const dayHeaders = allDays.map(d => {
+      // ── Color map ─────────────────────────────────────────────────────
+      const FILLS = {
+        present:   { fgColor: { rgb: '22C55E' } }, // green
+        absent:    { fgColor: { rgb: 'EF4444' } }, // red
+        sunday_ot: { fgColor: { rgb: 'A855F7' } }, // purple
+        leave:     { fgColor: { rgb: 'FACC15' } }, // yellow
+        holiday:   { fgColor: { rgb: '60A5FA' } }, // blue
+        sunday:    { fgColor: { rgb: '6B7280' } }, // gray
+        future:    { fgColor: { rgb: 'E5E7EB' } }, // light gray
+        nodata:    { fgColor: { rgb: 'E5E7EB' } },
+      }
+
+      // White font for dark backgrounds, dark for light
+      const DARK_BG  = new Set(['present','absent','sunday_ot','leave','holiday','sunday'])
+      const fontWhite = { color: { rgb: 'FFFFFF' }, bold: true, sz: 9 }
+      const fontDark  = { color: { rgb: '6B7280' }, bold: false, sz: 9 }
+
+      const cellLabel = (status, isSunday) => {
+        if (isSunday && status === 'sunday_ot') return 'OT'
+        if (isSunday)                            return 'S'
+        if (status === 'present')  return 'P'
+        if (status === 'absent')   return 'A'
+        if (status === 'leave')    return 'L'
+        if (status === 'holiday')  return 'H'
+        return ''
+      }
+
+      // ── Build worksheet using aoa (array of arrays) ───────────────────
+      const aoa = []
+
+      // Row 0 — Header
+      const headerRow = [
+        { v: 'Name',         s: { font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 10 }, fill: { fgColor: { rgb: '6366F1' } }, alignment: { horizontal: 'left' } } },
+        { v: 'ID',           s: { font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 10 }, fill: { fgColor: { rgb: '6366F1' } }, alignment: { horizontal: 'left' } } },
+      ]
+      for (const d of allDays) {
         const dow = ['Su','Mo','Tu','We','Th','Fr','Sa'][new Date(d.date).getDay()]
-        return `${d.day}\n${dow}`
-      })
-      const header = ['Name', 'ID', ...dayHeaders, 'Present', 'Absent', 'Sun OT']
-
-      const rows = result.map(emp => {
-        const dayCells = emp.days.map(d => {
-          if (d.isSunday && d.status === 'sunday_ot') return 'OT'
-          if (d.isSunday) return 'S'
-          if (d.status === 'present')  return 'P'
-          if (d.status === 'absent')   return 'A'
-          if (d.status === 'leave')    return 'L'
-          if (d.status === 'holiday')  return 'H'
-          if (d.status === 'future')   return ''
-          return '—'
+        const isSun = d.isSunday
+        headerRow.push({
+          v: `${d.day}\n${dow}`,
+          s: {
+            font:      { bold: true, color: { rgb: isSun ? 'F3E8FF' : 'FFFFFF' }, sz: 8 },
+            fill:      { fgColor: { rgb: isSun ? '7C3AED' : '6366F1' } },
+            alignment: { horizontal: 'center', wrapText: true },
+          },
         })
-        return [
-          emp.name,
-          emp.emp_code || '',
-          ...dayCells,
-          emp.summary.present,
-          emp.summary.absent,
-          emp.summary.sunday_ot,
+      }
+      headerRow.push(
+        { v: 'P',   s: { font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 10 }, fill: { fgColor: { rgb: '16A34A' } }, alignment: { horizontal: 'center' } } },
+        { v: 'A',   s: { font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 10 }, fill: { fgColor: { rgb: 'DC2626' } }, alignment: { horizontal: 'center' } } },
+        { v: 'OT',  s: { font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 10 }, fill: { fgColor: { rgb: '7C3AED' } }, alignment: { horizontal: 'center' } } },
+      )
+      aoa.push(headerRow)
+
+      // Data rows
+      for (let ri = 0; ri < result.length; ri++) {
+        const emp    = result[ri]
+        const isEven = ri % 2 === 0
+        const rowBg  = isEven ? 'FFFFFF' : 'F9FAFB'
+
+        const row = [
+          { v: emp.name,          s: { font: { bold: true,  sz: 10 }, fill: { fgColor: { rgb: rowBg } }, alignment: { horizontal: 'left' } } },
+          { v: emp.emp_code || '',s: { font: { bold: false, sz: 9,  color: { rgb: '6B7280' } }, fill: { fgColor: { rgb: rowBg } }, alignment: { horizontal: 'left' } } },
         ]
-      })
 
-      const wsData = [header, ...rows]
-      const ws = XLSX.utils.aoa_to_sheet(wsData)
+        for (const d of emp.days) {
+          const lbl  = cellLabel(d.status, d.isSunday)
+          const fill = FILLS[d.status] || FILLS.nodata
+          const font = DARK_BG.has(d.status) ? fontWhite : fontDark
+          row.push({
+            v: lbl,
+            s: {
+              font,
+              fill,
+              alignment: { horizontal: 'center', vertical: 'center' },
+              border: {
+                top:    { style: 'thin', color: { rgb: 'E5E7EB' } },
+                bottom: { style: 'thin', color: { rgb: 'E5E7EB' } },
+                left:   { style: 'thin', color: { rgb: 'E5E7EB' } },
+                right:  { style: 'thin', color: { rgb: 'E5E7EB' } },
+              },
+            },
+          })
+        }
 
-      // Column widths
+        // Summary P / A / OT
+        row.push(
+          { v: emp.summary.present,    s: { font: { bold: true, color: { rgb: '16A34A' }, sz: 10 }, fill: { fgColor: { rgb: rowBg } }, alignment: { horizontal: 'center' } } },
+          { v: emp.summary.absent,     s: { font: { bold: true, color: { rgb: 'DC2626' }, sz: 10 }, fill: { fgColor: { rgb: rowBg } }, alignment: { horizontal: 'center' } } },
+          { v: emp.summary.sunday_ot,  s: { font: { bold: true, color: { rgb: '7C3AED' }, sz: 10 }, fill: { fgColor: { rgb: rowBg } }, alignment: { horizontal: 'center' } } },
+        )
+        aoa.push(row)
+      }
+
+      const ws = XLSXStyle.utils.aoa_to_sheet(aoa)
+
+      // Row height for header
+      ws['!rows'] = [{ hpt: 28 }, ...result.map(() => ({ hpt: 20 }))]
+
+      // Column widths: Name(24), ID(14), days(4 each), P/A/OT(5 each)
       ws['!cols'] = [
-        { wch: 22 }, // Name
-        { wch: 12 }, // ID
-        ...allDays.map(() => ({ wch: 4 })), // day columns
-        { wch: 8 }, { wch: 8 }, { wch: 8 }, // P, A, OT
+        { wch: 24 },
+        { wch: 14 },
+        ...allDays.map(() => ({ wch: 4 })),
+        { wch: 5 }, { wch: 5 }, { wch: 5 },
       ]
 
-      // Cell colors via xlsx style (needs xlsx-style or ExcelJS for full color —
-      // basic xlsx lib doesn't support cell fill, so we add a legend sheet instead)
-      XLSX.utils.book_append_sheet(wb, ws, label)
+      const wb = XLSXStyle.utils.book_new()
+      XLSXStyle.utils.book_append_sheet(wb, ws, label)
 
-      // Legend sheet
-      const legendData = [
-        ['Legend', ''],
-        ['P',  'Present'],
-        ['A',  'Absent'],
-        ['L',  'Leave'],
-        ['H',  'Holiday'],
-        ['OT', 'Sunday Overtime'],
-        ['S',  'Sunday (Off)'],
-        ['—',  'No data / future'],
-      ]
-      const wsLegend = XLSX.utils.aoa_to_sheet(legendData)
-      wsLegend['!cols'] = [{ wch: 6 }, { wch: 22 }]
-      XLSX.utils.book_append_sheet(wb, wsLegend, 'Legend')
-
-      const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+      const buf      = XLSXStyle.write(wb, { type: 'buffer', bookType: 'xlsx' })
       const filename = `AllEmployees_Attendance_${label.replace(' ', '_')}.xlsx`
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
