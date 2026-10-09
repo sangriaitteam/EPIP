@@ -235,31 +235,92 @@ const ChatMessage = ({ msg, isMe }) => (
         <p>{msg.content}</p>
 
         {/* File attachment */}
-        {msg.file_url && (
-          <div className="mt-2">
-            {msg.file_type?.startsWith('image/') ? (
-              <a href={msg.file_url.replace(/^https?:\/\/[^/]+/, `${window.location.protocol}//${window.location.hostname}:5000`)} target="_blank" rel="noreferrer">
-                <img
-                  src={msg.file_url.replace(/^https?:\/\/[^/]+/, `${window.location.protocol}//${window.location.hostname}:5000`)}
-                  alt={msg.file_name}
-                  className="max-w-[220px] rounded-lg border border-white/20 mt-1"
-                />
-              </a>
-            ) : (
-              <a
-                href={msg.file_url.replace(/^https?:\/\/[^/]+/, `${window.location.protocol}//${window.location.hostname}:5000`)}
-                target="_blank" rel="noreferrer"
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium mt-1 ${
-                  isMe ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-white dark:bg-dark-600 text-primary-600 dark:text-primary-400 hover:bg-gray-50'
-                } transition-colors`}
-              >
-                <Paperclip size={12} />
-                {msg.file_name || 'Attachment'}
-                {msg.file_size_kb && <span className="opacity-60">({msg.file_size_kb} KB)</span>}
-              </a>
-            )}
-          </div>
-        )}
+        {msg.file_url && (() => {
+          const resolveUrl = (url) => {
+            if (!url) return url
+            if (url.startsWith('http://') || url.startsWith('https://')) {
+              // Replace origin with current backend host (handles Railway/Vercel redirects)
+              return url.replace(/^https?:\/\/[^/]+/, `${window.location.protocol}//${window.location.hostname}:5000`)
+            }
+            return `${window.location.protocol}//${window.location.hostname}:5000${url.startsWith('/') ? '' : '/'}${url}`
+          }
+          const absUrl = resolveUrl(msg.file_url)
+          const isImage = msg.file_type?.startsWith('image/')
+          const isVideo = msg.file_type?.startsWith('video/')
+          const isPdf   = msg.file_type === 'application/pdf' || msg.file_name?.endsWith('.pdf')
+
+          const handleOpen = (e) => {
+            e.stopPropagation(); e.preventDefault()
+            window.open(absUrl, '_blank', 'noopener,noreferrer')
+          }
+          const handleDownload = (e) => {
+            e.stopPropagation(); e.preventDefault()
+            const a = document.createElement('a')
+            a.href = absUrl; a.download = msg.file_name || 'attachment'
+            a.target = '_blank'; a.rel = 'noopener noreferrer'
+            document.body.appendChild(a); a.click(); document.body.removeChild(a)
+          }
+
+          return (
+            <div className="mt-2">
+              {isImage ? (
+                <div className="space-y-1">
+                  <button onClick={handleOpen} className="block">
+                    <img src={absUrl} alt={msg.file_name}
+                      className="max-w-[220px] rounded-lg border border-white/20 mt-1 hover:opacity-90 cursor-pointer" />
+                  </button>
+                  <div className="flex gap-1.5 mt-1">
+                    <button onClick={handleOpen}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-medium ${isMe ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-white dark:bg-dark-600 text-primary-600 hover:bg-gray-50'} transition-colors`}>
+                      🔍 View
+                    </button>
+                    <button onClick={handleDownload}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-medium ${isMe ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-white dark:bg-dark-600 text-primary-600 hover:bg-gray-50'} transition-colors`}>
+                      ⬇ Download
+                    </button>
+                  </div>
+                </div>
+              ) : isVideo ? (
+                <div className="space-y-1">
+                  <video src={absUrl} controls className="max-w-[240px] rounded-lg border border-white/20" style={{ maxHeight: 150 }} />
+                  <button onClick={handleDownload}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-medium ${isMe ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-white dark:bg-dark-600 text-primary-600 hover:bg-gray-50'} transition-colors`}>
+                    <Paperclip size={10} /> {msg.file_name} · ⬇ Download
+                  </button>
+                </div>
+              ) : (
+                <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border mt-1 ${isMe ? 'border-white/20 bg-white/10' : 'border-gray-200 dark:border-dark-500 bg-white dark:bg-dark-600'}`}>
+                  <span className="text-base flex-shrink-0">
+                    {isPdf ? '📄' : msg.file_name?.match(/\.(xlsx?|csv)$/i) ? '📊'
+                      : msg.file_name?.match(/\.(zip|rar|7z)$/i) ? '🗜️'
+                      : msg.file_name?.match(/\.(docx?)$/i) ? '📝'
+                      : msg.file_name?.match(/\.(mp4|mov|avi)$/i) ? '🎥' : '📎'}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-[11px] font-semibold truncate ${isMe ? 'text-white' : 'text-gray-800 dark:text-gray-200'}`}>
+                      {msg.file_name || 'Attachment'}
+                    </p>
+                    {msg.file_size_kb && (
+                      <p className={`text-[9px] ${isMe ? 'text-white/60' : 'text-gray-400'}`}>
+                        {msg.file_size_kb >= 1024 ? `${(msg.file_size_kb / 1024).toFixed(1)} MB` : `${msg.file_size_kb} KB`}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-1 flex-shrink-0">
+                    <button onClick={handleOpen} title="Open in new tab"
+                      className={`p-1.5 rounded-lg text-xs ${isMe ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-primary-500/10 text-primary-500 hover:bg-primary-500 hover:text-white'} transition-colors`}>
+                      🔍
+                    </button>
+                    <button onClick={handleDownload} title="Download"
+                      className={`p-1.5 rounded-lg text-xs ${isMe ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-green-500/10 text-green-600 hover:bg-green-500 hover:text-white'} transition-colors`}>
+                      ⬇
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {/* System attachment badge (first PM message gets Task Assignment label) */}
         {msg._isFirstPM && (
