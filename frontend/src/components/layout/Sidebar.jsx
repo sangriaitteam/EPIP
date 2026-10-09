@@ -71,8 +71,8 @@ const Sidebar = ({ collapsed, onToggle, onClose }) => {
   const handleLogout = async () => {
     if (loggingOut) return
     setLoggingOut(true)
-    try { await logout(); navigate('/login') }
-    finally { setLoggingOut(false) }
+    logout()          // sync now — returns immediately
+    navigate('/login')
   }
 
   // Recent Projects — only for project_manager role

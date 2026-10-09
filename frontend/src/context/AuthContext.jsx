@@ -113,17 +113,19 @@ export const AuthProvider = ({ children }) => {
   }
 
   // ── Logout ────────────────────────────────────────────────────────────────
-  const logout = async () => {
-    // Auto check-out for employees before clearing session
+  const logout = () => {
+    // Fire checkout in background — don't await, don't block logout
     const stored = localStorage.getItem('epip_user')
     if (stored) {
       try {
         const userData = JSON.parse(stored)
         if (userData?.role === 'employee') {
-          await _autoCheckOut()
+          // Fire-and-forget: session clear happens immediately, checkout runs async
+          _autoCheckOut().catch(() => {})
         }
       } catch { /* ignore */ }
     }
+    // Clear session immediately — no waiting
     clearSession()
   }
 
