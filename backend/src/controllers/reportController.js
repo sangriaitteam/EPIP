@@ -385,14 +385,13 @@ const allEmployeesAttendance = async (req, res, next) => {
         leave:     { fgColor: { rgb: 'FACC15' } }, // yellow
         holiday:   { fgColor: { rgb: '60A5FA' } }, // blue
         sunday:    { fgColor: { rgb: '6B7280' } }, // gray
-        future:    { fgColor: { rgb: 'E5E7EB' } }, // light gray
-        nodata:    { fgColor: { rgb: 'E5E7EB' } },
+        future:    { fgColor: { rgb: '334155' } }, // dark slate navy
+        nodata:    { fgColor: { rgb: '334155' } }, // dark slate navy
       }
 
-      // White font for dark backgrounds, dark for light
-      const DARK_BG  = new Set(['present','absent','sunday_ot','leave','holiday','sunday'])
+      // All cells → white text, bold
       const fontWhite = { color: { rgb: 'FFFFFF' }, bold: true, sz: 9 }
-      const fontDark  = { color: { rgb: '6B7280' }, bold: false, sz: 9 }
+      const fontDark  = { color: { rgb: 'FFFFFF' }, bold: false, sz: 9 } // also white now
 
       const cellLabel = (status, isSunday) => {
         if (isSunday && status === 'sunday_ot') return 'OT'
@@ -445,7 +444,7 @@ const allEmployeesAttendance = async (req, res, next) => {
         for (const d of emp.days) {
           const lbl  = cellLabel(d.status, d.isSunday)
           const fill = FILLS[d.status] || FILLS.nodata
-          const font = DARK_BG.has(d.status) ? fontWhite : fontDark
+          const font = fontWhite
           row.push({
             v: lbl,
             s: {

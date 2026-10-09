@@ -33,9 +33,9 @@ const getCellStyle = (status) => {
     case 'leave':     return 'bg-yellow-400 text-white'
     case 'holiday':   return 'bg-blue-400 text-white'
     case 'sunday_ot': return 'bg-purple-500 text-white'
-    case 'sunday':    return 'bg-gray-500 text-gray-200'
-    case 'future':    return 'bg-gray-200 dark:bg-dark-600 text-gray-400'
-    default:          return 'bg-gray-200 dark:bg-dark-600 text-gray-400'
+    case 'sunday':    return 'bg-gray-500 text-white'
+    case 'future':    return 'bg-slate-700 text-white'
+    default:          return 'bg-slate-700 text-white'
   }
 }
 
@@ -189,7 +189,7 @@ const generateAllEmpPDF = (data) => {
       case 'holiday':   return '#60a5fa'   // blue
       case 'sunday_ot': return '#a855f7'   // purple
       case 'sunday':    return '#6b7280'   // gray
-      default:          return '#e5e7eb'   // light gray
+      default:          return '#334155'   // dark slate navy
     }
   }
 
@@ -203,9 +203,7 @@ const generateAllEmpPDF = (data) => {
     return ''
   }
 
-  const cellFg = (status) =>
-    ['present','absent','sunday_ot','sunday','leave','holiday'].includes(status)
-      ? '#ffffff' : '#9ca3af'
+  const cellFg = (_status) => '#ffffff'
 
   // Build day-header row
   const dayHeaders = all_days.map(d => {
