@@ -81,9 +81,9 @@ const AllEmployeesGrid = ({ data }) => {
           style={{ minWidth: `${200 + all_days.length * 30}px` }}
         >
           <thead>
-            <tr className="bg-gray-100 dark:bg-dark-700 border-b border-gray-200 dark:border-dark-600">
+            <tr className="bg-gray-100 dark:bg-dark-600 border-b border-gray-200 dark:border-dark-600">
               {/* Name header — sticky */}
-              <th className="sticky left-0 z-20 bg-gray-100 dark:bg-dark-700 px-3 py-2.5 text-left font-bold text-gray-700 dark:text-gray-200 border-r border-gray-200 dark:border-dark-600"
+              <th className="sticky left-0 z-20 bg-gray-100 dark:bg-dark-600 px-3 py-2.5 text-left font-bold text-gray-700 dark:text-gray-200 border-r border-gray-200 dark:border-dark-600"
                 style={{ minWidth: 180 }}>
                 Employee
               </th>
@@ -111,11 +111,11 @@ const AllEmployeesGrid = ({ data }) => {
 
           <tbody>
             {employees.map((emp, rowIdx) => {
-              const isEven = rowIdx % 2 === 0
-              const rowBg  = isEven ? 'bg-white dark:bg-dark-800' : 'bg-gray-50 dark:bg-dark-750'
+              const isEven   = rowIdx % 2 === 0
+              const rowBg    = isEven ? 'bg-white dark:bg-dark-800' : 'bg-gray-50 dark:bg-dark-700'
               const stickyBg = isEven
                 ? 'bg-white dark:bg-dark-800'
-                : 'bg-gray-50 dark:bg-dark-750'
+                : 'bg-gray-50 dark:bg-dark-700'
 
               return (
                 <tr key={emp.id} className={`border-t border-gray-200 dark:border-dark-600 ${rowBg}`}>
