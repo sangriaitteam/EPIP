@@ -172,6 +172,151 @@ const AllEmployeesGrid = ({ data }) => {
   )
 }
 
+// ── PDF for All Employees grid ────────────────────────────────────────────
+const generateAllEmpPDF = (data) => {
+  const printWindow = window.open('', '_blank', 'width=1200,height=800')
+  if (!printWindow) { toast.error('Please allow popups for PDF generation'); return }
+
+  const { all_days, employees, period } = data
+  const companyName = 'Sangria Edutainment Pvt Ltd'
+  const today = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
+
+  const cellColor = (status) => {
+    switch (status) {
+      case 'present':   return '#22c55e'   // green
+      case 'absent':    return '#ef4444'   // red
+      case 'leave':     return '#facc15'   // yellow
+      case 'holiday':   return '#60a5fa'   // blue
+      case 'sunday_ot': return '#a855f7'   // purple
+      case 'sunday':    return '#6b7280'   // gray
+      default:          return '#e5e7eb'   // light gray
+    }
+  }
+
+  const cellText = (status, isSunday) => {
+    if (isSunday && status === 'sunday_ot') return 'OT'
+    if (isSunday) return 'S'
+    if (status === 'present')  return 'P'
+    if (status === 'absent')   return 'A'
+    if (status === 'leave')    return 'L'
+    if (status === 'holiday')  return 'H'
+    return ''
+  }
+
+  const cellFg = (status) =>
+    ['present','absent','sunday_ot','sunday','leave','holiday'].includes(status)
+      ? '#ffffff' : '#9ca3af'
+
+  // Build day-header row
+  const dayHeaders = all_days.map(d => {
+    const dow = ['Su','Mo','Tu','We','Th','Fr','Sa'][new Date(d.date).getDay()]
+    const sunStyle = d.isSunday ? 'color:#a855f7;font-weight:700;' : ''
+    return `<th style="width:22px;padding:3px 1px;text-align:center;font-size:9px;${sunStyle}">${d.day}<br/><span style="font-size:7px;opacity:.7">${dow}</span></th>`
+  }).join('')
+
+  // Build employee rows
+  const empRows = employees.map((emp, i) => {
+    const bg = i % 2 === 0 ? '#ffffff' : '#f9fafb'
+    const dayCells = emp.days.map(d => {
+      const bg = cellColor(d.status)
+      const fg = cellFg(d.status)
+      const lbl = cellText(d.status, d.isSunday)
+      return `<td style="padding:1px;text-align:center;">
+        <div style="width:18px;height:18px;background:${bg};color:${fg};border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;margin:auto;">${lbl}</div>
+      </td>`
+    }).join('')
+
+    return `<tr style="background:${bg}">
+      <td style="padding:4px 6px;font-size:9px;font-weight:600;white-space:nowrap;border-right:1px solid #e5e7eb;">${emp.name}</td>
+      <td style="padding:4px 6px;font-size:8px;color:#6b7280;white-space:nowrap;border-right:1px solid #e5e7eb;">${emp.emp_code || ''}</td>
+      ${dayCells}
+      <td style="padding:4px 4px;text-align:center;font-size:9px;font-weight:700;color:#16a34a;border-left:1px solid #e5e7eb;">${emp.summary.present}</td>
+      <td style="padding:4px 4px;text-align:center;font-size:9px;font-weight:700;color:#ef4444;">${emp.summary.absent}</td>
+      <td style="padding:4px 4px;text-align:center;font-size:9px;font-weight:700;color:#a855f7;">${emp.summary.sunday_ot}</td>
+    </tr>`
+  }).join('')
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <title>Attendance Register — ${period}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Segoe UI',Arial,sans-serif;padding:20px;background:#fff;color:#1e293b}
+    .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #6366f1;padding-bottom:12px;margin-bottom:16px}
+    .company{font-size:16px;font-weight:700;color:#6366f1}
+    .subtitle{font-size:12px;color:#475569;margin-top:3px}
+    .meta{text-align:right;font-size:11px;color:#64748b}
+    .meta strong{color:#1e293b;font-size:13px;display:block;margin-bottom:2px}
+    .legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;padding:8px 12px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0}
+    .leg-item{display:flex;align-items:center;gap:5px;font-size:9px;color:#475569}
+    .leg-dot{width:14px;height:14px;border-radius:2px;flex-shrink:0}
+    table{border-collapse:collapse;width:100%}
+    th{background:#6366f1;color:#fff;padding:5px 4px;font-size:9px;font-weight:600;text-align:center;border-right:1px solid rgba(255,255,255,0.2)}
+    th:first-child{text-align:left;min-width:140px}
+    th:nth-child(2){min-width:80px}
+    td{border-bottom:1px solid #f1f5f9;vertical-align:middle}
+    tr:hover td{background:#f0f4ff!important}
+    .footer{margin-top:16px;padding-top:10px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;font-size:10px;color:#94a3b8}
+    @media print{
+      body{padding:10px}
+      @page{size:A3 landscape;margin:8mm}
+      table{page-break-inside:auto}
+      tr{page-break-inside:avoid}
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="company">${companyName}</div>
+      <div class="subtitle">Monthly Attendance Register — ${period} &nbsp;·&nbsp; ${employees.length} Employees</div>
+    </div>
+    <div class="meta">
+      <strong>Period: ${period}</strong>
+      Generated: ${today}
+    </div>
+  </div>
+
+  <div class="legend">
+    ${[
+      ['#22c55e','Present (P)'],
+      ['#ef4444','Absent (A)'],
+      ['#facc15','Leave (L)'],
+      ['#a855f7','Sunday OT'],
+      ['#6b7280','Sunday (S)'],
+      ['#60a5fa','Holiday (H)'],
+    ].map(([c,l]) => `<div class="leg-item"><div class="leg-dot" style="background:${c}"></div>${l}</div>`).join('')}
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="text-align:left;padding:5px 6px;">Employee</th>
+        <th style="text-align:left;padding:5px 6px;">ID</th>
+        ${dayHeaders}
+        <th style="padding:5px 4px;color:#86efac;">P</th>
+        <th style="padding:5px 4px;color:#fca5a5;">A</th>
+        <th style="padding:5px 4px;color:#d8b4fe;">OT</th>
+      </tr>
+    </thead>
+    <tbody>${empRows}</tbody>
+  </table>
+
+  <div class="footer">
+    <span>Sangria Edutainment — EPIP · Attendance Register</span>
+    <span>Confidential</span>
+  </div>
+
+  <script>window.onload=function(){window.print();setTimeout(()=>window.close(),1200)}</script>
+</body>
+</html>`
+
+  printWindow.document.write(html)
+  printWindow.document.close()
+}
+
 // ── PDF for single employee ────────────────────────────────────────────────
 const generatePDF = (data, reportType, employee, periodLabel) => {
   const printWindow = window.open('', '_blank', 'width=900,height=700')
@@ -326,6 +471,25 @@ const downloadExcel = (employeeId, reportType, year, month) => {
     .catch(() => toast.error('Download failed'))
 }
 
+// ── Excel download for All Employees ──────────────────────────────────────
+const downloadAllEmpExcel = (year, month) => {
+  const token = localStorage.getItem('epip_token')
+  const url   = `${BASE_URL}/reports/all-employees/attendance?year=${year}&month=${month}&format=excel`
+  fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    .then(res => res.blob())
+    .then(blob => {
+      const objUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = objUrl
+      a.download = `AllEmployees_Attendance_${MONTHS[month-1]}_${year}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(objUrl)
+    })
+    .catch(() => toast.error('Excel download failed'))
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────
 const HRReports = () => {
   const now = new Date()
@@ -383,9 +547,14 @@ const HRReports = () => {
   }
 
   const handlePDF   = () => { if (reportData) generatePDF(reportData, selectedType, empObj, periodLabel) }
+  const handleAllEmpPDF   = () => { if (allEmpData) generateAllEmpPDF(allEmpData) }
+  const handleAllEmpExcel = () => {
+    if (!allEmpData) return
+    downloadAllEmpExcel(year, month)
+    toast.success('Downloading Excel...')
+  }
   const handleExcel = () => {
-    if (isAllEmployees) { toast.error('Excel export is per-employee only'); return }
-    if (!selectedEmp)   { toast.error('Generate report first'); return }
+    if (!selectedEmp) { toast.error('Generate report first'); return }
     downloadExcel(selectedEmp, selectedType, year, month)
     toast.success('Downloading Excel...')
   }
@@ -558,6 +727,18 @@ const HRReports = () => {
               </CardHeader>
               <CardBody>
                 <AllEmployeesGrid data={allEmpData} />
+
+                {/* Download buttons */}
+                <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-dark-600 mt-4">
+                  <button onClick={handleAllEmpPDF}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white bg-red-500 hover:bg-red-600 transition-colors">
+                    <Download size={14} /> Download PDF
+                  </button>
+                  <button onClick={handleAllEmpExcel}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white bg-green-600 hover:bg-green-700 transition-colors">
+                    <Download size={14} /> Download Excel
+                  </button>
+                </div>
               </CardBody>
             </Card>
           </motion.div>

@@ -281,10 +281,10 @@ const employeeKPI = async (req, res, next) => {
 }
 
 // ── 5. All Employees Monthly Attendance Grid ───────────────────────────────
-// GET /api/reports/all-employees/attendance?year=&month=
+// GET /api/reports/all-employees/attendance?year=&month=&format=json|excel
 const allEmployeesAttendance = async (req, res, next) => {
   try {
-    const { year = new Date().getFullYear(), month = new Date().getMonth() + 1 } = req.query
+    const { year = new Date().getFullYear(), month = new Date().getMonth() + 1, format = 'json' } = req.query
     const { from, to, label } = monthRange(year, month)
 
     // All days in the month
@@ -374,13 +374,83 @@ const allEmployeesAttendance = async (req, res, next) => {
       }
     })
 
+    if (format === 'excel') {
+      // Build Excel rows: Employee | Day1 | Day2 | ... | P | A | OT
+      const XLSX = require('xlsx')
+      const wb   = XLSX.utils.book_new()
+
+      // Header row: "Employee", "EmpID", 1..daysInMonth day headers, "P", "A", "SunOT"
+      const dayHeaders = allDays.map(d => {
+        const dow = ['Su','Mo','Tu','We','Th','Fr','Sa'][new Date(d.date).getDay()]
+        return `${d.day}\n${dow}`
+      })
+      const header = ['Name', 'ID', ...dayHeaders, 'Present', 'Absent', 'Sun OT']
+
+      const rows = result.map(emp => {
+        const dayCells = emp.days.map(d => {
+          if (d.isSunday && d.status === 'sunday_ot') return 'OT'
+          if (d.isSunday) return 'S'
+          if (d.status === 'present')  return 'P'
+          if (d.status === 'absent')   return 'A'
+          if (d.status === 'leave')    return 'L'
+          if (d.status === 'holiday')  return 'H'
+          if (d.status === 'future')   return ''
+          return '—'
+        })
+        return [
+          emp.name,
+          emp.emp_code || '',
+          ...dayCells,
+          emp.summary.present,
+          emp.summary.absent,
+          emp.summary.sunday_ot,
+        ]
+      })
+
+      const wsData = [header, ...rows]
+      const ws = XLSX.utils.aoa_to_sheet(wsData)
+
+      // Column widths
+      ws['!cols'] = [
+        { wch: 22 }, // Name
+        { wch: 12 }, // ID
+        ...allDays.map(() => ({ wch: 4 })), // day columns
+        { wch: 8 }, { wch: 8 }, { wch: 8 }, // P, A, OT
+      ]
+
+      // Cell colors via xlsx style (needs xlsx-style or ExcelJS for full color —
+      // basic xlsx lib doesn't support cell fill, so we add a legend sheet instead)
+      XLSX.utils.book_append_sheet(wb, ws, label)
+
+      // Legend sheet
+      const legendData = [
+        ['Legend', ''],
+        ['P',  'Present'],
+        ['A',  'Absent'],
+        ['L',  'Leave'],
+        ['H',  'Holiday'],
+        ['OT', 'Sunday Overtime'],
+        ['S',  'Sunday (Off)'],
+        ['—',  'No data / future'],
+      ]
+      const wsLegend = XLSX.utils.aoa_to_sheet(legendData)
+      wsLegend['!cols'] = [{ wch: 6 }, { wch: 22 }]
+      XLSX.utils.book_append_sheet(wb, wsLegend, 'Legend')
+
+      const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+      const filename = `AllEmployees_Attendance_${label.replace(' ', '_')}.xlsx`
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      return res.send(buf)
+    }
+
     return ok(res, {
-      period:      label,
-      year:        y,
-      month:       m,
-      days_in_month: daysInMonth,
-      all_days:    allDays,
-      employees:   result,
+      period:          label,
+      year:            y,
+      month:           m,
+      days_in_month:   daysInMonth,
+      all_days:        allDays,
+      employees:       result,
       total_employees: result.length,
     })
   } catch (err) { next(err) }
