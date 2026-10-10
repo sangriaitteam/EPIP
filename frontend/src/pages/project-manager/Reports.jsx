@@ -629,12 +629,17 @@ const PMReports = () => {
                             onMouseEnter={() => !weekend && handleCellMouseEnter(emp.id, dayIdx)}
                             onMouseLeave={handleCellMouseLeave}
                           >
-                            {/* Workload bar (weekdays only) */}
+                            {/* Green circle dot — task assigned on this day */}
                             {!weekend && dayTasks.length > 0 && (
-                              <div className="mx-1 h-5 rounded-md overflow-hidden relative"
-                                style={{ background: dayPct > 80 ? '#fee2e2' : dayPct > 50 ? '#fef9c3' : '#dcfce7' }}>
-                                <div className={`h-full rounded-md transition-all ${workloadColor(dayPct)}`}
-                                  style={{ width: `${dayPct}%`, opacity: 0.7 }} />
+                              <div className="flex items-center justify-center">
+                                <motion.div
+                                  initial={{ scale: 0 }} animate={{ scale: 1 }}
+                                  className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center shadow-sm"
+                                  style={{ boxShadow: '0 0 6px rgba(34,197,94,0.6)' }}
+                                  title={`${dayTasks.length} task${dayTasks.length !== 1 ? 's' : ''}`}
+                                >
+                                  <span className="text-[9px] font-bold text-white leading-none">{dayTasks.length}</span>
+                                </motion.div>
                               </div>
                             )}
 
