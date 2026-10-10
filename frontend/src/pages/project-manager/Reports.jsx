@@ -285,7 +285,105 @@ const AssignTaskDrawer = ({ employee, day, employees, onClose, onTaskAdded }) =>
   )
 }
 
-// ── Main Reports Page ─────────────────────────────────────────────────────────
+// ── Employee Tasks Drawer ─────────────────────────────────────────────────────
+const EmployeeTasksDrawer = ({ employee, tasks, onClose, onAddTask }) => {
+  const empName  = employee.name || `${employee.first_name || ''} ${employee.last_name || ''}`.trim()
+  const empTasks = tasks.filter(t => String(t.assigned_to) === String(employee.id))
+
+  const STATUS_COLORS = {
+    done:        'bg-green-500/10 text-green-600',
+    in_progress: 'bg-blue-500/10 text-blue-600',
+    review:      'bg-yellow-500/10 text-yellow-600',
+    todo:        'bg-gray-500/10 text-gray-500',
+  }
+  const STATUS_LABELS = {
+    done: 'Done', in_progress: 'In Progress', review: 'Review', todo: 'Pending',
+  }
+  const PRIORITY_COLORS = {
+    urgent: 'text-red-500', high: 'text-orange-500',
+    medium: 'text-yellow-500', low: 'text-green-500',
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed top-[60px] right-0 bottom-0 z-40 flex" style={{ left: 0 }}>
+      <div className="flex-1" onClick={onClose} />
+      <motion.div
+        initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+        transition={{ type: 'spring', stiffness: 280, damping: 28 }}
+        className="w-full max-w-md bg-white dark:bg-dark-800 h-full overflow-y-auto shadow-2xl flex flex-col border-l border-gray-200 dark:border-dark-600"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-dark-600 sticky top-0 bg-white dark:bg-dark-800 z-10">
+          <div className="flex items-center gap-3">
+            <Avatar name={empName} src={employee.avatar_url} size="md" />
+            <div>
+              <h2 className="font-bold text-gray-900 dark:text-white text-sm">{empName}</h2>
+              <p className="text-xs text-gray-400">{employee.designation || '—'} · {empTasks.length} task{empTasks.length !== 1 ? 's' : ''} assigned</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 text-gray-400">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Task list */}
+        <div className="flex-1 p-4 space-y-2 overflow-y-auto">
+          {empTasks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <CheckSquare size={32} className="text-gray-300 mb-3" />
+              <p className="text-sm text-gray-400">No tasks assigned yet</p>
+            </div>
+          ) : (
+            empTasks.map((t, i) => (
+              <motion.div key={t.id}
+                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.04 }}
+                className="p-3 rounded-xl border border-gray-100 dark:border-dark-600 bg-gray-50 dark:bg-dark-700 space-y-2"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 flex-1 leading-tight">{t.title}</p>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold flex-shrink-0 capitalize ${PRIORITY_COLORS[t.priority] || ''}`}>
+                    {t.priority}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${STATUS_COLORS[t.status] || STATUS_COLORS.todo}`}>
+                    {STATUS_LABELS[t.status] || t.status}
+                  </span>
+                  {t.due_date && (
+                    <span className="text-[10px] text-gray-400 flex items-center gap-0.5">
+                      <Calendar size={9} /> {new Date(t.due_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </span>
+                  )}
+                  <span className="text-[10px] text-gray-400 ml-auto font-semibold">{t.completion_percent || 0}%</span>
+                </div>
+                {/* Progress bar */}
+                <div className="h-1 bg-gray-200 dark:bg-dark-600 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full bg-primary-500 transition-all"
+                    style={{ width: `${t.completion_percent || 0}%` }} />
+                </div>
+                {t.description && (
+                  <p className="text-[10px] text-gray-400 line-clamp-2">{t.description}</p>
+                )}
+              </motion.div>
+            ))
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-4 border-t border-gray-100 dark:border-dark-600 sticky bottom-0 bg-white dark:bg-dark-800">
+          <button onClick={() => { onClose(); onAddTask(employee, new Date()) }}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-primary-500 to-purple-600 text-white text-sm font-semibold hover:opacity-90 transition-opacity">
+            <Plus size={15} /> Assign New Task
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+
 const PMReports = () => {
   const today = new Date()
   const [year,       setYear]       = useState(today.getFullYear())
@@ -295,6 +393,7 @@ const PMReports = () => {
   const [loading,    setLoading]    = useState(true)
   const [hoveredCell,setHoveredCell]= useState(null)  // { empId, dayIdx }
   const [assignPanel,setAssignPanel]= useState(null)  // { employee, day }
+  const [empDrawer,  setEmpDrawer]  = useState(null)  // employee object
   const hoverTimer = useRef(null)
 
   const days = getDaysInMonth(year, month)
@@ -454,12 +553,13 @@ const PMReports = () => {
 
                   return (
                     <tr key={emp.id} className="border-b border-gray-50 dark:border-dark-700 hover:bg-gray-50/50 dark:hover:bg-dark-700/30 transition-colors">
-                      {/* Employee name */}
+                      {/* Employee name — click to see all tasks */}
                       <td className="sticky left-0 bg-white dark:bg-dark-800 z-10 px-4 py-2.5">
-                        <div className="flex items-center gap-2.5">
+                        <div className="flex items-center gap-2.5 cursor-pointer group/emp"
+                          onClick={() => setEmpDrawer(emp)}>
                           <Avatar name={empName} src={emp.avatar_url} size="sm" />
                           <div className="min-w-0">
-                            <p className="font-semibold text-gray-800 dark:text-gray-200 truncate text-xs">{empName}</p>
+                            <p className="font-semibold text-gray-800 dark:text-gray-200 truncate text-xs group-hover/emp:text-primary-500 transition-colors">{empName}</p>
                             <p className="text-[10px] text-gray-400 truncate">{emp.designation || emp.department_name || '—'}</p>
                           </div>
                         </div>
@@ -581,6 +681,18 @@ const PMReports = () => {
             employees={employees}
             onClose={() => setAssignPanel(null)}
             onTaskAdded={handleTaskAdded}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Employee Tasks Drawer */}
+      <AnimatePresence>
+        {empDrawer && (
+          <EmployeeTasksDrawer
+            employee={empDrawer}
+            tasks={tasks}
+            onClose={() => setEmpDrawer(null)}
+            onAddTask={(emp, day) => { setEmpDrawer(null); setAssignPanel({ employee: emp, day }) }}
           />
         )}
       </AnimatePresence>
