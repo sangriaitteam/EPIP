@@ -584,7 +584,10 @@ const PMReports = () => {
                   const loadPct     = Math.min(100, Math.round((assignedHrs / totalHours) * 100))
 
                   return (
-                    <tr key={emp.id} className="border-b border-gray-50 dark:border-dark-700 hover:bg-gray-50/50 dark:hover:bg-dark-700/30 transition-colors">
+                    <tr key={emp.id}
+                      className="border-b border-gray-50 dark:border-dark-700 hover:bg-primary-500/5 dark:hover:bg-primary-500/5 transition-colors cursor-pointer"
+                      onClick={() => setEmpDrawer(emp)}
+                    >
                       {/* Employee name — click anywhere in cell to see all tasks */}
                       <td className="sticky left-0 bg-white dark:bg-dark-800 z-10 px-4 py-2.5 cursor-pointer"
                         onClick={() => setEmpDrawer(emp)}>
@@ -597,8 +600,8 @@ const PMReports = () => {
                         </div>
                       </td>
 
-                      {/* Month total bar */}
-                      <td className="px-3 py-2.5 border-r border-gray-100 dark:border-dark-600 text-center">
+                      {/* Month total bar — stop propagation so row click still works for name only */}
+                      <td className="px-3 py-2.5 border-r border-gray-100 dark:border-dark-600 text-center" onClick={e => e.stopPropagation()}>
                         <div className="flex flex-col items-center gap-1">
                           <div className="w-16 h-2 bg-gray-100 dark:bg-dark-600 rounded-full overflow-hidden">
                             <div className={`h-full rounded-full ${workloadColor(loadPct)}`}
@@ -622,6 +625,7 @@ const PMReports = () => {
                               weekend   ? 'bg-gray-50/50 dark:bg-dark-700/30' :
                               todayCell ? 'bg-primary-500/5' : ''
                             } hover:bg-primary-500/10 group`}
+                            onClick={e => e.stopPropagation()}
                             onMouseEnter={() => !weekend && handleCellMouseEnter(emp.id, dayIdx)}
                             onMouseLeave={handleCellMouseLeave}
                           >
