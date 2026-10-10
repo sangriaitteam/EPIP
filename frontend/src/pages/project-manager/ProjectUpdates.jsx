@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Search, RefreshCw } from 'lucide-react'
+import { Search, RefreshCw, Trash2 } from 'lucide-react'
 import { api } from '../../services/api'
+import toast from 'react-hot-toast'
 
 const fmtDate = (d) =>
   d ? new Date(d).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '—'
@@ -23,6 +24,7 @@ const PMProjectUpdates = () => {
   const [loading,    setLoading]    = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [search,     setSearch]     = useState('')
+  const [deleting,   setDeleting]   = useState(null) // task id being deleted
 
   const load = async (silent = false) => {
     if (!silent) setLoading(true)
@@ -34,6 +36,23 @@ const PMProjectUpdates = () => {
     } catch { setData([]) }
     setLoading(false)
     setRefreshing(false)
+  }
+
+  const handleDelete = async (taskId, taskTitle) => {
+    if (!window.confirm(`Delete "${taskTitle}"? This cannot be undone.`)) return
+    setDeleting(taskId)
+    try {
+      const res = await api.delete(`/tasks/${taskId}`)
+      if (res.success) {
+        toast.success('Task deleted')
+        setData(prev => prev.map(emp => ({
+          ...emp,
+          tasks: (emp.tasks || []).filter(t => t.id !== taskId),
+          total_tasks: Math.max(0, (emp.total_tasks || 0) - 1),
+        })))
+      } else toast.error(res.message || 'Delete failed')
+    } catch { toast.error('Cannot connect') }
+    setDeleting(null)
   }
 
   useEffect(() => {
@@ -117,6 +136,7 @@ const PMProjectUpdates = () => {
                   <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Priority</th>
                   <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Completion</th>
                   <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Due Date</th>
+                  <th className="px-4 py-3 text-center text-[11px] font-semibold text-gray-400 uppercase tracking-wide w-16"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50 dark:divide-dark-700">
@@ -203,6 +223,22 @@ const PMProjectUpdates = () => {
                               : `${days}d left`}
                           </p>
                         )}
+                      </td>
+
+                      {/* Delete */}
+                      <td className="px-4 py-4 text-center">
+                        <button
+                          onClick={() => handleDelete(t.id, t.title)}
+                          disabled={deleting === t.id}
+                          className="p-2 rounded-xl text-red-400 hover:text-red-600 hover:bg-red-500/10 disabled:opacity-50 transition-colors"
+                          title="Delete task"
+                        >
+                          {deleting === t.id
+                            ? <motion.div animate={{ rotate: 360 }} transition={{ duration: 0.6, repeat: Infinity, ease: 'linear' }}
+                                className="w-4 h-4 border-2 border-red-400/30 border-t-red-400 rounded-full" />
+                            : <Trash2 size={15} />
+                          }
+                        </button>
                       </td>
                     </motion.tr>
                   )
