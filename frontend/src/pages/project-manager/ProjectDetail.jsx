@@ -1032,39 +1032,48 @@ const TasksTab = ({ tasks, projectId, project, memberStats, weekStart, setWeekSt
                             </div>
                           </td>
 
-                          {/* Gantt bars — pill shape, color based on completion + due date */}
+                          {/* Gantt bars — pill shape, color based on completion + day status */}
                           {DAY_SHORT.map((d, di) => {
-                            const today = new Date(); today.setHours(0,0,0,0)
-                            const due   = t.due_date ? new Date(t.due_date) : null
+                            // ── Box always in the task's assigned day column ──────
+                            // due_date ಇದ್ದ್ರೆ ಅದರ day, ಇಲ್ಲದಿದ್ರೆ index % 7 (Mon, Tue, Wed...)
+                            const due = t.due_date ? new Date(t.due_date) : null
                             if (due) due.setHours(0,0,0,0)
 
-                            const isOverdue  = due && due < today && (t.completion_percent || 0) < 100
-                            const isComplete = (t.completion_percent || 0) >= 100
-
-                            // ── Box always stays in original due day column ────────
-                            // No auto-move — red box stays where the task was due
                             let targetDayIdx
                             if (due) {
-                              const dow = due.getDay() // 0=Sun,1=Mon...6=Sat
-                              targetDayIdx = dow === 0 ? 6 : dow - 1 // Convert to Mon=0...Sun=6
+                              const dow = due.getDay()            // 0=Sun, 1=Mon...
+                              targetDayIdx = dow === 0 ? 6 : dow - 1  // Mon=0...Sun=6
                             } else {
-                              targetDayIdx = ganttCol // fallback: index % 7
+                              targetDayIdx = ganttCol              // index % 7
                             }
 
                             if (di !== targetDayIdx) return <td key={d} className="px-1.5 py-3 text-center" />
 
-                            // ── Box color ──────────────────────────────────────────
+                            // ── Color logic ────────────────────────────────────────
+                            const pct        = t.completion_percent || 0
+                            const isComplete = pct >= 100 || t.status === 'done'
+
+                            // Is this day already past? (targetDayIdx < today's weekday index)
+                            const today      = new Date()
+                            const todayDow   = today.getDay()
+                            const todayIdx   = todayDow === 0 ? 6 : todayDow - 1
+                            const dayPassed  = due
+                              ? due < new Date(today.setHours(0,0,0,0))   // due_date < today
+                              : targetDayIdx < todayIdx                    // assigned day passed
+
+                            const isDelayed  = !isComplete && dayPassed
+
                             const boxColor = isComplete
-                              ? '#22c55e'   // 🟢 Green — done
-                              : isOverdue
-                                ? '#ef4444' // 🔴 Red — overdue
-                                : col.bar   // Original day color
+                              ? '#22c55e'    // 🟢 Green
+                              : isDelayed
+                                ? '#ef4444'  // 🔴 Red
+                                : col.bar    // Original color
 
                             const boxTitle = isComplete
-                              ? '✅ Complete'
-                              : isOverdue
-                                ? `⚠️ Overdue (${(t.completion_percent||0)}% done)`
-                                : `${t.completion_percent || 0}% done`
+                              ? `✅ Complete (${pct}%)`
+                              : isDelayed
+                                ? `⚠️ Delayed — ${pct}% done`
+                                : `${pct}% done`
 
                             return (
                               <td key={d} className="px-1.5 py-3 text-center">
@@ -1081,7 +1090,7 @@ const TasksTab = ({ tasks, projectId, project, memberStats, weekStart, setWeekSt
                                     transformOrigin: 'left',
                                     boxShadow: isComplete
                                       ? '0 0 6px rgba(34,197,94,0.5)'
-                                      : isOverdue
+                                      : isDelayed
                                         ? '0 0 6px rgba(239,68,68,0.5)'
                                         : undefined,
                                   }}
