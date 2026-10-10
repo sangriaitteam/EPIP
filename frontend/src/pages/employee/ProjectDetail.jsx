@@ -368,9 +368,18 @@ const ChatTab = ({ tasks, employeeId, currentUser }) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
   }
 
-  const isMe = (comment) =>
-    Number(comment.author_id) === Number(employeeId) ||
-    (comment.author_name && currentUser?.name && comment.author_name.trim() === currentUser.name.trim())
+  const isMe = (comment) => {
+    // Primary: match by employee DB id
+    if (employeeId && comment.author_id && Number(comment.author_id) === Number(employeeId)) return true
+    // Fallback: author_id is set (non-null) means it's an employee message — PM messages have author_id = null
+    // So if author_id is NOT null, it's an employee message → show on right side
+    if (comment.author_id !== null && comment.author_id !== undefined && comment.author_id !== '') {
+      // If we have employeeId, only match our own; otherwise show all employee messages on right
+      if (employeeId) return Number(comment.author_id) === Number(employeeId)
+      return true // employeeId not resolved yet, assume it's mine
+    }
+    return false // author_id = null means PM message → show on left
+  }
 
   return (
     <div className="flex gap-4 h-[60vh] min-h-[400px]">

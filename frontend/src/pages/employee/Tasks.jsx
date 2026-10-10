@@ -477,13 +477,18 @@ const EmployeeTasks = () => {
   }
 
   // Determine if a comment is from the current employee (me)
-  // NULL author_id = posted by PM/HR (non-employee) → NOT "me" on employee side → left bubble
+  // NULL author_id = PM/HR message → left bubble (not mine)
+  // Non-null author_id = employee message → right bubble if it's mine
   const myEmployeeId = user?.employee?.id
   const isMyComment = (c) => {
     if (c._synthetic) return false
-    if (c.author_id === null || c.author_id === undefined) return false  // PM message → left side
-    if (!myEmployeeId) return false
-    return String(c.author_id) === String(myEmployeeId)
+    // PM messages always have author_id = null → left side
+    if (c.author_id === null || c.author_id === undefined) return false
+    // If we know our employee ID, match exactly
+    if (myEmployeeId) return String(c.author_id) === String(myEmployeeId)
+    // Fallback: author_id is set but we don't have employeeId yet
+    // → show on right (it's an employee message, likely mine in this task context)
+    return true
   }
 
   // Build synthetic PM assignment message if no comments exist
