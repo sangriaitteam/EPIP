@@ -330,9 +330,8 @@ const ActiveProjectsTab = ({ projects, loading, onDeleteProject, onRefresh }) =>
 
 // ── Create New Project ────────────────────────────────────────────────────────
 // ── Project Templates ─────────────────────────────────────────────────────────
-// ── 3D Models — 18 chapter tasks (from production content sheet) ──────────────
 const TEMPLATE_TASKS = {
-  '3d_models': [
+  'cbt': [
     { seq: 0,  title: 'Login Screen',              file_name: '00_Scr', duration_mins: 0,   description: 'Project login screen setup and access configuration.' },
     { seq: 1,  title: 'Intro',                     file_name: '01_Scr', duration_mins: 10,  description: 'Project introduction — overview, objectives and scope. (10 min)' },
     { seq: 2,  title: 'Features',                  file_name: '02_Scr', duration_mins: 5,   description: 'Key features and capabilities walkthrough. (5 min)' },
@@ -346,7 +345,7 @@ const TEMPLATE_TASKS = {
     { seq: 10, title: 'Fault Diagnosis',           file_name: '10_Scr', duration_mins: 80,  description: 'Fault detection, diagnosis and troubleshooting guide. (80 min)' },
     { seq: 11, title: 'Dismantling & Reassembly',  file_name: '11_Scr', duration_mins: 240, description: 'Step-by-step dismantling and reassembly instructions. (240 min)' },
     { seq: 12, title: 'Test Equipment',            file_name: '12_Scr', duration_mins: 60,  description: 'Test equipment usage, calibration and procedures. (60 min)' },
-    { seq: 13, title: "Do's and Don'ts",           file_name: '13_Scr', duration_mins: 20,  description: 'Safety guidelines, do\'s and don\'ts for operations. (20 min)' },
+    { seq: 13, title: "Do's and Don'ts",           file_name: '13_Scr', duration_mins: 20,  description: "Safety guidelines, do's and don'ts for operations. (20 min)" },
     { seq: 14, title: '3D Models',                 file_name: '14_Scr', duration_mins: 0,   description: '3D model creation, rigging, texturing and animation assets.' },
     { seq: 15, title: 'Gallery',                   file_name: '15_Scr', duration_mins: 0,   description: 'Image and media gallery compilation for the project.' },
     { seq: 16, title: 'Manuals',                   file_name: '16_Scr', duration_mins: 0,   description: 'User manuals, reference guides and documentation.' },
@@ -363,36 +362,6 @@ const PROJECT_TEMPLATES = [
     color:       'from-blue-500 to-indigo-600',
     description: 'A structured Computer Based Training project for employee skill development and certification.',
     priority:    'medium',
-    status:      'planning',
-  },
-  {
-    id:          's1000d',
-    name:        'S1000D',
-    fullName:    'International Technical Documentation',
-    icon:        '📋',
-    color:       'from-emerald-500 to-teal-600',
-    description: 'Technical documentation project following S1000D specification for aerospace, defence and industrial equipment.',
-    priority:    'high',
-    status:      'planning',
-  },
-  {
-    id:          'ietm',
-    name:        'IETM',
-    fullName:    'Interactive Electronic Technical Manual',
-    icon:        '💻',
-    color:       'from-orange-500 to-red-500',
-    description: 'Interactive Electronic Technical Manual project for digital maintenance and operation documentation.',
-    priority:    'high',
-    status:      'planning',
-  },
-  {
-    id:          '3d_models',
-    name:        '3D Models',
-    fullName:    '3D Modelling & Animation',
-    icon:        '🧊',
-    color:       'from-violet-500 to-purple-600',
-    description: 'End-to-end 3D modelling, rigging, texturing and animation project for product visualisation, training simulations or cinematic content.',
-    priority:    'high',
     status:      'planning',
   },
 ]
