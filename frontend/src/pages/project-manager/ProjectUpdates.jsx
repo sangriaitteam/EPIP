@@ -24,7 +24,7 @@ const PMProjectUpdates = () => {
   const [loading,    setLoading]    = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [search,     setSearch]     = useState('')
-  const [deleting,   setDeleting]   = useState(null) // task id being deleted
+  const [deleting,   setDeleting]   = useState(null)
 
   const load = async (silent = false) => {
     if (!silent) setLoading(true)
@@ -37,6 +37,12 @@ const PMProjectUpdates = () => {
     setLoading(false)
     setRefreshing(false)
   }
+
+  useEffect(() => {
+    load()
+    const interval = setInterval(() => load(true), 30000)
+    return () => clearInterval(interval)
+  }, [])
 
   const handleDelete = async (taskId, taskTitle) => {
     if (!window.confirm(`Delete "${taskTitle}"? This cannot be undone.`)) return
@@ -55,13 +61,7 @@ const PMProjectUpdates = () => {
     setDeleting(null)
   }
 
-  useEffect(() => {
-    load()
-    const interval = setInterval(() => load(true), 30000)
-    return () => clearInterval(interval)
-  }, [])
-
-  // Flatten all tasks from all employees
+  // Flatten all tasks
   const allTasks = data.flatMap(emp =>
     (emp.tasks || []).map(t => ({ ...t, employee_name: emp.employee_name }))
   )
@@ -75,7 +75,6 @@ const PMProjectUpdates = () => {
 
   return (
     <div className="space-y-4">
-
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -98,7 +97,7 @@ const PMProjectUpdates = () => {
       {/* Table card */}
       <div className="bg-white dark:bg-dark-800 rounded-2xl border border-gray-100 dark:border-dark-600 shadow-sm overflow-hidden">
 
-        {/* Search bar */}
+        {/* Search */}
         <div className="p-4 border-b border-gray-100 dark:border-dark-600">
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -120,9 +119,6 @@ const PMProjectUpdates = () => {
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">
               {search ? 'No tasks match your search' : 'No tasks yet'}
-            </p>
-            <p className="text-xs text-gray-400 mt-1">
-              {search ? 'Try a different keyword' : 'Assign tasks from the Tasks page'}
             </p>
           </div>
         ) : (
@@ -162,9 +158,7 @@ const PMProjectUpdates = () => {
                       {/* Task Name */}
                       <td className="px-5 py-4">
                         <p className={`font-semibold leading-tight ${
-                          t.status === 'done'
-                            ? 'line-through text-gray-400'
-                            : 'text-gray-800 dark:text-gray-100'
+                          t.status === 'done' ? 'line-through text-gray-400' : 'text-gray-800 dark:text-gray-100'
                         }`}>{t.title}</p>
                         {t.employee_name && (
                           <p className="text-[10px] text-gray-400 mt-0.5">👤 {t.employee_name}</p>
@@ -173,8 +167,8 @@ const PMProjectUpdates = () => {
 
                       {/* Description */}
                       <td className="px-4 py-4">
-                        <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 max-w-[220px]">
-                          {t.description || <span className="text-gray-300 dark:text-dark-500 italic">No description</span>}
+                        <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 max-w-[200px]">
+                          {t.description || <span className="italic text-gray-300 dark:text-dark-500">No description</span>}
                         </p>
                       </td>
 
@@ -196,9 +190,7 @@ const PMProjectUpdates = () => {
                               animate={{ width: `${pct}%` }}
                               transition={{ duration: 0.8, delay: i * 0.03 }}
                               className={`h-full rounded-full ${
-                                pct >= 100 ? 'bg-green-500' :
-                                pct >= 60  ? 'bg-blue-500' :
-                                pct >= 30  ? 'bg-yellow-400' : 'bg-red-400'
+                                pct >= 100 ? 'bg-green-500' : pct >= 60 ? 'bg-blue-500' : pct >= 30 ? 'bg-yellow-400' : 'bg-red-400'
                               }`}
                             />
                           </div>
@@ -214,13 +206,8 @@ const PMProjectUpdates = () => {
                           {fmtDate(t.due_date)}
                         </p>
                         {days !== null && t.status !== 'done' && t.due_date && (
-                          <p className={`text-[11px] mt-0.5 ${
-                            isOverdue ? 'text-red-400' : days === 0 ? 'text-yellow-500' : 'text-gray-400'
-                          }`}>
-                            {isOverdue
-                              ? `${Math.abs(days)}d overdue`
-                              : days === 0 ? 'Due today'
-                              : `${days}d left`}
+                          <p className={`text-[11px] mt-0.5 ${isOverdue ? 'text-red-400' : days === 0 ? 'text-yellow-500' : 'text-gray-400'}`}>
+                            {isOverdue ? `${Math.abs(days)}d overdue` : days === 0 ? 'Due today' : `${days}d left`}
                           </p>
                         )}
                       </td>
@@ -248,7 +235,7 @@ const PMProjectUpdates = () => {
           </div>
         )}
 
-        {/* Footer count */}
+        {/* Footer */}
         {!loading && filtered.length > 0 && (
           <div className="px-5 py-3 border-t border-gray-100 dark:border-dark-600 text-xs text-gray-400">
             {filtered.length} task{filtered.length !== 1 ? 's' : ''} total

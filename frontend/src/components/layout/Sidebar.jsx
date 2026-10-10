@@ -39,6 +39,7 @@ const navConfig = {
   project_manager: [
     { label: 'Home',         icon: LayoutDashboard, path: '/pm/dashboard'    },
     { label: 'Tasks',        icon: CheckSquare,     path: '/pm/reports'      },
+    { label: 'Chats',        icon: MessageSquare,   path: '/pm/chats'        },
     { label: 'Task Updates', icon: TrendingUp,      path: '/pm/updates'      },
     { label: 'Projects',     icon: FolderOpen,      path: '/pm/projects'     },
     { label: 'Group Chats',  icon: Hash,            path: '/pm/group-chats'  },
