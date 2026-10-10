@@ -248,7 +248,9 @@ const TaskChatPage = () => {
             {task?.title || 'Task Chat'}
           </h1>
           <div className="flex items-center gap-3 mt-0.5 text-[11px] text-gray-400 flex-wrap">
-            {task?.assigned_to_name && <span>👤 {task.assigned_to_name}</span>}
+            {(task?.assigned_to_name || task?.assignee_name) && (
+              <span>👤 {task.assigned_to_name || task.assignee_name}</span>
+            )}
             {task?.status && (
               <span className={`px-2 py-0.5 rounded-full font-semibold ${STATUS_COLORS[task.status] || STATUS_COLORS.todo}`}>
                 {STATUS_LABELS[task.status] || task.status}

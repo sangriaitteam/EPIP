@@ -769,7 +769,7 @@ const TasksTab = ({ tasks, projectId, project, memberStats, weekStart, setWeekSt
                           <td className="px-3 py-3 text-center">
                             <motion.button
                               onClick={() => navigate(`/pm/task-chat/${t.id}`, {
-                                state: { task: t, projectId: id }
+                                state: { task: t, projectId: projectId }
                               })}
                               whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
                               className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-primary-500/10 text-primary-500 hover:bg-primary-500 hover:text-white transition-colors"
