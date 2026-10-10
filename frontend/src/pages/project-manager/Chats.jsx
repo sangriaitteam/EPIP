@@ -139,7 +139,7 @@ const ChatBubble = ({ msg, isMe }) => (
               )}
             </div>
           )
-        })()
+        })()}
         {msg._isFirst && !isMe && (
           <div className="mt-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-white dark:bg-dark-600 text-primary-600 dark:text-primary-400">
             <Paperclip size={11} /> Task Assignment
