@@ -768,7 +768,7 @@ const TasksTab = ({ tasks, projectId, project, memberStats, weekStart, setWeekSt
 
   const [editingTime, setEditingTime] = useState(null)
   const [savingTime,  setSavingTime]  = useState(null)
-  const [chatTask,    setChatTask]    = useState(null) // task to open chat for
+  const navigate = useNavigate()
 
   const handleTimeSave = async (taskId, field, value) => {
     if (!value?.trim()) { setEditingTime(null); return }
@@ -859,12 +859,7 @@ const TasksTab = ({ tasks, projectId, project, memberStats, weekStart, setWeekSt
 
   return (
     <div className="space-y-4">
-      {/* Chat modal */}
-      <AnimatePresence>
-        {chatTask && (
-          <TaskChatModal task={chatTask} onClose={() => setChatTask(null)} />
-        )}
-      </AnimatePresence>
+      {/* No chat modal — task chat opens as full page via /pm/chats?taskId= */}
 
       {tasks.length === 0 ? (
         /* No tasks — show default placeholder table */
@@ -1099,10 +1094,10 @@ const TasksTab = ({ tasks, projectId, project, memberStats, weekStart, setWeekSt
                             )
                           })}
 
-                          {/* Chat button */}
+                          {/* Chat button — navigate to full chat page */}
                           <td className="px-3 py-3 text-center">
                             <motion.button
-                              onClick={() => setChatTask(t)}
+                              onClick={() => navigate(`/pm/chats?taskId=${t.id}`)}
                               whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
                               className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-primary-500/10 text-primary-500 hover:bg-primary-500 hover:text-white transition-colors"
                               title={`Chat about: ${t.title}`}
