@@ -1034,42 +1034,36 @@ const TasksTab = ({ tasks, projectId, project, memberStats, weekStart, setWeekSt
 
                           {/* Gantt bars — pill shape, color based on completion + due date */}
                           {DAY_SHORT.map((d, di) => {
-                            // ── Determine which column this task's box belongs to ──
-                            // Priority: due_date day-of-week, fallback index % 7
                             const today = new Date(); today.setHours(0,0,0,0)
                             const due   = t.due_date ? new Date(t.due_date) : null
                             if (due) due.setHours(0,0,0,0)
 
-                            // If overdue + incomplete → find next weekday from today for display
                             const isOverdue  = due && due < today && (t.completion_percent || 0) < 100
                             const isComplete = (t.completion_percent || 0) >= 100
 
+                            // ── Box always stays in original due day column ────────
+                            // No auto-move — red box stays where the task was due
                             let targetDayIdx
-                            if (isOverdue) {
-                              // Move to today's day-of-week (display: task is now "today's problem")
-                              const todayDow = today.getDay() // 0=Sun,1=Mon...6=Sat
-                              // Convert JS day (0=Sun) to our array (0=Mon)
-                              targetDayIdx = todayDow === 0 ? 6 : todayDow - 1
-                            } else if (due) {
-                              const dow = due.getDay()
-                              targetDayIdx = dow === 0 ? 6 : dow - 1
+                            if (due) {
+                              const dow = due.getDay() // 0=Sun,1=Mon...6=Sat
+                              targetDayIdx = dow === 0 ? 6 : dow - 1 // Convert to Mon=0...Sun=6
                             } else {
-                              targetDayIdx = ganttCol
+                              targetDayIdx = ganttCol // fallback: index % 7
                             }
 
                             if (di !== targetDayIdx) return <td key={d} className="px-1.5 py-3 text-center" />
 
                             // ── Box color ──────────────────────────────────────────
                             const boxColor = isComplete
-                              ? '#22c55e'                                      // Green ✅
+                              ? '#22c55e'   // 🟢 Green — done
                               : isOverdue
-                                ? '#ef4444'                                    // Red ❌
-                                : col.bar                                      // Original color
+                                ? '#ef4444' // 🔴 Red — overdue
+                                : col.bar   // Original day color
 
                             const boxTitle = isComplete
                               ? '✅ Complete'
                               : isOverdue
-                                ? `⚠️ Overdue — moved to today`
+                                ? `⚠️ Overdue (${(t.completion_percent||0)}% done)`
                                 : `${t.completion_percent || 0}% done`
 
                             return (
