@@ -108,9 +108,10 @@ const PMProjectUpdates = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm" style={{ minWidth: 700 }}>
+            <table className="w-full text-sm" style={{ minWidth: 860 }}>
               <thead>
                 <tr className="border-b border-gray-100 dark:border-dark-600 bg-gray-50 dark:bg-dark-700">
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Assigned Date</th>
                   <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Task Name</th>
                   <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Description</th>
                   <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Priority</th>
@@ -131,6 +132,13 @@ const PMProjectUpdates = () => {
                       transition={{ delay: Math.min(i * 0.03, 0.4) }}
                       className="hover:bg-gray-50 dark:hover:bg-dark-700/40 transition-colors"
                     >
+                      {/* Assigned Date */}
+                      <td className="px-5 py-4">
+                        <p className="text-sm font-semibold text-gray-600 dark:text-gray-300">
+                          {fmtDate(t.created_at)}
+                        </p>
+                      </td>
+
                       {/* Task Name */}
                       <td className="px-5 py-4">
                         <p className={`font-semibold leading-tight ${
