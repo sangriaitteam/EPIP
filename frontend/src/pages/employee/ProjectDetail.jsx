@@ -501,13 +501,23 @@ const ChatTab = ({ tasks, employeeId, currentUser }) => {
                         </div>
                       )
                     })()}
-                    {comment.content && (
+                    {(comment.content && comment.content.trim()) && (
                       <div className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed shadow-sm ${
                         mine
                           ? 'bg-primary-500 text-white rounded-br-sm'
                           : 'bg-gray-100 dark:bg-dark-700 text-gray-800 dark:text-gray-200 rounded-bl-sm'
                       }`}>
                         {comment.content}
+                      </div>
+                    )}
+                    {/* Show empty bubble only if no file and no content */}
+                    {(!comment.content || !comment.content.trim()) && !comment.file_url && !comment.file_data && (
+                      <div className={`px-3.5 py-2.5 rounded-2xl text-sm shadow-sm italic ${
+                        mine
+                          ? 'bg-primary-500/80 text-white/70 rounded-br-sm'
+                          : 'bg-gray-100 dark:bg-dark-700 text-gray-400 rounded-bl-sm'
+                      }`}>
+                        Message
                       </div>
                     )}
                     <div className={`flex items-center gap-1 mt-0.5 px-1 ${mine ? 'flex-row-reverse' : ''}`}>

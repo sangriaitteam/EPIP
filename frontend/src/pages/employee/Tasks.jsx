@@ -232,7 +232,8 @@ const ChatMessage = ({ msg, isMe }) => (
           ? 'bg-primary-500 text-white rounded-br-sm'
           : 'bg-gray-100 dark:bg-dark-700 text-gray-800 dark:text-gray-200 rounded-bl-sm'
       }`}>
-        <p>{msg.content}</p>
+        {/* Only show text bubble if content exists */}
+        {msg.content && msg.content.trim() && <p>{msg.content}</p>}
 
         {/* File attachment */}
         {(msg.file_url || msg.file_data) && (() => {
