@@ -10,7 +10,7 @@ import {
   TrendingUp, AlertCircle, ChevronRight,
 } from 'lucide-react'
 import Avatar from '../../components/common/Avatar'
-import { api } from '../../services/api'
+import { api, resolveFileUrl } from '../../services/api'
 import { useAuth } from '../../context/AuthContext'
 import toast from 'react-hot-toast'
 
@@ -441,17 +441,57 @@ const ChatTab = ({ tasks, employeeId, currentUser }) => {
                     {!mine && (
                       <span className="text-[10px] text-gray-400 font-medium mb-1 ml-1">{comment.author_name || 'Project Manager'}</span>
                     )}
-                    {comment.file_url && (
-                      <a href={comment.file_url} target="_blank" rel="noreferrer"
-                        className={`mb-1 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border ${
-                          mine
-                            ? 'bg-primary-600 text-white border-primary-500/40'
-                            : 'bg-white dark:bg-dark-700 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-dark-500'
-                        }`}>
-                        <Paperclip size={10} />
-                        <span className="truncate max-w-[140px]">{comment.file_name || 'Attachment'}</span>
-                      </a>
-                    )}
+                    {(comment.file_url || comment.file_data) && (() => {
+                      const absUrl = comment.file_data || resolveFileUrl(comment.file_url)
+                      if (!absUrl) return (
+                        <div className="mb-1 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs border border-gray-600/30 text-gray-500">
+                          <Paperclip size={10}/><span className="truncate">{comment.file_name}</span>
+                          <span className="ml-auto text-[10px]">Unavailable</span>
+                        </div>
+                      )
+                      const isImage = comment.file_type?.startsWith('image/')
+                      const isVideo = comment.file_type?.startsWith('video/')
+                      const doDownload = (e) => {
+                        e.preventDefault()
+                        const a = document.createElement('a')
+                        a.href = absUrl; a.download = comment.file_name || 'attachment'
+                        document.body.appendChild(a); a.click(); document.body.removeChild(a)
+                      }
+                      return (
+                        <div className="mb-1">
+                          {isImage ? (
+                            <div className="space-y-0.5">
+                              <img src={absUrl} alt={comment.file_name} onClick={doDownload}
+                                className="max-w-[200px] rounded-xl cursor-pointer hover:opacity-90 border border-white/10" />
+                              <p className={`text-[10px] ${mine ? 'text-white/60' : 'text-gray-400'}`}>Tap to download</p>
+                            </div>
+                          ) : isVideo ? (
+                            <div className="space-y-1">
+                              <video src={absUrl} controls className="max-w-[220px] rounded-xl border border-white/10" style={{ maxHeight: 140 }} />
+                              <button onClick={doDownload}
+                                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] w-full justify-center ${mine ? 'bg-white/20 text-white' : 'bg-gray-100 dark:bg-dark-600 text-gray-700 dark:text-gray-300'}`}>
+                                ⬇ Download video
+                              </button>
+                            </div>
+                          ) : (
+                            <button onClick={doDownload}
+                              className={`flex items-center gap-2 px-3 py-2 rounded-xl border w-full text-left ${mine ? 'border-white/20 bg-white/10 hover:bg-white/20' : 'border-gray-200 dark:border-dark-500 bg-white dark:bg-dark-700 hover:bg-gray-50'}`}>
+                              <span className="text-xl">
+                                {comment.file_name?.match(/\.pdf$/i) ? '📄' : comment.file_name?.match(/\.(xlsx?|csv)$/i) ? '📊'
+                                  : comment.file_name?.match(/\.(zip|rar|7z)$/i) ? '🗜️' : comment.file_name?.match(/\.(docx?)$/i) ? '📝' : '📎'}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-[11px] font-semibold truncate ${mine ? 'text-white' : 'text-gray-800 dark:text-gray-200'}`}>{comment.file_name || 'Attachment'}</p>
+                                <p className={`text-[9px] ${mine ? 'text-white/60' : 'text-gray-400'}`}>
+                                  {comment.file_size_kb ? comment.file_size_kb >= 1024 ? `${(comment.file_size_kb/1024).toFixed(1)} MB` : `${comment.file_size_kb} KB` : ''} · Tap to download
+                                </p>
+                              </div>
+                              <span className={`text-base ${mine ? 'text-white/80' : 'text-gray-400'}`}>⬇</span>
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })()}
                     {comment.content && (
                       <div className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed shadow-sm ${
                         mine
@@ -494,12 +534,14 @@ const ChatTab = ({ tasks, employeeId, currentUser }) => {
               className="p-1 rounded-lg text-gray-400 hover:text-primary-500 transition-colors flex-shrink-0">
               <Paperclip size={15} />
             </button>
-            <input ref={fileInputRef} type="file" className="hidden" onChange={e => {
-              const f = e.target.files?.[0]
-              if (f && f.size <= 5 * 1024 * 1024) setAttachedFile(f)
-              else if (f) toast.error('File too large (max 5MB)')
-              e.target.value = ''
-            }} />
+            <input ref={fileInputRef} type="file" className="hidden"
+              accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.txt,.csv"
+              onChange={e => {
+                const f = e.target.files?.[0]
+                if (f && f.size <= 10 * 1024 * 1024) setAttachedFile(f)
+                else if (f) toast.error('File too large (max 10MB)')
+                e.target.value = ''
+              }} />
             <textarea
               value={message}
               onChange={e => setMessage(e.target.value)}

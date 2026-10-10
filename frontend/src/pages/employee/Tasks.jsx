@@ -400,16 +400,8 @@ const EmployeeTasks = () => {
         const fd = new FormData()
         if (content) fd.append('content', content)
         fd.append('attachment', attachedFile.file)
-        const token = localStorage.getItem('epip_token')
-        const apiBase = window.location.hostname === 'localhost'
-          ? `http://localhost:5000/api`
-          : `${window.location.protocol}//${window.location.hostname}:5000/api`
-        const raw = await fetch(`${apiBase}/tasks/${selectedTask.id}/comments`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          body: fd,
-        })
-        res = await raw.json()
+        // ── Use api.upload() — resolves correct BASE_URL (Railway/Vercel safe) ──
+        res = await api.upload(`/tasks/${selectedTask.id}/comments`, fd)
       } else {
         res = await api.post(`/tasks/${selectedTask.id}/comments`, { content })
       }
