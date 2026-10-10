@@ -894,7 +894,7 @@ const TasksTab = ({ tasks, projectId, project, memberStats, weekStart, setWeekSt
                     <td className="px-4 py-3.5 text-sm text-gray-400">{row.duration}</td>
                     <td className="px-4 py-3.5"><span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${st.pill}`}><span className={`w-1.5 h-1.5 rounded-full ${st.dot}`}/>{st.label}</span></td>
                     <td className="px-4 py-3.5 min-w-[120px]"><div className="flex items-center gap-2"><div className="flex-1 h-1.5 bg-gray-100 dark:bg-dark-600 rounded-full"/><span className="text-xs text-gray-400 w-8 text-right">0%</span></div></td>
-                    {DAY_SHORT.map((d, di) => <td key={d} className="px-1.5 py-3.5 text-center">{di === i % 7 ? <div className="h-5 rounded-md mx-auto" style={{ background: col.bar, width: 36 }}/> : null}</td>)}
+                    {DAY_SHORT.map((d, di) => <td key={d} className="px-1.5 py-3.5 text-center">{di === i % 7 ? <div className="h-[18px] w-8 rounded-full mx-auto" style={{ background: col.bar }} /> : null}</td>)}
                   </tr>
                 )
               })}
@@ -1032,16 +1032,69 @@ const TasksTab = ({ tasks, projectId, project, memberStats, weekStart, setWeekSt
                             </div>
                           </td>
 
-                          {/* Gantt bars */}
-                          {DAY_SHORT.map((d, di) => (
-                            <td key={d} className="px-1.5 py-3 text-center">
-                              {di === ganttCol ? (
-                                <motion.div initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
-                                  transition={{ duration: 0.4 }} className="h-4 rounded-md mx-auto"
-                                  style={{ background: col.bar, width: 28, transformOrigin: 'left' }} />
-                              ) : null}
-                            </td>
-                          ))}
+                          {/* Gantt bars — pill shape, color based on completion + due date */}
+                          {DAY_SHORT.map((d, di) => {
+                            // ── Determine which column this task's box belongs to ──
+                            // Priority: due_date day-of-week, fallback index % 7
+                            const today = new Date(); today.setHours(0,0,0,0)
+                            const due   = t.due_date ? new Date(t.due_date) : null
+                            if (due) due.setHours(0,0,0,0)
+
+                            // If overdue + incomplete → find next weekday from today for display
+                            const isOverdue  = due && due < today && (t.completion_percent || 0) < 100
+                            const isComplete = (t.completion_percent || 0) >= 100
+
+                            let targetDayIdx
+                            if (isOverdue) {
+                              // Move to today's day-of-week (display: task is now "today's problem")
+                              const todayDow = today.getDay() // 0=Sun,1=Mon...6=Sat
+                              // Convert JS day (0=Sun) to our array (0=Mon)
+                              targetDayIdx = todayDow === 0 ? 6 : todayDow - 1
+                            } else if (due) {
+                              const dow = due.getDay()
+                              targetDayIdx = dow === 0 ? 6 : dow - 1
+                            } else {
+                              targetDayIdx = ganttCol
+                            }
+
+                            if (di !== targetDayIdx) return <td key={d} className="px-1.5 py-3 text-center" />
+
+                            // ── Box color ──────────────────────────────────────────
+                            const boxColor = isComplete
+                              ? '#22c55e'                                      // Green ✅
+                              : isOverdue
+                                ? '#ef4444'                                    // Red ❌
+                                : col.bar                                      // Original color
+
+                            const boxTitle = isComplete
+                              ? '✅ Complete'
+                              : isOverdue
+                                ? `⚠️ Overdue — moved to today`
+                                : `${t.completion_percent || 0}% done`
+
+                            return (
+                              <td key={d} className="px-1.5 py-3 text-center">
+                                <motion.div
+                                  initial={{ scaleX: 0 }}
+                                  animate={{ scaleX: 1 }}
+                                  transition={{ duration: 0.4 }}
+                                  title={boxTitle}
+                                  className="mx-auto rounded-full cursor-default"
+                                  style={{
+                                    background: boxColor,
+                                    width: 32,
+                                    height: 18,
+                                    transformOrigin: 'left',
+                                    boxShadow: isComplete
+                                      ? '0 0 6px rgba(34,197,94,0.5)'
+                                      : isOverdue
+                                        ? '0 0 6px rgba(239,68,68,0.5)'
+                                        : undefined,
+                                  }}
+                                />
+                              </td>
+                            )
+                          })}
 
                           {/* Chat button */}
                           <td className="px-3 py-3 text-center">
