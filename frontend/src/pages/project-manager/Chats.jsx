@@ -166,61 +166,77 @@ const EmployeeCard = ({ emp, selected, onClick }) => {
 }
 
 // ── Task Item (middle panel) ──────────────────────────────────────────────────
-const TaskItem = ({ task, selected, onClick }) => {
+const TaskItem = ({ task, selected, onClick, onDelete }) => {
   const cfg = STATUS_MAP[task.status] || STATUS_MAP.todo
   const days = daysLeft(task.due_date)
   const isOverdue = days !== null && days < 0 && task.status !== 'done'
   const unread = parseInt(task.unread_count) || 0
 
   return (
-    <motion.button
-      onClick={onClick}
-      whileHover={{ x: 2 }}
-      className={`w-full text-left px-4 py-3.5 border-b border-gray-100 dark:border-dark-700 transition-all ${
-        selected
-          ? 'bg-primary-500/8 border-l-2 border-l-primary-500'
-          : 'hover:bg-gray-50 dark:hover:bg-dark-700/40 border-l-2 border-l-transparent'
-      }`}
-    >
-      <div className="flex items-start justify-between gap-2 mb-1.5">
-        <p className={`text-sm font-semibold leading-tight flex-1 ${
-          selected ? 'text-primary-600 dark:text-primary-400' : 'text-gray-800 dark:text-gray-200'
-        }`}>{task.title}</p>
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          {unread > 0 && !selected && (
-            <motion.span
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="min-w-[18px] h-[18px] px-1 rounded-full bg-green-500 text-white text-[10px] font-bold flex items-center justify-center"
-            >
-              {unread > 99 ? '99+' : unread}
-            </motion.span>
+    <div className="relative group/task">
+      <motion.button
+        onClick={onClick}
+        whileHover={{ x: 2 }}
+        className={`w-full text-left px-4 py-3.5 border-b border-gray-100 dark:border-dark-700 transition-all pr-10 ${
+          selected
+            ? 'bg-primary-500/8 border-l-2 border-l-primary-500'
+            : 'hover:bg-gray-50 dark:hover:bg-dark-700/40 border-l-2 border-l-transparent'
+        }`}
+      >
+        <div className="flex items-start justify-between gap-2 mb-1.5">
+          <p className={`text-sm font-semibold leading-tight flex-1 ${
+            selected ? 'text-primary-600 dark:text-primary-400' : 'text-gray-800 dark:text-gray-200'
+          }`}>{task.title}</p>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {unread > 0 && !selected && (
+              <motion.span
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className="min-w-[18px] h-[18px] px-1 rounded-full bg-green-500 text-white text-[10px] font-bold flex items-center justify-center"
+              >
+                {unread > 99 ? '99+' : unread}
+              </motion.span>
+            )}
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 capitalize ${PRIORITY_BADGE[task.priority] || PRIORITY_BADGE.medium}`}>
+              {task.priority}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cfg.dot}`} />
+            <span className="text-[11px] text-gray-400">{cfg.label}</span>
+          </div>
+          {task.due_date && (
+            <span className={`text-[10px] font-medium flex items-center gap-0.5 ${isOverdue ? 'text-red-500' : 'text-gray-400'}`}>
+              <Calendar size={9} />{fmtDate(task.due_date)}
+            </span>
           )}
-          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 capitalize ${PRIORITY_BADGE[task.priority] || PRIORITY_BADGE.medium}`}>
-            {task.priority}
-          </span>
         </div>
-      </div>
 
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5">
-          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cfg.dot}`} />
-          <span className="text-[11px] text-gray-400">{cfg.label}</span>
-        </div>
-        {task.due_date && (
-          <span className={`text-[10px] font-medium flex items-center gap-0.5 ${isOverdue ? 'text-red-500' : 'text-gray-400'}`}>
-            <Calendar size={9} />{fmtDate(task.due_date)}
-          </span>
+        {task.project_name && (
+          <div className="flex items-center gap-1 mt-1">
+            <FolderOpen size={10} className="text-primary-400 flex-shrink-0" />
+            <span className="text-[10px] text-gray-400 truncate">{task.project_name}</span>
+          </div>
         )}
-      </div>
+      </motion.button>
 
-      {task.project_name && (
-        <div className="flex items-center gap-1 mt-1">
-          <FolderOpen size={10} className="text-primary-400 flex-shrink-0" />
-          <span className="text-[10px] text-gray-400 truncate">{task.project_name}</span>
-        </div>
-      )}
-    </motion.button>
+      {/* Delete button — visible on hover */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onDelete(task) }}
+        className="absolute top-1/2 -translate-y-1/2 right-2 p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-500/10 opacity-0 group-hover/task:opacity-100 transition-all z-10"
+        title="Delete task"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="3 6 5 6 21 6"/>
+          <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+          <path d="M10 11v6M14 11v6"/>
+          <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
+        </svg>
+      </button>
+    </div>
   )
 }
 
@@ -335,6 +351,22 @@ const PMChats = () => {
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [comments])
+
+  // ── Delete task ─────────────────────────────────────────────────────────
+  const handleDeleteTask = async (task) => {
+    if (!window.confirm(`Delete "${task.title}"? This cannot be undone.`)) return
+    try {
+      const res = await api.delete(`/tasks/${task.id}`)
+      if (res.success) {
+        toast.success('Task deleted')
+        setEmpTasks(prev => prev.filter(t => t.id !== task.id))
+        if (selectedTask?.id === task.id) {
+          setSelectedTask(null)
+          setComments([])
+        }
+      } else toast.error(res.message || 'Delete failed')
+    } catch { toast.error('Cannot connect') }
+  }
 
   // ── Select employee ──────────────────────────────────────────────────────
   const handleSelectEmp = async (emp) => {
@@ -555,6 +587,7 @@ const PMChats = () => {
                   task={task}
                   selected={selectedTask?.id === task.id}
                   onClick={() => handleSelectTask(task)}
+                  onDelete={handleDeleteTask}
                 />
               </motion.div>
             ))
