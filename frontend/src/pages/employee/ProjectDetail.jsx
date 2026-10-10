@@ -349,7 +349,8 @@ const ChatTab = ({ tasks, employeeId, currentUser }) => {
       let res
       if (attachedFile) {
         const fd = new FormData()
-        fd.append('content', message.trim() || attachedFile.name)
+        // Only append content if user typed a message — don't use filename as content
+        if (message.trim()) fd.append('content', message.trim())
         fd.append('attachment', attachedFile)
         res = await api.upload(`/tasks/${selectedTask.id}/comments`, fd)
       } else {
