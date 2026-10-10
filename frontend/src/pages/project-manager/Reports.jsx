@@ -585,13 +585,13 @@ const PMReports = () => {
 
                   return (
                     <tr key={emp.id} className="border-b border-gray-50 dark:border-dark-700 hover:bg-gray-50/50 dark:hover:bg-dark-700/30 transition-colors">
-                      {/* Employee name — click to see all tasks */}
-                      <td className="sticky left-0 bg-white dark:bg-dark-800 z-10 px-4 py-2.5">
-                        <div className="flex items-center gap-2.5 cursor-pointer group/emp"
-                          onClick={() => setEmpDrawer(emp)}>
+                      {/* Employee name — click anywhere in cell to see all tasks */}
+                      <td className="sticky left-0 bg-white dark:bg-dark-800 z-10 px-4 py-2.5 cursor-pointer"
+                        onClick={() => setEmpDrawer(emp)}>
+                        <div className="flex items-center gap-2.5 group/emp">
                           <Avatar name={empName} src={emp.avatar_url} size="sm" />
                           <div className="min-w-0">
-                            <p className="font-semibold text-gray-800 dark:text-gray-200 truncate text-xs group-hover/emp:text-primary-500 transition-colors">{empName}</p>
+                            <p className="font-semibold text-gray-800 dark:text-gray-200 truncate text-xs group-hover/emp:text-primary-500 transition-colors underline-offset-2 group-hover/emp:underline">{empName}</p>
                             <p className="text-[10px] text-gray-400 truncate">{emp.designation || emp.department_name || '—'}</p>
                           </div>
                         </div>
