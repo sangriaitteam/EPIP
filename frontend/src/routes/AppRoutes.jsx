@@ -25,6 +25,7 @@ import PMProjectUpdates from '../pages/project-manager/ProjectUpdates'
 import PMProjectDetail from '../pages/project-manager/ProjectDetail'
 import PMChats         from '../pages/project-manager/Chats'
 import PMGroupChats    from '../pages/project-manager/GroupChats'
+import TaskChatPage    from '../pages/project-manager/TaskChatPage'
 
 // HR (Admin) pages
 import HRDashboard from '../pages/hr/Dashboard'
@@ -108,13 +109,14 @@ const AppRoutes = () => (
     {/* Project Manager */}
     <Route element={<ProtectedRoute allowedRoles={['project_manager']} />}>
       <Route element={<DashboardLayout />}>
-        <Route path="/pm/dashboard" element={<PMDashboard />} />
-        <Route path="/pm/reports"   element={<PMReports />} />
-        <Route path="/pm/projects"  element={<PMProjects />} />
-        <Route path="/pm/projects/:id" element={<PMProjectDetail />} />
-        <Route path="/pm/updates"      element={<PMProjectUpdates />} />
-        <Route path="/pm/chats"        element={<PMChats />} />
-        <Route path="/pm/group-chats"  element={<PMGroupChats />} />
+        <Route path="/pm/dashboard"        element={<PMDashboard />} />
+        <Route path="/pm/reports"          element={<PMReports />} />
+        <Route path="/pm/projects"         element={<PMProjects />} />
+        <Route path="/pm/projects/:id"     element={<PMProjectDetail />} />
+        <Route path="/pm/updates"          element={<PMProjectUpdates />} />
+        <Route path="/pm/chats"            element={<PMChats />} />
+        <Route path="/pm/group-chats"      element={<PMGroupChats />} />
+        <Route path="/pm/task-chat/:taskId" element={<TaskChatPage />} />
       </Route>
     </Route>
 
