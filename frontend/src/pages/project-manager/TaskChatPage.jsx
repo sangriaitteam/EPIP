@@ -195,16 +195,27 @@ const TaskChatPage = () => {
   }
 
   const handleReassign = async (newAssignedTo) => {
+    if (!newAssignedTo) return
+    const memberId = parseInt(newAssignedTo)
+    if (isNaN(memberId)) return
     try {
-      const res = await api.put(`/tasks/${taskId}`, { assigned_to: parseInt(newAssignedTo) })
+      const res = await api.put(`/tasks/${taskId}`, { assigned_to: memberId })
       if (res.success) {
         toast.success('Task reassigned!')
-        // Refresh task info
+        // Re-fetch task from server to confirm DB saved correctly
         const taskRes = await api.get(`/tasks/${taskId}`)
-        if (taskRes.success) setTask(taskRes.data)
+        if (taskRes.success && taskRes.data) {
+          setTask(taskRes.data)
+        }
         setShowReassign(false)
-      } else toast.error(res.message || 'Reassign failed')
-    } catch { toast.error('Cannot connect') }
+      } else {
+        console.error('[Reassign] Failed:', res)
+        toast.error(res.message || 'Reassign failed')
+      }
+    } catch (err) {
+      console.error('[Reassign] Error:', err)
+      toast.error('Cannot connect')
+    }
   }
 
   useEffect(() => { loadComments() }, [taskId])

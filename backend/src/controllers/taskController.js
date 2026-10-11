@@ -182,7 +182,13 @@ const getById = async (req, res, next) => {
 // PUT /api/tasks/:id
 const update = async (req, res, next) => {
   try {
-    const task = await Task.update(req.params.id, req.body)
+    // Ensure assigned_to is integer if present
+    const body = { ...req.body }
+    if (body.assigned_to !== undefined) {
+      body.assigned_to = parseInt(body.assigned_to)
+      if (isNaN(body.assigned_to)) delete body.assigned_to
+    }
+    const task = await Task.update(req.params.id, body)
     if (!task) return fail(res, 'Task not found', 404)
     return ok(res, task, 'Task updated')
   } catch (err) { next(err) }
