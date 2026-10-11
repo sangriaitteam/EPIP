@@ -5,7 +5,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Send, Paperclip, ThumbsUp,
-  Calendar, AlertTriangle, X, MessageSquare
+  Calendar, AlertTriangle, X, MessageSquare, RefreshCw
 } from 'lucide-react'
 import Avatar from '../../components/common/Avatar'
 import { api, resolveFileUrl } from '../../services/api'
@@ -152,6 +152,8 @@ const TaskChatPage = () => {
 
   // Task can come from navigation state (fast) or fetched from API
   const [task,        setTask]        = useState(location.state?.task || null)
+  const [members,     setMembers]     = useState([])   // project team members for reassign
+  const [showReassign,setShowReassign]= useState(false)
   const [comments,    setComments]    = useState([])
   const [loading,     setLoading]     = useState(true)
   const [sending,     setSending]     = useState(false)
@@ -172,6 +174,13 @@ const TaskChatPage = () => {
         if (res.success) setTask(res.data)
       }).catch(() => {})
     }
+    // Load project members for reassign dropdown
+    const pid = location.state?.projectId || task?.project_id
+    if (pid) {
+      api.get(`/projects/${pid}`).then(res => {
+        if (res.success) setMembers(res.data?.memberStats || [])
+      }).catch(() => {})
+    }
   }, [taskId])
 
   const loadComments = async () => {
@@ -183,6 +192,19 @@ const TaskChatPage = () => {
       }
     } catch {}
     setLoading(false)
+  }
+
+  const handleReassign = async (newAssignedTo) => {
+    try {
+      const res = await api.put(`/tasks/${taskId}`, { assigned_to: parseInt(newAssignedTo) })
+      if (res.success) {
+        toast.success('Task reassigned!')
+        // Refresh task info
+        const taskRes = await api.get(`/tasks/${taskId}`)
+        if (taskRes.success) setTask(taskRes.data)
+        setShowReassign(false)
+      } else toast.error(res.message || 'Reassign failed')
+    } catch { toast.error('Cannot connect') }
   }
 
   useEffect(() => { loadComments() }, [taskId])
@@ -234,7 +256,8 @@ const TaskChatPage = () => {
   const projectId = location.state?.projectId || task?.project_id
 
   return (
-    <div className="flex flex-col h-[calc(100vh-80px)] bg-white dark:bg-dark-800 rounded-2xl border border-gray-100 dark:border-dark-600 shadow-sm overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-80px)] bg-white dark:bg-dark-800 rounded-2xl border border-gray-100 dark:border-dark-600 shadow-sm overflow-hidden"
+      onClick={() => showReassign && setShowReassign(false)}>
 
       {/* Header */}
       <div className="flex items-center gap-3 px-4 sm:px-5 py-3.5 border-b border-gray-100 dark:border-dark-600 flex-shrink-0">
@@ -268,6 +291,44 @@ const TaskChatPage = () => {
             )}
           </div>
         </div>
+
+        {/* Reassign button */}
+        {members.length > 0 && (
+          <div className="relative flex-shrink-0">
+            <button
+              onClick={() => setShowReassign(s => !s)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-primary-500/10 text-primary-500 hover:bg-primary-500 hover:text-white transition-colors"
+              title="Reassign task"
+            >
+              <RefreshCw size={12} /> Reassign
+            </button>
+            {showReassign && (
+              <div className="absolute right-0 top-full mt-1 z-50 w-44 bg-white dark:bg-dark-800 rounded-xl shadow-xl border border-gray-100 dark:border-dark-600 overflow-hidden">
+                <p className="px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wide border-b border-gray-100 dark:border-dark-600">
+                  Reassign to
+                </p>
+                {members.map(m => {
+                  const name = `${m.first_name || ''} ${m.last_name || ''}`.trim()
+                  const isCurrent = String(m.id) === String(task?.assigned_to)
+                  return (
+                    <button key={m.id}
+                      onClick={() => handleReassign(m.id)}
+                      className={`w-full flex items-center gap-2 px-3 py-2.5 text-xs text-left transition-colors hover:bg-gray-50 dark:hover:bg-dark-700 ${
+                        isCurrent ? 'text-primary-500 font-semibold' : 'text-gray-700 dark:text-gray-300'
+                      }`}
+                    >
+                      <span className="w-6 h-6 rounded-full bg-primary-500/20 flex items-center justify-center text-[9px] font-bold text-primary-600 flex-shrink-0">
+                        {name.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
+                      </span>
+                      <span className="truncate">{name}</span>
+                      {isCurrent && <span className="ml-auto text-[10px]">✓</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Messages */}

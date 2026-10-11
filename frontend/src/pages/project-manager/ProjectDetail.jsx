@@ -417,7 +417,7 @@ const TaskCard = ({ task, onStatusChange, onDelete }) => {
   )
 }
 
-const TasksTab = ({ tasks, projectId, project, memberStats, weekStart, setWeekStart }) => {
+const TasksTab = ({ tasks, projectId, project, memberStats, weekStart, setWeekStart, onReload }) => {
   const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
   const DAY_SHORT = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
 
@@ -449,6 +449,7 @@ const TasksTab = ({ tasks, projectId, project, memberStats, weekStart, setWeekSt
       const res = await api.put(`/tasks/${taskId}`, { assigned_to: parseInt(newAssignedTo) })
       if (res.success) {
         toast.success('Task reassigned!')
+        // Reload the full project data instead of window.location.reload
         onReload()
       } else toast.error(res.message || 'Reassign failed')
     } catch { toast.error('Cannot connect') }
@@ -660,7 +661,7 @@ const TasksTab = ({ tasks, projectId, project, memberStats, weekStart, setWeekSt
                                 onBlur={(e) => {
                                   const val = e.target.value
                                   if (val && val !== String(t.assigned_to)) {
-                                    handleReassign(t.id, val, () => window.location.reload())
+                                    handleReassign(t.id, val, onReload || (() => {}))
                                   } else {
                                     setReassigningId(null)
                                   }
@@ -668,7 +669,7 @@ const TasksTab = ({ tasks, projectId, project, memberStats, weekStart, setWeekSt
                                 onChange={(e) => {
                                   const val = e.target.value
                                   if (val && val !== String(t.assigned_to)) {
-                                    handleReassign(t.id, val, () => window.location.reload())
+                                    handleReassign(t.id, val, onReload || (() => {}))
                                   }
                                 }}
                                 className="mt-1 w-full px-2 py-1 text-[10px] rounded-lg border border-primary-500 bg-dark-700 text-white focus:outline-none"
@@ -1511,7 +1512,7 @@ const ProjectDetail = () => {
       <AnimatePresence mode="wait">
         <motion.div key={tab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
-          {tab === 'tasks'    && <TasksTab tasks={tasks} projectId={id} project={project} memberStats={memberStats} weekStart={weekStart} setWeekStart={setWeekStart} />}
+          {tab === 'tasks'    && <TasksTab tasks={tasks} projectId={id} project={project} memberStats={memberStats} weekStart={weekStart} setWeekStart={setWeekStart} onReload={() => load(true)} />}
           {tab === 'overview' && <OverviewTab project={project} tasks={tasks} memberStats={memberStats} />}
           {tab === 'team'     && <TeamTab memberStats={memberStats} />}
           {tab === 'reports'  && <ReportsTab project={project} projectId={id} />}
