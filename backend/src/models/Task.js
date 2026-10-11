@@ -94,7 +94,7 @@ const Task = {
   },
 
   async update(id, fields) {
-    const allowed = ['title', 'description', 'priority', 'status', 'due_date', 'completion_percent', 'tags', 'start_time', 'end_time']
+    const allowed = ['title', 'description', 'priority', 'status', 'due_date', 'completion_percent', 'tags', 'start_time', 'end_time', 'assigned_to']
     const sets = []; const vals = []
     Object.entries(fields).forEach(([k, v]) => {
       if (allowed.includes(k)) { vals.push(v); sets.push(`${k} = $${vals.length}`) }

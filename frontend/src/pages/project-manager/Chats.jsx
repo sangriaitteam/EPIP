@@ -3,7 +3,6 @@
 // All messages stored in task_comments — same table employee uses, so fully bidirectional
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft, Send, Paperclip, Smile,
   MessageSquare, FolderOpen, Calendar, AlertTriangle,
@@ -89,14 +88,14 @@ const ChatBubble = ({ msg, isMe }) => (
           ? 'bg-primary-500 text-white rounded-br-sm'
           : 'bg-gray-100 dark:bg-dark-700 text-gray-800 dark:text-gray-200 rounded-bl-sm'
       }`}>
-        {msg.content && msg.content.trim() && <p>{msg.content}</p>}
+        {msg.content}
         {/* File attachment */}
         {(msg.file_url || msg.file_data) && (() => {
           const absUrl = msg.file_data || resolveFileUrl(msg.file_url)
           if (!absUrl) return (
-            <div className="mt-2 flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-600/30 text-gray-500 text-[11px]">
-              <Paperclip size={10}/><span className="truncate">{msg.file_name || 'Attachment'}</span>
-              <span className="ml-auto text-[10px]">Unavailable</span>
+            <div className="mt-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] bg-gray-700/30 text-gray-500">
+              <Paperclip size={10} /><span className="truncate">{msg.file_name || 'Attachment'}</span>
+              <span className="ml-auto">Unavailable</span>
             </div>
           )
           const isImage = msg.file_type?.startsWith('image/')
@@ -110,20 +109,22 @@ const ChatBubble = ({ msg, isMe }) => (
           return (
             <div className="mt-2">
               {isImage ? (
-                <div className="space-y-0.5">
+                <div className="space-y-1">
                   <img src={absUrl} alt={msg.file_name} onClick={doDownload}
-                    className="max-w-[220px] rounded-xl cursor-pointer hover:opacity-90 border border-white/10" />
+                    className="max-w-[200px] rounded-xl cursor-pointer hover:opacity-90 border border-white/10" />
                   <p className={`text-[10px] ${isMe ? 'text-white/60' : 'text-gray-400'}`}>Tap to download</p>
                 </div>
               ) : isVideo ? (
-                <div className="space-y-1">
-                  <video src={absUrl} controls className="max-w-[240px] rounded-xl border border-white/10" style={{ maxHeight: 150 }} />
-                  <button onClick={doDownload} className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] w-full justify-center ${isMe ? 'bg-white/20 text-white' : 'bg-gray-100 dark:bg-dark-600 text-gray-700 dark:text-gray-300'}`}>
+                <div className="space-y-1.5">
+                  <video src={absUrl} controls className="max-w-[220px] rounded-xl border border-white/10" style={{ maxHeight: 140 }} />
+                  <button onClick={doDownload}
+                    className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] w-full justify-center ${isMe ? 'bg-white/20 text-white' : 'bg-gray-100 dark:bg-dark-600 text-gray-700'}`}>
                     ⬇ Download video
                   </button>
                 </div>
               ) : (
-                <button onClick={doDownload} className={`flex items-center gap-2 px-3 py-2 rounded-xl border w-full text-left mt-1 ${isMe ? 'border-white/20 bg-white/10 hover:bg-white/20' : 'border-gray-200 dark:border-dark-500 bg-white dark:bg-dark-600 hover:bg-gray-50'}`}>
+                <button onClick={doDownload}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl border w-full text-left mt-1 ${isMe ? 'border-white/20 bg-white/10 hover:bg-white/20' : 'border-gray-200 dark:border-dark-500 bg-white dark:bg-dark-600 hover:bg-gray-50'}`}>
                   <span className="text-xl">
                     {msg.file_name?.match(/\.pdf$/i) ? '📄' : msg.file_name?.match(/\.(xlsx?|csv)$/i) ? '📊'
                       : msg.file_name?.match(/\.(zip|rar|7z)$/i) ? '🗜️' : msg.file_name?.match(/\.(docx?)$/i) ? '📝' : '📎'}
@@ -268,8 +269,6 @@ const TaskItem = ({ task, selected, onClick, onDelete }) => {
 // ── Main Component ────────────────────────────────────────────────────────────
 const PMChats = () => {
   const { user } = useAuth()
-  const [searchParams] = useSearchParams()
-  const autoTaskId = searchParams.get('taskId')
 
   // Panel state
   const [employees,       setEmployees]       = useState([])
@@ -373,28 +372,6 @@ const PMChats = () => {
   }
 
   useEffect(() => { loadEmployees() }, [])
-
-  // Auto-open task from URL param (e.g. ?taskId=5 from ProjectDetail chat button)
-  useEffect(() => {
-    if (!autoTaskId || employees.length === 0) return
-    const taskIdNum = parseInt(autoTaskId)
-    // Find which employee has this task
-    const emp = employees.find(e => (e.tasks || []).some(t => t.id === taskIdNum))
-    if (emp) {
-      handleSelectEmp(emp).then(() => {
-        // loadEmpTasks sets empTasks — we need to find the task after load
-      })
-    }
-  }, [autoTaskId, employees]) // eslint-disable-line
-
-  // When empTasks loads and autoTaskId set, auto-select that task
-  useEffect(() => {
-    if (!autoTaskId || empTasks.length === 0) return
-    const task = empTasks.find(t => t.id === parseInt(autoTaskId))
-    if (task && selectedTask?.id !== task.id) {
-      handleSelectTask(task)
-    }
-  }, [empTasks, autoTaskId]) // eslint-disable-line
 
   // Scroll to bottom
   useEffect(() => {

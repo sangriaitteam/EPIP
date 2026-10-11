@@ -438,9 +438,22 @@ const TasksTab = ({ tasks, projectId, project, memberStats, weekStart, setWeekSt
     todo:        { label: 'Pending',     dot: 'bg-gray-500',   pill: 'bg-gray-500/15 text-gray-400 border border-gray-500/30' },
   }
 
-  const [editingTime, setEditingTime] = useState(null)
-  const [savingTime,  setSavingTime]  = useState(null)
+  const [editingTime,    setEditingTime]    = useState(null)
+  const [savingTime,     setSavingTime]     = useState(null)
+  const [reassigningId,  setReassigningId]  = useState(null) // taskId being reassigned
   const navigate = useNavigate()
+
+  const handleReassign = async (taskId, newAssignedTo, onReload) => {
+    if (!newAssignedTo) return
+    try {
+      const res = await api.put(`/tasks/${taskId}`, { assigned_to: parseInt(newAssignedTo) })
+      if (res.success) {
+        toast.success('Task reassigned!')
+        onReload()
+      } else toast.error(res.message || 'Reassign failed')
+    } catch { toast.error('Cannot connect') }
+    setReassigningId(null)
+  }
 
   const handleTimeSave = async (taskId, field, value) => {
     if (!value?.trim()) { setEditingTime(null); return }
@@ -636,11 +649,46 @@ const TasksTab = ({ tasks, projectId, project, memberStats, weekStart, setWeekSt
                             </div>
                           </td>
 
-                          {/* Task name */}
+                          {/* Task name + assignee + reassign */}
                           <td className="px-4 py-3">
                             <p className="text-sm font-medium text-gray-800 dark:text-gray-200 max-w-[200px] leading-snug">{t.title}</p>
-                            {t.assignee_name && (
-                              <p className="text-[10px] text-gray-400 mt-0.5">👤 {t.assignee_name}</p>
+                            {/* Assignee + reassign */}
+                            {reassigningId === t.id ? (
+                              <select
+                                autoFocus
+                                defaultValue={t.assigned_to || ''}
+                                onBlur={(e) => {
+                                  const val = e.target.value
+                                  if (val && val !== String(t.assigned_to)) {
+                                    handleReassign(t.id, val, () => window.location.reload())
+                                  } else {
+                                    setReassigningId(null)
+                                  }
+                                }}
+                                onChange={(e) => {
+                                  const val = e.target.value
+                                  if (val && val !== String(t.assigned_to)) {
+                                    handleReassign(t.id, val, () => window.location.reload())
+                                  }
+                                }}
+                                className="mt-1 w-full px-2 py-1 text-[10px] rounded-lg border border-primary-500 bg-dark-700 text-white focus:outline-none"
+                              >
+                                <option value="">Select member</option>
+                                {(memberStats || []).map(m => {
+                                  const name = `${m.first_name || ''} ${m.last_name || ''}`.trim()
+                                  return <option key={m.id} value={m.id}>{name}</option>
+                                })}
+                              </select>
+                            ) : (
+                              <button
+                                onClick={() => setReassigningId(t.id)}
+                                className="mt-0.5 flex items-center gap-1 text-[10px] text-gray-400 hover:text-primary-400 transition-colors group/reassign"
+                                title="Click to reassign"
+                              >
+                                <span>👤</span>
+                                <span>{t.assignee_name || t.assigned_to_name || '—'}</span>
+                                <span className="opacity-0 group-hover/reassign:opacity-100 text-[9px] text-primary-400 ml-0.5">↺</span>
+                              </button>
                             )}
                           </td>
 
