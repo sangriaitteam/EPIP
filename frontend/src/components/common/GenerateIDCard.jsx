@@ -16,8 +16,13 @@ const TemplateOverlayCard = ({ templateUrl, photo, name, designation, empId, car
   const photoTop        = config.photoTop        ?? 37
   const photoLeft       = config.photoLeft       ?? 50
   const photoSize       = config.photoSize       ?? 110
-  const detailsTop      = config.detailsTop      ?? 60
-  const detailsLeft     = config.detailsLeft     ?? 50
+  // Separate positions for each text element
+  const nameTop         = config.nameTop         ?? config.detailsTop  ?? 60
+  const nameLeft        = config.nameLeft        ?? config.detailsLeft ?? 50
+  const designationTop  = config.designationTop  ?? (nameTop + 5)
+  const designationLeft = config.designationLeft ?? nameLeft
+  const empIdTop        = config.empIdTop        ?? (designationTop + 5)
+  const empIdLeft       = config.empIdLeft       ?? nameLeft
   const nameSize        = config.nameSize        ?? 16
   const designationSize = config.designationSize ?? 12
   const empIdSize       = config.empIdSize       ?? 12
@@ -72,55 +77,41 @@ const TemplateOverlayCard = ({ templateUrl, photo, name, designation, empId, car
       )}
     </div>
 
-    {/* Employee details — positioned by detailsTop + detailsLeft */}
+    {/* Name — separate draggable position */}
     <div style={{
       position: 'absolute',
-      top: `${detailsTop}%`,
-      left: `${detailsLeft}%`,
+      top: `${nameTop}%`,
+      left: `${nameLeft}%`,
       transform: 'translateX(-50%)',
-      width: 'max-content',
-      maxWidth: '90%',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: '3px',
+      whiteSpace: 'nowrap',
     }}>
-      {/* Name */}
-      <p style={{
-        color: '#111111',
-        fontWeight: 700,
-        fontSize: `${nameSize}px`,
-        textAlign: 'center',
-        margin: 0,
-        lineHeight: 1.2,
-        whiteSpace: 'nowrap',
-      }}>
+      <p style={{ color: '#111111', fontWeight: 700, fontSize: `${nameSize}px`, textAlign: 'center', margin: 0, lineHeight: 1.2 }}>
         {name || 'Employee Name'}
       </p>
+    </div>
 
-      {/* Designation */}
-      <p style={{
-        color: '#333333',
-        fontWeight: 600,
-        fontSize: `${designationSize}px`,
-        textAlign: 'center',
-        margin: 0,
-        letterSpacing: '0.5px',
-        whiteSpace: 'nowrap',
-      }}>
+    {/* Designation — separate position */}
+    <div style={{
+      position: 'absolute',
+      top: `${designationTop}%`,
+      left: `${designationLeft}%`,
+      transform: 'translateX(-50%)',
+      whiteSpace: 'nowrap',
+    }}>
+      <p style={{ color: '#333333', fontWeight: 600, fontSize: `${designationSize}px`, textAlign: 'center', margin: 0, letterSpacing: '0.5px' }}>
         {designation || 'Designation'}
       </p>
+    </div>
 
-      {/* Emp ID */}
-      <p style={{
-        color: '#111111',
-        fontWeight: 700,
-        fontSize: `${empIdSize}px`,
-        textAlign: 'center',
-        margin: '2px 0 0',
-        letterSpacing: '1px',
-        whiteSpace: 'nowrap',
-      }}>
+    {/* Emp ID — separate position */}
+    <div style={{
+      position: 'absolute',
+      top: `${empIdTop}%`,
+      left: `${empIdLeft}%`,
+      transform: 'translateX(-50%)',
+      whiteSpace: 'nowrap',
+    }}>
+      <p style={{ color: '#111111', fontWeight: 700, fontSize: `${empIdSize}px`, textAlign: 'center', margin: 0, letterSpacing: '1px' }}>
         {empId || 'EMP0000'}
       </p>
     </div>
@@ -203,8 +194,12 @@ const GenerateIDCard = ({ empData, onClose }) => {
       const photoTop         = tplConfig.photoTop         ?? 37
       const photoLeft        = tplConfig.photoLeft        ?? 50
       const photoSize        = tplConfig.photoSize        ?? 110
-      const detailsTop       = tplConfig.detailsTop       ?? 60
-      const detailsLeft      = tplConfig.detailsLeft      ?? 50
+      const nameTop          = tplConfig.nameTop          ?? tplConfig.detailsTop  ?? 60
+      const nameLeft         = tplConfig.nameLeft         ?? tplConfig.detailsLeft ?? 50
+      const designationTop   = tplConfig.designationTop   ?? (nameTop + 5)
+      const designationLeft  = tplConfig.designationLeft  ?? nameLeft
+      const empIdTop         = tplConfig.empIdTop         ?? (designationTop + 5)
+      const empIdLeft        = tplConfig.empIdLeft        ?? nameLeft
       const nameSize         = tplConfig.nameSize         ?? 16
       const designationSize  = tplConfig.designationSize  ?? 12
       const empIdSize        = tplConfig.empIdSize        ?? 12
@@ -266,8 +261,6 @@ const GenerateIDCard = ({ empData, onClose }) => {
 
       // 4. Text details (only for uploaded template)
       if (isUploadedTemplate) {
-        const detailsY = (detailsTop / 100) * CARD_H
-        const detailsX = (detailsLeft / 100) * CARD_W
         ctx.textAlign   = 'center'
         ctx.shadowColor = 'transparent'
         ctx.shadowBlur  = 0
@@ -276,25 +269,26 @@ const GenerateIDCard = ({ empData, onClose }) => {
         const dSize  = parseFloat(designationSize) || 12
         const eSize  = parseFloat(empIdSize)       || 12
 
-        // Tight line spacing matching preview (gap: 3px between items)
-        const yName = detailsY + nSize
-        const yDes  = yName + nSize * 1.2 + 3
-        const yEmp  = yDes  + dSize * 1.2 + 3
-
-        // Name
+        // Name — independent position
+        const nX = (nameLeft        / 100) * CARD_W
+        const nY = (nameTop         / 100) * CARD_H + nSize
         ctx.font      = `bold ${nSize}px Arial`
         ctx.fillStyle = '#111111'
-        ctx.fillText(generated?.custom_name || form.name || '', detailsX, yName)
+        ctx.fillText(generated?.custom_name || form.name || '', nX, nY)
 
-        // Designation
+        // Designation — independent position
+        const dX = (designationLeft / 100) * CARD_W
+        const dY = (designationTop  / 100) * CARD_H + dSize
         ctx.font      = `600 ${dSize}px Arial`
         ctx.fillStyle = '#333333'
-        ctx.fillText(generated?.custom_designation || form.designation || '', detailsX, yDes)
+        ctx.fillText(generated?.custom_designation || form.designation || '', dX, dY)
 
-        // Emp ID
+        // Emp ID — independent position
+        const eX = (empIdLeft       / 100) * CARD_W
+        const eY = (empIdTop        / 100) * CARD_H + eSize
         ctx.font      = `bold ${eSize}px Arial`
         ctx.fillStyle = '#111111'
-        ctx.fillText(generated?.custom_emp_id || form.empId || '', detailsX, yEmp)
+        ctx.fillText(generated?.custom_emp_id || form.empId || '', eX, eY)
       }
 
       // 5. Download as PNG

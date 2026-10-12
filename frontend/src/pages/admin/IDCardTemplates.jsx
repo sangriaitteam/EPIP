@@ -33,11 +33,17 @@ const UPLOAD_DEFAULTS = {
   photoTop:        37,   // %
   photoLeft:       50,   // %
   photoSize:       110,  // px
-  detailsTop:      60,   // %
-  detailsLeft:     50,   // % (horizontal center)
-  nameSize:        10,   // px (preview scale)
-  designationSize: 8,    // px (preview scale)
-  empIdSize:       8,    // px (preview scale)
+  detailsTop:      60,   // % (legacy - kept for backward compat)
+  detailsLeft:     50,   // % (legacy)
+  nameTop:         60,   // %
+  nameLeft:        50,   // %
+  designationTop:  65,   // %
+  designationLeft: 50,   // %
+  empIdTop:        70,   // %
+  empIdLeft:       50,   // %
+  nameSize:        10,   // px
+  designationSize: 8,    // px
+  empIdSize:       8,    // px
 }
 
 // ── ID Card Preview Component ─────────────────────────────────────────────────
@@ -245,23 +251,25 @@ const IDCardTemplates = () => {
   // Drag state for preview
   const previewContainerRef = useRef(null)
   const [isDraggingPhoto,   setIsDraggingPhoto]   = useState(false)
-  const [isDraggingDetails, setIsDraggingDetails] = useState(false)
+  const [isDraggingName,    setIsDraggingName]    = useState(false)
+  const [isDraggingDes,     setIsDraggingDes]     = useState(false)
+  const [isDraggingEmpId,   setIsDraggingEmpId]   = useState(false)
 
-  const handlePhotoDragStart = (e) => {
+  // Generic drag helper
+  const makeDragHandler = (setDragging, xKey, yKey, xMin, xMax, yMin, yMax) => (e) => {
     e.preventDefault()
-    setIsDraggingPhoto(true)
+    setDragging(true)
     const container = previewContainerRef.current
     if (!container) return
     const rect = container.getBoundingClientRect()
-    // rect is already scaled by CSS transform — use it directly for % calculation
     const onMove = (mv) => {
-      const x = Math.min(90, Math.max(10, ((mv.clientX - rect.left) / rect.width)  * 100))
-      const y = Math.min(80, Math.max(10, ((mv.clientY - rect.top)  / rect.height) * 100))
-      setC('photoLeft', parseFloat(x.toFixed(1)))
-      setC('photoTop',  parseFloat(y.toFixed(1)))
+      const x = Math.min(xMax, Math.max(xMin, ((mv.clientX - rect.left)  / rect.width)  * 100))
+      const y = Math.min(yMax, Math.max(yMin, ((mv.clientY - rect.top)   / rect.height) * 100))
+      setC(xKey, parseFloat(x.toFixed(1)))
+      setC(yKey, parseFloat(y.toFixed(1)))
     }
     const onUp = () => {
-      setIsDraggingPhoto(false)
+      setDragging(false)
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup',   onUp)
     }
@@ -269,26 +277,10 @@ const IDCardTemplates = () => {
     window.addEventListener('mouseup',   onUp)
   }
 
-  const handleDetailsDragStart = (e) => {
-    e.preventDefault()
-    setIsDraggingDetails(true)
-    const container = previewContainerRef.current
-    if (!container) return
-    const rect = container.getBoundingClientRect()
-    const onMove = (mv) => {
-      const x = Math.min(90, Math.max(10, ((mv.clientX - rect.left) / rect.width)  * 100))
-      const y = Math.min(90, Math.max(30, ((mv.clientY - rect.top)  / rect.height) * 100))
-      setC('detailsLeft', parseFloat(x.toFixed(1)))
-      setC('detailsTop',  parseFloat(y.toFixed(1)))
-    }
-    const onUp = () => {
-      setIsDraggingDetails(false)
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup',   onUp)
-    }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup',   onUp)
-  }
+  const handlePhotoDragStart   = makeDragHandler(setIsDraggingPhoto,  'photoLeft',      'photoTop',      10, 90, 10, 80)
+  const handleNameDragStart    = makeDragHandler(setIsDraggingName,   'nameLeft',       'nameTop',       10, 90, 30, 95)
+  const handleDesDragStart     = makeDragHandler(setIsDraggingDes,    'designationLeft','designationTop',10, 90, 30, 95)
+  const handleEmpIdDragStart   = makeDragHandler(setIsDraggingEmpId,  'empIdLeft',      'empIdTop',      10, 90, 30, 95)
 
   useEffect(() => { loadTemplates() }, [])
 
@@ -580,27 +572,42 @@ const IDCardTemplates = () => {
                                 onChange={v => setC('photoSize', v)} />
                             </div>
 
-                            {/* Details position */}
+                            {/* Name position */}
                             <div className="space-y-3 pt-3 border-t border-gray-100 dark:border-dark-600">
                               <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">
-                                🧾 Details Position
+                                🔵 Name Position
                               </p>
-                              <AdjustRow label="Top position" value={U('detailsTop')} min={30} max={90} step={0.1} unit="%"
-                                onChange={v => setC('detailsTop', v)} />
-                              <AdjustRow label="Left / Right position" value={U('detailsLeft')} min={10} max={90} step={0.1} unit="%"
-                                onChange={v => setC('detailsLeft', v)} />
+                              <AdjustRow label="Top" value={U('nameTop')} min={30} max={95} step={0.1} unit="%"
+                                onChange={v => setC('nameTop', v)} />
+                              <AdjustRow label="Left / Right" value={U('nameLeft')} min={10} max={90} step={0.1} unit="%"
+                                onChange={v => setC('nameLeft', v)} />
+                              <AdjustRow label="Font size" value={U('nameSize')} min={6} max={28} step={0.1} unit="px"
+                                onChange={v => setC('nameSize', v)} />
                             </div>
 
-                            {/* Font sizes */}
+                            {/* Designation position */}
                             <div className="space-y-3 pt-3 border-t border-gray-100 dark:border-dark-600">
                               <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">
-                                🔤 Font Sizes
+                                � Designation Position
                               </p>
-                              <AdjustRow label="Name font size" value={U('nameSize')} min={6} max={28} step={0.1} unit="px"
-                                onChange={v => setC('nameSize', v)} />
-                              <AdjustRow label="Designation font size" value={U('designationSize')} min={5} max={24} step={0.1} unit="px"
+                              <AdjustRow label="Top" value={U('designationTop')} min={30} max={95} step={0.1} unit="%"
+                                onChange={v => setC('designationTop', v)} />
+                              <AdjustRow label="Left / Right" value={U('designationLeft')} min={10} max={90} step={0.1} unit="%"
+                                onChange={v => setC('designationLeft', v)} />
+                              <AdjustRow label="Font size" value={U('designationSize')} min={5} max={24} step={0.1} unit="px"
                                 onChange={v => setC('designationSize', v)} />
-                              <AdjustRow label="Emp ID font size" value={U('empIdSize')} min={5} max={24} step={0.1} unit="px"
+                            </div>
+
+                            {/* Emp ID position */}
+                            <div className="space-y-3 pt-3 border-t border-gray-100 dark:border-dark-600">
+                              <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+                                🟡 Emp ID Position
+                              </p>
+                              <AdjustRow label="Top" value={U('empIdTop')} min={30} max={95} step={0.1} unit="%"
+                                onChange={v => setC('empIdTop', v)} />
+                              <AdjustRow label="Left / Right" value={U('empIdLeft')} min={10} max={90} step={0.1} unit="%"
+                                onChange={v => setC('empIdLeft', v)} />
+                              <AdjustRow label="Font size" value={U('empIdSize')} min={5} max={24} step={0.1} unit="px"
                                 onChange={v => setC('empIdSize', v)} />
                             </div>
                           </div>
@@ -679,28 +686,58 @@ const IDCardTemplates = () => {
                           </span>
                         </div>
 
-                        {/* Draggable Details block */}
+                        {/* Draggable Name */}
                         <div
-                          onMouseDown={handleDetailsDragStart}
+                          onMouseDown={handleNameDragStart}
                           style={{
                             position: 'absolute',
-                            top: `${U('detailsTop')}%`,
-                            left: `${U('detailsLeft')}%`,
+                            top: `${U('nameTop')}%`,
+                            left: `${U('nameLeft')}%`,
                             transform: 'translateX(-50%)',
-                            width: 'max-content',
-                            maxWidth: '90%',
-                            textAlign: 'center',
-                            padding: '2px 8px',
-                            borderRadius: '4px',
-                            cursor: isDraggingDetails ? 'grabbing' : 'grab',
-                            border: isDraggingDetails ? '1px dashed #6366f1' : '1px dashed rgba(99,102,241,0.4)',
-                            background: isDraggingDetails ? 'rgba(99,102,241,0.1)' : 'transparent',
-                            zIndex: 10,
+                            cursor: isDraggingName ? 'grabbing' : 'grab',
+                            border: isDraggingName ? '1px dashed #6366f1' : '1px dashed rgba(99,102,241,0.5)',
+                            background: isDraggingName ? 'rgba(99,102,241,0.1)' : 'rgba(255,255,255,0.5)',
+                            padding: '1px 6px', borderRadius: '3px', zIndex: 10,
+                            whiteSpace: 'nowrap',
                           }}
                         >
-                          <p style={{ color: '#111', fontWeight: 700, fontSize: `${U('nameSize')}px`, margin: 0, whiteSpace: 'nowrap' }}>Employee Name</p>
-                          <p style={{ color: '#333', fontSize: `${U('designationSize')}px`, margin: '2px 0 0', whiteSpace: 'nowrap' }}>Designation</p>
-                          <p style={{ color: '#333', fontSize: `${U('empIdSize')}px`, fontWeight: 600, margin: '2px 0 0', whiteSpace: 'nowrap' }}>EMP0001</p>
+                          <p style={{ color: '#111', fontWeight: 700, fontSize: `${U('nameSize')}px`, margin: 0 }}>Employee Name</p>
+                        </div>
+
+                        {/* Draggable Designation */}
+                        <div
+                          onMouseDown={handleDesDragStart}
+                          style={{
+                            position: 'absolute',
+                            top: `${U('designationTop')}%`,
+                            left: `${U('designationLeft')}%`,
+                            transform: 'translateX(-50%)',
+                            cursor: isDraggingDes ? 'grabbing' : 'grab',
+                            border: isDraggingDes ? '1px dashed #10b981' : '1px dashed rgba(16,185,129,0.5)',
+                            background: isDraggingDes ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.5)',
+                            padding: '1px 6px', borderRadius: '3px', zIndex: 10,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          <p style={{ color: '#333', fontSize: `${U('designationSize')}px`, margin: 0 }}>Designation</p>
+                        </div>
+
+                        {/* Draggable Emp ID */}
+                        <div
+                          onMouseDown={handleEmpIdDragStart}
+                          style={{
+                            position: 'absolute',
+                            top: `${U('empIdTop')}%`,
+                            left: `${U('empIdLeft')}%`,
+                            transform: 'translateX(-50%)',
+                            cursor: isDraggingEmpId ? 'grabbing' : 'grab',
+                            border: isDraggingEmpId ? '1px dashed #f59e0b' : '1px dashed rgba(245,158,11,0.5)',
+                            background: isDraggingEmpId ? 'rgba(245,158,11,0.1)' : 'rgba(255,255,255,0.5)',
+                            padding: '1px 6px', borderRadius: '3px', zIndex: 10,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          <p style={{ color: '#333', fontSize: `${U('empIdSize')}px`, fontWeight: 600, margin: 0 }}>EMP0001</p>
                         </div>
                       </div>
                       </div>
