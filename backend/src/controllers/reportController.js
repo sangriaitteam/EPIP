@@ -430,9 +430,12 @@ const allEmployeesAttendance = async (req, res, next) => {
         })
       }
       headerRow.push(
-        { v: 'P',   s: { font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 10 }, fill: { fgColor: { rgb: '16A34A' } }, alignment: { horizontal: 'center' } } },
-        { v: 'A',   s: { font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 10 }, fill: { fgColor: { rgb: 'DC2626' } }, alignment: { horizontal: 'center' } } },
-        { v: 'OT',  s: { font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 10 }, fill: { fgColor: { rgb: '7C3AED' } }, alignment: { horizontal: 'center' } } },
+        { v: 'P',          s: { font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 10 }, fill: { fgColor: { rgb: '16A34A' } }, alignment: { horizontal: 'center' } } },
+        { v: 'A',          s: { font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 10 }, fill: { fgColor: { rgb: 'DC2626' } }, alignment: { horizontal: 'center' } } },
+        { v: 'OT',         s: { font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 10 }, fill: { fgColor: { rgb: '7C3AED' } }, alignment: { horizontal: 'center' } } },
+        { v: 'Total Days', s: { font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 9  }, fill: { fgColor: { rgb: '6B7280' } }, alignment: { horizontal: 'center', wrapText: true }, border: { left: { style: 'thin', color: { rgb: 'D1D5DB' } } } } },
+        { v: 'Attended',   s: { font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 9  }, fill: { fgColor: { rgb: '2563EB' } }, alignment: { horizontal: 'center' } } },
+        { v: 'Absent Days',s: { font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 9  }, fill: { fgColor: { rgb: 'EA580C' } }, alignment: { horizontal: 'center', wrapText: true } } },
       )
       aoa.push(headerRow)
 
@@ -467,11 +470,14 @@ const allEmployeesAttendance = async (req, res, next) => {
           })
         }
 
-        // Summary P / A / OT
+        // Summary P / A / OT + Total Days / Attended / Absent Days
         row.push(
           { v: emp.summary.present,    s: { font: { bold: true, color: { rgb: '16A34A' }, sz: 10 }, fill: { fgColor: { rgb: rowBg } }, alignment: { horizontal: 'center' } } },
           { v: emp.summary.absent,     s: { font: { bold: true, color: { rgb: 'DC2626' }, sz: 10 }, fill: { fgColor: { rgb: rowBg } }, alignment: { horizontal: 'center' } } },
           { v: emp.summary.sunday_ot,  s: { font: { bold: true, color: { rgb: '7C3AED' }, sz: 10 }, fill: { fgColor: { rgb: rowBg } }, alignment: { horizontal: 'center' } } },
+          { v: daysInMonth,            s: { font: { bold: true, color: { rgb: '6B7280' }, sz: 10 }, fill: { fgColor: { rgb: 'F3F4F6' } }, alignment: { horizontal: 'center' }, border: { left: { style: 'thin', color: { rgb: 'D1D5DB' } } } } },
+          { v: emp.summary.present,    s: { font: { bold: true, color: { rgb: '2563EB' }, sz: 10 }, fill: { fgColor: { rgb: 'EFF6FF' } }, alignment: { horizontal: 'center' } } },
+          { v: emp.summary.absent,     s: { font: { bold: true, color: { rgb: 'EA580C' }, sz: 10 }, fill: { fgColor: { rgb: 'FFF7ED' } }, alignment: { horizontal: 'center' } } },
         )
         aoa.push(row)
       }
@@ -481,12 +487,13 @@ const allEmployeesAttendance = async (req, res, next) => {
       // Row height for header
       ws['!rows'] = [{ hpt: 28 }, ...result.map(() => ({ hpt: 20 }))]
 
-      // Column widths: Name(24), ID(14), days(4 each), P/A/OT(5 each)
+      // Column widths: Name(24), ID(14), days(4 each), P/A/OT(5 each), Total/Attended/Absent(8 each)
       ws['!cols'] = [
         { wch: 24 },
         { wch: 14 },
         ...allDays.map(() => ({ wch: 4 })),
         { wch: 5 }, { wch: 5 }, { wch: 5 },
+        { wch: 8 }, { wch: 8 }, { wch: 8 },
       ]
 
       const wb = XLSXStyle.utils.book_new()

@@ -106,6 +106,9 @@ const AllEmployeesGrid = ({ data }) => {
               <th className="px-1 py-2.5 text-center font-bold text-green-600 dark:text-green-400 border-l border-gray-200 dark:border-dark-600" style={{ minWidth: 30 }}>P</th>
               <th className="px-1 py-2.5 text-center font-bold text-red-500" style={{ minWidth: 30 }}>A</th>
               <th className="px-1 py-2.5 text-center font-bold text-purple-500" style={{ minWidth: 30 }}>OT</th>
+              <th className="px-1 py-2.5 text-center font-bold text-gray-500 dark:text-gray-400 border-l border-gray-200 dark:border-dark-600 text-[9px] leading-tight" style={{ minWidth: 36 }}>Total<br/>Days</th>
+              <th className="px-1 py-2.5 text-center font-bold text-blue-500 text-[9px] leading-tight" style={{ minWidth: 42 }}>Attended</th>
+              <th className="px-1 py-2.5 text-center font-bold text-orange-500 text-[9px] leading-tight" style={{ minWidth: 38 }}>Absent<br/>Days</th>
             </tr>
           </thead>
 
@@ -158,6 +161,9 @@ const AllEmployeesGrid = ({ data }) => {
                   <td className="px-1 py-1 text-center font-bold text-green-600 dark:text-green-400 text-[10px] border-l border-gray-200 dark:border-dark-600">{emp.summary.present}</td>
                   <td className="px-1 py-1 text-center font-bold text-red-500 text-[10px]">{emp.summary.absent}</td>
                   <td className="px-1 py-1 text-center font-bold text-purple-500 text-[10px]">{emp.summary.sunday_ot}</td>
+                  <td className="px-1 py-1 text-center font-bold text-gray-500 dark:text-gray-400 text-[10px] border-l border-gray-200 dark:border-dark-600">{all_days.length}</td>
+                  <td className="px-1 py-1 text-center font-bold text-blue-500 text-[10px]">{emp.summary.present}</td>
+                  <td className="px-1 py-1 text-center font-bold text-orange-500 text-[10px]">{emp.summary.absent}</td>
                 </tr>
               )
             })}
@@ -231,6 +237,9 @@ const generateAllEmpPDF = (data) => {
       <td style="padding:4px 4px;text-align:center;font-size:9px;font-weight:700;color:#16a34a;border-left:1px solid #e5e7eb;">${emp.summary.present}</td>
       <td style="padding:4px 4px;text-align:center;font-size:9px;font-weight:700;color:#ef4444;">${emp.summary.absent}</td>
       <td style="padding:4px 4px;text-align:center;font-size:9px;font-weight:700;color:#a855f7;">${emp.summary.sunday_ot}</td>
+      <td style="padding:4px 4px;text-align:center;font-size:9px;font-weight:700;color:#6b7280;border-left:1px solid #e5e7eb;">${all_days.length}</td>
+      <td style="padding:4px 4px;text-align:center;font-size:9px;font-weight:700;color:#3b82f6;">${emp.summary.present}</td>
+      <td style="padding:4px 4px;text-align:center;font-size:9px;font-weight:700;color:#f97316;">${emp.summary.absent}</td>
     </tr>`
   }).join('')
 
@@ -297,6 +306,9 @@ const generateAllEmpPDF = (data) => {
         <th style="padding:5px 4px;color:#86efac;">P</th>
         <th style="padding:5px 4px;color:#fca5a5;">A</th>
         <th style="padding:5px 4px;color:#d8b4fe;">OT</th>
+        <th style="padding:5px 4px;color:#d1d5db;border-left:1px solid rgba(255,255,255,0.2);">Total</th>
+        <th style="padding:5px 4px;color:#93c5fd;">Attended</th>
+        <th style="padding:5px 4px;color:#fdba74;">Absent</th>
       </tr>
     </thead>
     <tbody>${empRows}</tbody>
