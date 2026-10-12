@@ -253,11 +253,12 @@ const IDCardTemplates = () => {
     const container = previewContainerRef.current
     if (!container) return
     const rect = container.getBoundingClientRect()
+    // rect is already scaled by CSS transform — use it directly for % calculation
     const onMove = (mv) => {
       const x = Math.min(90, Math.max(10, ((mv.clientX - rect.left) / rect.width)  * 100))
       const y = Math.min(80, Math.max(10, ((mv.clientY - rect.top)  / rect.height) * 100))
-      setC('photoLeft', Math.round(x))
-      setC('photoTop',  Math.round(y))
+      setC('photoLeft', parseFloat(x.toFixed(1)))
+      setC('photoTop',  parseFloat(y.toFixed(1)))
     }
     const onUp = () => {
       setIsDraggingPhoto(false)
@@ -277,8 +278,8 @@ const IDCardTemplates = () => {
     const onMove = (mv) => {
       const x = Math.min(90, Math.max(10, ((mv.clientX - rect.left) / rect.width)  * 100))
       const y = Math.min(90, Math.max(30, ((mv.clientY - rect.top)  / rect.height) * 100))
-      setC('detailsLeft', Math.round(x))
-      setC('detailsTop',  Math.round(y))
+      setC('detailsLeft', parseFloat(x.toFixed(1)))
+      setC('detailsTop',  parseFloat(y.toFixed(1)))
     }
     const onUp = () => {
       setIsDraggingDetails(false)
@@ -646,13 +647,15 @@ const IDCardTemplates = () => {
                   </p>
                   {formMode === 'upload' && uploadPreview ? (
                     <div className="p-4 bg-gray-100 dark:bg-dark-900 rounded-2xl flex items-center justify-center overflow-auto min-h-[300px]">
+                      {/* Use exact 340px — same as employee card, scaled via CSS to fit */}
+                      <div style={{ transform: 'scale(0.78)', transformOrigin: 'top center', marginBottom: '-18%', flexShrink: 0 }}>
                       <div
                         ref={previewContainerRef}
-                        style={{ position: 'relative', width: '280px', borderRadius: '10px', overflow: 'hidden', margin: '0 auto', userSelect: 'none' }}
+                        style={{ position: 'relative', width: '340px', borderRadius: '10px', overflow: 'hidden', margin: '0 auto', userSelect: 'none' }}
                       >
                         <img src={uploadPreview} alt="Template" style={{ width: '100%', height: 'auto', display: 'block' }} />
 
-                        {/* Draggable Photo Circle */}
+                        {/* Draggable Photo Circle — exact same size as employee card */}
                         <div
                           onMouseDown={handlePhotoDragStart}
                           style={{
@@ -660,8 +663,8 @@ const IDCardTemplates = () => {
                             top: `${U('photoTop')}%`,
                             left: `${U('photoLeft')}%`,
                             transform: 'translate(-50%, -50%)',
-                            width: `${Math.round(U('photoSize') * 0.82)}px`,
-                            height: `${Math.round(U('photoSize') * 0.82)}px`,
+                            width: `${U('photoSize')}px`,
+                            height: `${U('photoSize')}px`,
                             borderRadius: '50%',
                             border: isDraggingPhoto ? '2.5px solid #6366f1' : '2px solid white',
                             background: isDraggingPhoto ? 'rgba(99,102,241,0.9)' : 'rgba(99,102,241,0.8)',
@@ -671,12 +674,12 @@ const IDCardTemplates = () => {
                             zIndex: 10,
                           }}
                         >
-                          <span style={{ color: 'white', fontSize: '9px', fontWeight: 700, pointerEvents: 'none' }}>
+                          <span style={{ color: 'white', fontSize: '11px', fontWeight: 700, pointerEvents: 'none' }}>
                             {isDraggingPhoto ? '✥ drag' : '✥ PHOTO'}
                           </span>
                         </div>
 
-                        {/* Draggable Details circle */}
+                        {/* Draggable Details block */}
                         <div
                           onMouseDown={handleDetailsDragStart}
                           style={{
@@ -699,6 +702,7 @@ const IDCardTemplates = () => {
                           <p style={{ color: '#333', fontSize: `${U('designationSize')}px`, margin: '2px 0 0', whiteSpace: 'nowrap' }}>Designation</p>
                           <p style={{ color: '#333', fontSize: `${U('empIdSize')}px`, fontWeight: 600, margin: '2px 0 0', whiteSpace: 'nowrap' }}>EMP0001</p>
                         </div>
+                      </div>
                       </div>
                       <p className="text-xs text-gray-400 text-center mt-2">
                         Drag <span className="text-primary-500 font-medium">PHOTO circle</span> or <span className="text-primary-500 font-medium">text block</span> to position

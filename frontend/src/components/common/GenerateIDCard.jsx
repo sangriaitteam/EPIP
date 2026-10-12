@@ -238,7 +238,7 @@ const GenerateIDCard = ({ empData, onClose }) => {
       // 1. Draw template background
       if (tplImg) ctx.drawImage(tplImg, 0, 0, CARD_W, CARD_H)
 
-      // 2. Draw employee photo in circle
+      // 2. Draw employee photo in circle — clip to exact circle, no extra border
       const photoX   = (photoLeft / 100) * CARD_W
       const photoY   = (photoTop  / 100) * CARD_H
       const radius   = photoSize / 2
@@ -262,38 +262,39 @@ const GenerateIDCard = ({ empData, onClose }) => {
           ctx.restore()
         }
       }
-
-      // 3. White border ring
-      ctx.beginPath()
-      ctx.arc(photoX, photoY, radius + 2, 0, Math.PI * 2)
-      ctx.strokeStyle = 'white'
-      ctx.lineWidth   = 3
-      ctx.stroke()
+      // NOTE: No extra border ring drawn — template image already has the circle design
 
       // 4. Text details (only for uploaded template)
       if (isUploadedTemplate) {
         const detailsY = (detailsTop / 100) * CARD_H
         const detailsX = (detailsLeft / 100) * CARD_W
-        ctx.textAlign     = 'center'
-        ctx.shadowColor   = 'transparent'
-        ctx.shadowBlur    = 0
+        ctx.textAlign   = 'center'
+        ctx.shadowColor = 'transparent'
+        ctx.shadowBlur  = 0
 
-        // Name — use admin-configured font size scaled up 1.8x for high-res canvas
-        ctx.font      = `bold ${Math.round(nameSize * 1.8)}px Arial`
+        const nSize  = parseFloat(nameSize)        || 16
+        const dSize  = parseFloat(designationSize) || 12
+        const eSize  = parseFloat(empIdSize)       || 12
+
+        // Tight line spacing matching preview (gap: 3px between items)
+        const yName = detailsY + nSize
+        const yDes  = yName + nSize * 1.2 + 3
+        const yEmp  = yDes  + dSize * 1.2 + 3
+
+        // Name
+        ctx.font      = `bold ${nSize}px Arial`
         ctx.fillStyle = '#111111'
-        ctx.fillText(generated?.custom_name || form.name || '', detailsX, detailsY)
+        ctx.fillText(generated?.custom_name || form.name || '', detailsX, yName)
 
         // Designation
-        const nameFontH = Math.round(nameSize * 1.8)
-        ctx.font      = `600 ${Math.round(designationSize * 1.8)}px Arial`
+        ctx.font      = `600 ${dSize}px Arial`
         ctx.fillStyle = '#333333'
-        ctx.fillText(generated?.custom_designation || form.designation || '', detailsX, detailsY + nameFontH + 4)
+        ctx.fillText(generated?.custom_designation || form.designation || '', detailsX, yDes)
 
         // Emp ID
-        const desFontH = Math.round(designationSize * 1.8)
-        ctx.font      = `bold ${Math.round(empIdSize * 1.8)}px Arial`
+        ctx.font      = `bold ${eSize}px Arial`
         ctx.fillStyle = '#111111'
-        ctx.fillText(generated?.custom_emp_id || form.empId || '', detailsX, detailsY + nameFontH + desFontH + 10)
+        ctx.fillText(generated?.custom_emp_id || form.empId || '', detailsX, yEmp)
       }
 
       // 5. Download as PNG
