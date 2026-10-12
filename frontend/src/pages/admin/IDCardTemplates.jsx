@@ -238,6 +238,53 @@ const IDCardTemplates = () => {
   const [uploadPreview,setUploadPreview]= useState(null)
   const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
+  // Drag state for preview
+  const previewContainerRef = useRef(null)
+  const [isDraggingPhoto,   setIsDraggingPhoto]   = useState(false)
+  const [isDraggingDetails, setIsDraggingDetails] = useState(false)
+
+  const handlePhotoDragStart = (e) => {
+    e.preventDefault()
+    setIsDraggingPhoto(true)
+    const container = previewContainerRef.current
+    if (!container) return
+    const rect = container.getBoundingClientRect()
+    const onMove = (mv) => {
+      const x = Math.min(90, Math.max(10, ((mv.clientX - rect.left) / rect.width)  * 100))
+      const y = Math.min(80, Math.max(10, ((mv.clientY - rect.top)  / rect.height) * 100))
+      setC('photoLeft', Math.round(x))
+      setC('photoTop',  Math.round(y))
+    }
+    const onUp = () => {
+      setIsDraggingPhoto(false)
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup',   onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup',   onUp)
+  }
+
+  const handleDetailsDragStart = (e) => {
+    e.preventDefault()
+    setIsDraggingDetails(true)
+    const container = previewContainerRef.current
+    if (!container) return
+    const rect = container.getBoundingClientRect()
+    const onMove = (mv) => {
+      const x = Math.min(90, Math.max(10, ((mv.clientX - rect.left) / rect.width)  * 100))
+      const y = Math.min(90, Math.max(30, ((mv.clientY - rect.top)  / rect.height) * 100))
+      setC('detailsLeft', Math.round(x))
+      setC('detailsTop',  Math.round(y))
+    }
+    const onUp = () => {
+      setIsDraggingDetails(false)
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup',   onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup',   onUp)
+  }
+
   useEffect(() => { loadTemplates() }, [])
 
   const loadTemplates = async () => {
@@ -595,38 +642,63 @@ const IDCardTemplates = () => {
                   </p>
                   {formMode === 'upload' && uploadPreview ? (
                     <div className="p-4 bg-gray-100 dark:bg-dark-900 rounded-2xl flex items-center justify-center overflow-auto min-h-[300px]">
-                      <div style={{ position: 'relative', width: '280px', borderRadius: '10px', overflow: 'hidden', margin: '0 auto' }}>
+                      <div
+                        ref={previewContainerRef}
+                        style={{ position: 'relative', width: '280px', borderRadius: '10px', overflow: 'hidden', margin: '0 auto', userSelect: 'none' }}
+                      >
                         <img src={uploadPreview} alt="Template" style={{ width: '100%', height: 'auto', display: 'block' }} />
-                        <div style={{
-                          position: 'absolute',
-                          top: `${U('photoTop')}%`,
-                          left: `${U('photoLeft')}%`,
-                          transform: 'translate(-50%, -50%)',
-                          width: `${Math.round(U('photoSize') * 0.82)}px`,
-                          height: `${Math.round(U('photoSize') * 0.82)}px`,
-                          borderRadius: '50%',
-                          border: '2px solid white',
-                          background: 'rgba(99,102,241,0.8)',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
-                        }}>
-                          <span style={{ color: 'white', fontSize: '10px', fontWeight: 700 }}>PHOTO</span>
+
+                        {/* Draggable Photo Circle */}
+                        <div
+                          onMouseDown={handlePhotoDragStart}
+                          style={{
+                            position: 'absolute',
+                            top: `${U('photoTop')}%`,
+                            left: `${U('photoLeft')}%`,
+                            transform: 'translate(-50%, -50%)',
+                            width: `${Math.round(U('photoSize') * 0.82)}px`,
+                            height: `${Math.round(U('photoSize') * 0.82)}px`,
+                            borderRadius: '50%',
+                            border: isDraggingPhoto ? '2.5px solid #6366f1' : '2px solid white',
+                            background: isDraggingPhoto ? 'rgba(99,102,241,0.9)' : 'rgba(99,102,241,0.8)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            boxShadow: isDraggingPhoto ? '0 0 0 3px rgba(99,102,241,0.4)' : '0 2px 8px rgba(0,0,0,0.4)',
+                            cursor: isDraggingPhoto ? 'grabbing' : 'grab',
+                            zIndex: 10,
+                          }}
+                        >
+                          <span style={{ color: 'white', fontSize: '9px', fontWeight: 700, pointerEvents: 'none' }}>
+                            {isDraggingPhoto ? '✥ drag' : '✥ PHOTO'}
+                          </span>
                         </div>
-                        <div style={{
-                          position: 'absolute',
-                          top: `${U('detailsTop')}%`,
-                          left: `${U('detailsLeft')}%`,
-                          transform: 'translateX(-50%)',
-                          width: 'max-content',
-                          maxWidth: '90%',
-                          textAlign: 'center',
-                          padding: '0 8px',
-                        }}>
+
+                        {/* Draggable Details circle */}
+                        <div
+                          onMouseDown={handleDetailsDragStart}
+                          style={{
+                            position: 'absolute',
+                            top: `${U('detailsTop')}%`,
+                            left: `${U('detailsLeft')}%`,
+                            transform: 'translateX(-50%)',
+                            width: 'max-content',
+                            maxWidth: '90%',
+                            textAlign: 'center',
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            cursor: isDraggingDetails ? 'grabbing' : 'grab',
+                            border: isDraggingDetails ? '1px dashed #6366f1' : '1px dashed rgba(99,102,241,0.4)',
+                            background: isDraggingDetails ? 'rgba(99,102,241,0.1)' : 'transparent',
+                            zIndex: 10,
+                          }}
+                        >
                           <p style={{ color: '#111', fontWeight: 700, fontSize: `${U('nameSize')}px`, margin: 0, whiteSpace: 'nowrap' }}>Employee Name</p>
                           <p style={{ color: '#333', fontSize: `${U('designationSize')}px`, margin: '2px 0 0', whiteSpace: 'nowrap' }}>Designation</p>
                           <p style={{ color: '#333', fontSize: `${U('empIdSize')}px`, fontWeight: 600, margin: '2px 0 0', whiteSpace: 'nowrap' }}>EMP0001</p>
                         </div>
                       </div>
+                      <p className="text-xs text-gray-400 text-center mt-2">
+                        Drag <span className="text-primary-500 font-medium">PHOTO circle</span> or <span className="text-primary-500 font-medium">text block</span> to position
+                      </p>
                     </div>
                   ) : formMode === 'design' ? (
                     <div className="flex justify-center p-4 bg-gray-100 dark:bg-dark-900 rounded-2xl overflow-auto">
@@ -639,9 +711,6 @@ const IDCardTemplates = () => {
                       <p className="text-xs text-gray-400">Upload a template to preview</p>
                     </div>
                   )}
-                  <p className="text-xs text-gray-400 text-center mt-2">
-                    {formMode === 'upload' ? 'Your uploaded template image' : 'Preview with sample data'}
-                  </p>
                 </div>
               </div>
 
