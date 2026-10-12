@@ -195,7 +195,11 @@ const ToggleRow = ({ label, value, onChange }) => (
 
 // ── Adjust Row: slider + (−) (+) buttons ──────────────────────────────────────
 const AdjustRow = ({ label, value, min, max, step = 1, unit = '', onChange }) => {
-  const clamp = v => Math.min(max, Math.max(min, v))
+  const clamp = v => {
+    const rounded = parseFloat(v.toFixed(1))
+    return Math.min(max, Math.max(min, rounded))
+  }
+  const display = step < 1 ? parseFloat(value).toFixed(1) : value
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
@@ -205,7 +209,7 @@ const AdjustRow = ({ label, value, min, max, step = 1, unit = '', onChange }) =>
             className="w-6 h-6 rounded-lg flex items-center justify-center bg-gray-100 dark:bg-dark-700 text-gray-600 dark:text-gray-300 hover:bg-primary-500 hover:text-white transition-colors">
             <Minus size={12} />
           </button>
-          <span className="text-xs font-mono text-primary-500 w-12 text-center">{value}{unit}</span>
+          <span className="text-xs font-mono text-primary-500 w-14 text-center">{display}{unit}</span>
           <button type="button" onClick={() => onChange(clamp(value + step))}
             className="w-6 h-6 rounded-lg flex items-center justify-center bg-gray-100 dark:bg-dark-700 text-gray-600 dark:text-gray-300 hover:bg-primary-500 hover:text-white transition-colors">
             <Plus size={12} />
@@ -567,11 +571,11 @@ const IDCardTemplates = () => {
                                 📍 Photo Circle Position
                               </p>
                               <p className="text-xs text-gray-400">Adjust where the employee photo appears on the template</p>
-                              <AdjustRow label="Top position" value={U('photoTop')} min={10} max={80} unit="%"
+                              <AdjustRow label="Top position" value={U('photoTop')} min={10} max={80} step={0.1} unit="%"
                                 onChange={v => setC('photoTop', v)} />
-                              <AdjustRow label="Left / Right position" value={U('photoLeft')} min={10} max={90} unit="%"
+                              <AdjustRow label="Left / Right position" value={U('photoLeft')} min={10} max={90} step={0.1} unit="%"
                                 onChange={v => setC('photoLeft', v)} />
-                              <AdjustRow label="Circle size" value={U('photoSize')} min={60} max={200} step={1} unit="px"
+                              <AdjustRow label="Circle size" value={U('photoSize')} min={60} max={200} step={0.1} unit="px"
                                 onChange={v => setC('photoSize', v)} />
                             </div>
 
@@ -580,9 +584,9 @@ const IDCardTemplates = () => {
                               <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">
                                 🧾 Details Position
                               </p>
-                              <AdjustRow label="Top position" value={U('detailsTop')} min={30} max={90} unit="%"
+                              <AdjustRow label="Top position" value={U('detailsTop')} min={30} max={90} step={0.1} unit="%"
                                 onChange={v => setC('detailsTop', v)} />
-                              <AdjustRow label="Left / Right position" value={U('detailsLeft')} min={10} max={90} unit="%"
+                              <AdjustRow label="Left / Right position" value={U('detailsLeft')} min={10} max={90} step={0.1} unit="%"
                                 onChange={v => setC('detailsLeft', v)} />
                             </div>
 
@@ -591,11 +595,11 @@ const IDCardTemplates = () => {
                               <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">
                                 🔤 Font Sizes
                               </p>
-                              <AdjustRow label="Name font size" value={U('nameSize')} min={6} max={28} step={0.5} unit="px"
+                              <AdjustRow label="Name font size" value={U('nameSize')} min={6} max={28} step={0.1} unit="px"
                                 onChange={v => setC('nameSize', v)} />
-                              <AdjustRow label="Designation font size" value={U('designationSize')} min={5} max={24} step={0.5} unit="px"
+                              <AdjustRow label="Designation font size" value={U('designationSize')} min={5} max={24} step={0.1} unit="px"
                                 onChange={v => setC('designationSize', v)} />
-                              <AdjustRow label="Emp ID font size" value={U('empIdSize')} min={5} max={24} step={0.5} unit="px"
+                              <AdjustRow label="Emp ID font size" value={U('empIdSize')} min={5} max={24} step={0.1} unit="px"
                                 onChange={v => setC('empIdSize', v)} />
                             </div>
                           </div>
