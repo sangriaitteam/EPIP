@@ -571,7 +571,7 @@ const IDCardTemplates = () => {
                                 onChange={v => setC('photoTop', v)} />
                               <AdjustRow label="Left / Right position" value={U('photoLeft')} min={10} max={90} unit="%"
                                 onChange={v => setC('photoLeft', v)} />
-                              <AdjustRow label="Circle size" value={U('photoSize')} min={60} max={200} step={2} unit="px"
+                              <AdjustRow label="Circle size" value={U('photoSize')} min={60} max={200} step={1} unit="px"
                                 onChange={v => setC('photoSize', v)} />
                             </div>
 
