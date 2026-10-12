@@ -142,6 +142,83 @@ const getById = async (req, res, next) => {
   } catch (err) { next(err) }
 }
 
+// ── Employee self-update: skills, education, experience, certifications ────
+
+// PUT /api/employees/my/skills
+const updateMySkills = async (req, res, next) => {
+  try {
+    const employee = await Employee.findByUserId(req.user.id)
+    if (!employee) return fail(res, 'Employee profile not found', 404)
+    const { skills } = req.body   // array of strings
+    if (!Array.isArray(skills)) return fail(res, 'skills must be an array', 400)
+
+    // Delete existing and re-insert
+    await query(`DELETE FROM employee_skills WHERE employee_id = $1`, [employee.id])
+    for (const skill of skills.filter(s => s?.trim())) {
+      await query(`INSERT INTO employee_skills (employee_id, skill) VALUES ($1, $2)`, [employee.id, skill.trim()])
+    }
+    const { rows } = await query(`SELECT skill FROM employee_skills WHERE employee_id = $1 ORDER BY id`, [employee.id])
+    return ok(res, rows.map(r => r.skill), 'Skills updated')
+  } catch (err) { next(err) }
+}
+
+// PUT /api/employees/my/education
+const updateMyEducation = async (req, res, next) => {
+  try {
+    const employee = await Employee.findByUserId(req.user.id)
+    if (!employee) return fail(res, 'Employee profile not found', 404)
+    const { education } = req.body  // array of {degree, institution, year}
+    if (!Array.isArray(education)) return fail(res, 'education must be an array', 400)
+
+    await query(`DELETE FROM employee_education WHERE employee_id = $1`, [employee.id])
+    for (const e of education) {
+      if (!e?.degree?.trim()) continue
+      await query(`INSERT INTO employee_education (employee_id, degree, institution, year) VALUES ($1,$2,$3,$4)`,
+        [employee.id, e.degree, e.institution || '', e.year || null])
+    }
+    const { rows } = await query(`SELECT id, degree, institution, year FROM employee_education WHERE employee_id = $1 ORDER BY id`, [employee.id])
+    return ok(res, rows, 'Education updated')
+  } catch (err) { next(err) }
+}
+
+// PUT /api/employees/my/experience
+const updateMyExperience = async (req, res, next) => {
+  try {
+    const employee = await Employee.findByUserId(req.user.id)
+    if (!employee) return fail(res, 'Employee profile not found', 404)
+    const { experience } = req.body  // array of {company, role, duration}
+    if (!Array.isArray(experience)) return fail(res, 'experience must be an array', 400)
+
+    await query(`DELETE FROM employee_experience WHERE employee_id = $1`, [employee.id])
+    for (const e of experience) {
+      if (!e?.company?.trim() && !e?.role?.trim()) continue
+      await query(`INSERT INTO employee_experience (employee_id, company, role, duration) VALUES ($1,$2,$3,$4)`,
+        [employee.id, e.company || '', e.role || '', e.duration || ''])
+    }
+    const { rows } = await query(`SELECT id, company, role, duration FROM employee_experience WHERE employee_id = $1 ORDER BY id`, [employee.id])
+    return ok(res, rows, 'Experience updated')
+  } catch (err) { next(err) }
+}
+
+// PUT /api/employees/my/certifications
+const updateMyCertifications = async (req, res, next) => {
+  try {
+    const employee = await Employee.findByUserId(req.user.id)
+    if (!employee) return fail(res, 'Employee profile not found', 404)
+    const { certifications } = req.body  // array of {name, year}
+    if (!Array.isArray(certifications)) return fail(res, 'certifications must be an array', 400)
+
+    await query(`DELETE FROM employee_certifications WHERE employee_id = $1`, [employee.id])
+    for (const c of certifications) {
+      if (!c?.name?.trim()) continue
+      await query(`INSERT INTO employee_certifications (employee_id, name, year) VALUES ($1,$2,$3)`,
+        [employee.id, c.name.trim(), c.year || null])
+    }
+    const { rows } = await query(`SELECT id, name, year FROM employee_certifications WHERE employee_id = $1 ORDER BY id`, [employee.id])
+    return ok(res, rows, 'Certifications updated')
+  } catch (err) { next(err) }
+}
+
 // POST /api/employees
 const create = async (req, res, next) => {
   try {
@@ -442,4 +519,4 @@ const getTeam = async (req, res, next) => {
   } catch (err) { next(err) }
 }
 
-module.exports = { getAll, getById, getMyProfile, updateMyProfile, uploadMissingDoc, create, update, uploadAvatar, getTeam, verifyDocuments, remove, checkCompanyId }
+module.exports = { getAll, getById, getMyProfile, updateMyProfile, uploadMissingDoc, create, update, uploadAvatar, getTeam, verifyDocuments, remove, checkCompanyId, updateMySkills, updateMyEducation, updateMyExperience, updateMyCertifications }

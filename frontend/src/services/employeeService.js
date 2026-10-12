@@ -50,4 +50,24 @@ export const employeeService = {
     const data = await res.json()
     return data.success ? data.data : { success: false }
   },
+
+  updateMySkills: async (skills) => {
+    const res = await api.put('/employees/my/skills', { skills })
+    return res.success ? res.data : null
+  },
+
+  updateMyEducation: async (education) => {
+    const res = await api.put('/employees/my/education', { education })
+    return res.success ? res.data : null
+  },
+
+  updateMyExperience: async (experience) => {
+    const res = await api.put('/employees/my/experience', { experience })
+    return res.success ? res.data : null
+  },
+
+  updateMyCertifications: async (certifications) => {
+    const res = await api.put('/employees/my/certifications', { certifications })
+    return res.success ? res.data : null
+  },
 }

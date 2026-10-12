@@ -8,7 +8,11 @@ router.use(authenticate)
 
 router.get('/my',                ctrl.getMyProfile)
 router.put('/my',                ctrl.updateMyProfile)
-router.post('/my/upload-doc',    uploadDocument, ctrl.uploadMissingDoc)   // upload missing doc
+router.post('/my/upload-doc',    uploadDocument, ctrl.uploadMissingDoc)
+router.put('/my/skills',         ctrl.updateMySkills)
+router.put('/my/education',      ctrl.updateMyEducation)
+router.put('/my/experience',     ctrl.updateMyExperience)
+router.put('/my/certifications', ctrl.updateMyCertifications)
 router.get('/team',              authorize('admin'), ctrl.getTeam)
 router.get('/verify-documents/check-id', ctrl.checkCompanyId)
 router.post('/verify-documents', uploadVerifyDocs, ctrl.verifyDocuments)

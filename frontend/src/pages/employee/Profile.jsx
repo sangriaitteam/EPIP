@@ -276,6 +276,236 @@ const EditPersonalModal = ({ empData, onClose, onSaved }) => {
   )
 }
 
+// ── Edit Skills Modal ────────────────────────────────────────────────────────
+const EditSkillsModal = ({ current = [], onClose, onSaved }) => {
+  const [skills, setSkills] = useState(current.join(', '))
+  const [saving, setSaving] = useState(false)
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const arr = skills.split(',').map(s => s.trim()).filter(Boolean)
+      const result = await employeeService.updateMySkills(arr)
+      if (result !== null) {
+        toast.success('Skills updated ✅')
+        onSaved(result)
+        onClose()
+      } else toast.error('Update failed')
+    } catch { toast.error('Cannot connect to server') }
+    setSaving(false)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <motion.div initial={{ y: '100%', opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+        exit={{ y: '100%', opacity: 0 }} transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+        className="relative bg-white dark:bg-dark-800 w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl border border-gray-100 dark:border-dark-600 overflow-hidden">
+        <div className="w-10 h-1 bg-gray-300 dark:bg-dark-500 rounded-full mx-auto mt-3 sm:hidden" />
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-dark-600">
+          <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Edit Skills</h3>
+          <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-dark-700 text-gray-400"><X size={15} /></button>
+        </div>
+        <div className="p-6 space-y-3">
+          <p className="text-xs text-gray-500">Enter skills separated by commas (e.g. React, Node.js, PostgreSQL)</p>
+          <textarea value={skills} onChange={e => setSkills(e.target.value)} rows={4}
+            placeholder="React, Node.js, PostgreSQL, Docker..."
+            className={`${inputCls} resize-none`} />
+          {skills.split(',').map(s => s.trim()).filter(Boolean).length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {skills.split(',').map(s => s.trim()).filter(Boolean).map((s, i) => (
+                <span key={i} className="px-2.5 py-1 rounded-full text-xs bg-primary-500/10 text-primary-600 dark:text-primary-400 border border-primary-500/20">{s}</span>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="px-6 py-4 border-t border-gray-100 dark:border-dark-600 flex gap-3">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-medium border border-gray-200 dark:border-dark-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors">Cancel</button>
+          <motion.button onClick={handleSave} disabled={saving} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 disabled:opacity-60 transition-colors">
+            {saving ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : <><Check size={14} /> Save Skills</>}
+          </motion.button>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+// ── Edit Certifications Modal ─────────────────────────────────────────────────
+const EditCertificationsModal = ({ current = [], onClose, onSaved }) => {
+  const [certs, setCerts] = useState(current.length > 0 ? current : [{ name: '', year: '' }])
+  const [saving, setSaving] = useState(false)
+
+  const addRow    = () => setCerts(c => [...c, { name: '', year: '' }])
+  const removeRow = i  => setCerts(c => c.filter((_, idx) => idx !== i))
+  const update    = (i, k, v) => setCerts(c => c.map((r, idx) => idx === i ? { ...r, [k]: v } : r))
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const result = await employeeService.updateMyCertifications(certs.filter(c => c.name?.trim()))
+      if (result !== null) { toast.success('Certifications updated ✅'); onSaved(result); onClose() }
+      else toast.error('Update failed')
+    } catch { toast.error('Cannot connect to server') }
+    setSaving(false)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <motion.div initial={{ y: '100%', opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+        exit={{ y: '100%', opacity: 0 }} transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+        className="relative bg-white dark:bg-dark-800 w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl border border-gray-100 dark:border-dark-600 overflow-hidden max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-dark-600 sticky top-0 bg-white dark:bg-dark-800">
+          <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Edit Certifications</h3>
+          <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-dark-700 text-gray-400"><X size={15} /></button>
+        </div>
+        <div className="p-6 space-y-3">
+          {certs.map((c, i) => (
+            <div key={i} className="flex gap-2 items-start">
+              <div className="flex-1 space-y-2">
+                <input value={c.name} onChange={e => update(i, 'name', e.target.value)} placeholder="Certification name"
+                  className={inputCls} />
+                <input value={c.year} onChange={e => update(i, 'year', e.target.value)} placeholder="Year (e.g. 2023)"
+                  type="number" className={inputCls} />
+              </div>
+              <button onClick={() => removeRow(i)} className="mt-1 p-2 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors"><X size={14} /></button>
+            </div>
+          ))}
+          <button onClick={addRow} className="w-full py-2 rounded-xl text-sm border border-dashed border-gray-300 dark:border-dark-500 text-gray-500 hover:border-primary-500 hover:text-primary-500 transition-colors">
+            + Add Certification
+          </button>
+        </div>
+        <div className="px-6 py-4 border-t border-gray-100 dark:border-dark-600 flex gap-3">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-medium border border-gray-200 dark:border-dark-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors">Cancel</button>
+          <motion.button onClick={handleSave} disabled={saving} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 disabled:opacity-60 transition-colors">
+            {saving ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : <><Check size={14} /> Save</>}
+          </motion.button>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+// ── Edit Education Modal ──────────────────────────────────────────────────────
+const EditEducationModal = ({ current = [], onClose, onSaved }) => {
+  const [rows, setRows] = useState(current.length > 0 ? current : [{ degree: '', institution: '', year: '' }])
+  const [saving, setSaving] = useState(false)
+
+  const addRow    = () => setRows(r => [...r, { degree: '', institution: '', year: '' }])
+  const removeRow = i  => setRows(r => r.filter((_, idx) => idx !== i))
+  const update    = (i, k, v) => setRows(r => r.map((row, idx) => idx === i ? { ...row, [k]: v } : row))
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const result = await employeeService.updateMyEducation(rows.filter(r => r.degree?.trim()))
+      if (result !== null) { toast.success('Education updated ✅'); onSaved(result); onClose() }
+      else toast.error('Update failed')
+    } catch { toast.error('Cannot connect to server') }
+    setSaving(false)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <motion.div initial={{ y: '100%', opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+        exit={{ y: '100%', opacity: 0 }} transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+        className="relative bg-white dark:bg-dark-800 w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl border border-gray-100 dark:border-dark-600 overflow-hidden max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-dark-600 sticky top-0 bg-white dark:bg-dark-800">
+          <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Edit Education</h3>
+          <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-dark-700 text-gray-400"><X size={15} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          {rows.map((r, i) => (
+            <div key={i} className="p-3 rounded-xl bg-gray-50 dark:bg-dark-700 space-y-2 relative">
+              <button onClick={() => removeRow(i)} className="absolute top-2 right-2 p-1 rounded text-red-400 hover:bg-red-500/10"><X size={13} /></button>
+              <input value={r.degree} onChange={e => update(i, 'degree', e.target.value)} placeholder="Degree / Qualification"
+                className={inputCls} />
+              <input value={r.institution} onChange={e => update(i, 'institution', e.target.value)} placeholder="Institution / College"
+                className={inputCls} />
+              <input value={r.year} onChange={e => update(i, 'year', e.target.value)} placeholder="Year (e.g. 2022)"
+                type="number" className={inputCls} />
+            </div>
+          ))}
+          <button onClick={addRow} className="w-full py-2 rounded-xl text-sm border border-dashed border-gray-300 dark:border-dark-500 text-gray-500 hover:border-primary-500 hover:text-primary-500 transition-colors">
+            + Add Education
+          </button>
+        </div>
+        <div className="px-6 py-4 border-t border-gray-100 dark:border-dark-600 flex gap-3">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-medium border border-gray-200 dark:border-dark-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors">Cancel</button>
+          <motion.button onClick={handleSave} disabled={saving} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 disabled:opacity-60 transition-colors">
+            {saving ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : <><Check size={14} /> Save</>}
+          </motion.button>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+// ── Edit Experience Modal ─────────────────────────────────────────────────────
+const EditExperienceModal = ({ current = [], onClose, onSaved }) => {
+  const [rows, setRows] = useState(current.length > 0 ? current : [{ company: '', role: '', duration: '' }])
+  const [saving, setSaving] = useState(false)
+
+  const addRow    = () => setRows(r => [...r, { company: '', role: '', duration: '' }])
+  const removeRow = i  => setRows(r => r.filter((_, idx) => idx !== i))
+  const update    = (i, k, v) => setRows(r => r.map((row, idx) => idx === i ? { ...row, [k]: v } : row))
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const result = await employeeService.updateMyExperience(rows.filter(r => r.company?.trim() || r.role?.trim()))
+      if (result !== null) { toast.success('Work experience updated ✅'); onSaved(result); onClose() }
+      else toast.error('Update failed')
+    } catch { toast.error('Cannot connect to server') }
+    setSaving(false)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <motion.div initial={{ y: '100%', opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+        exit={{ y: '100%', opacity: 0 }} transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+        className="relative bg-white dark:bg-dark-800 w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl border border-gray-100 dark:border-dark-600 overflow-hidden max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-dark-600 sticky top-0 bg-white dark:bg-dark-800">
+          <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Edit Work Experience</h3>
+          <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-dark-700 text-gray-400"><X size={15} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          {rows.map((r, i) => (
+            <div key={i} className="p-3 rounded-xl bg-gray-50 dark:bg-dark-700 space-y-2 relative">
+              <button onClick={() => removeRow(i)} className="absolute top-2 right-2 p-1 rounded text-red-400 hover:bg-red-500/10"><X size={13} /></button>
+              <input value={r.company} onChange={e => update(i, 'company', e.target.value)} placeholder="Company name"
+                className={inputCls} />
+              <input value={r.role} onChange={e => update(i, 'role', e.target.value)} placeholder="Role / Position"
+                className={inputCls} />
+              <input value={r.duration} onChange={e => update(i, 'duration', e.target.value)} placeholder="Duration (e.g. 2 years)"
+                className={inputCls} />
+            </div>
+          ))}
+          <button onClick={addRow} className="w-full py-2 rounded-xl text-sm border border-dashed border-gray-300 dark:border-dark-500 text-gray-500 hover:border-primary-500 hover:text-primary-500 transition-colors">
+            + Add Experience
+          </button>
+        </div>
+        <div className="px-6 py-4 border-t border-gray-100 dark:border-dark-600 flex gap-3">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-medium border border-gray-200 dark:border-dark-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors">Cancel</button>
+          <motion.button onClick={handleSave} disabled={saving} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 disabled:opacity-60 transition-colors">
+            {saving ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : <><Check size={14} /> Save</>}
+          </motion.button>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
 // ── Main Profile Page ─────────────────────────────────────────────────────────
 const EmployeeProfile = () => {
   const { user } = useAuth()
@@ -283,6 +513,10 @@ const EmployeeProfile = () => {
   const [empData,         setEmpData]         = useState(null)
   const [loading,         setLoading]         = useState(true)
   const [showEditPersonal,setShowEditPersonal]= useState(false)
+  const [showEditSkills,  setShowEditSkills]  = useState(false)
+  const [showEditEducation,setShowEditEducation]= useState(false)
+  const [showEditExperience,setShowEditExperience]= useState(false)
+  const [showEditCertifications,setShowEditCertifications]= useState(false)
   const [showIDCard,      setShowIDCard]      = useState(false)
   const [uploadingDoc,    setUploadingDoc]    = useState(null) // doc_type being uploaded
   const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
@@ -536,7 +770,7 @@ const EmployeeProfile = () => {
           {activeTab === 'education' && (
             <div className="space-y-4">
               <Section title="Education" icon={BookOpen} delay={0.1}
-                onEdit={() => toast.success('Edit — HR/Admin can update education records')}>
+                onEdit={() => setShowEditEducation(true)}>
                 <div className="space-y-3">
                   {education.length === 0
                     ? <p className="text-sm text-gray-400 text-center py-4">No education records added yet</p>
@@ -552,7 +786,7 @@ const EmployeeProfile = () => {
                 </div>
               </Section>
               <Section title="Work Experience" icon={Briefcase} delay={0.2}
-                onEdit={() => toast.success('Edit — HR/Admin can update experience records')}>
+                onEdit={() => setShowEditExperience(true)}>
                 <div className="space-y-3">
                   {experience.length === 0
                     ? <p className="text-sm text-gray-400 text-center py-4">No experience records added yet</p>
@@ -574,7 +808,7 @@ const EmployeeProfile = () => {
           {activeTab === 'skills' && (
             <div className="space-y-4">
               <Section title="Skills" delay={0.1}
-                onEdit={() => toast.success('Skills can be updated by HR/Admin')}>
+                onEdit={() => setShowEditSkills(true)}>
                 <div className="flex flex-wrap gap-2">
                   {skills.length === 0
                     ? <p className="text-sm text-gray-400 py-2">No skills added yet</p>
@@ -591,7 +825,7 @@ const EmployeeProfile = () => {
                 </div>
               </Section>
               <Section title="Certifications" icon={Award} delay={0.15}
-                onEdit={() => toast.success('Certifications can be updated by HR/Admin')}>
+                onEdit={() => setShowEditCertifications(true)}>
                 <div className="space-y-3">
                   {certifications.length === 0
                     ? <p className="text-sm text-gray-400 text-center py-4">No certifications added yet</p>
@@ -734,6 +968,50 @@ const EmployeeProfile = () => {
             empData={empData}
             onClose={() => setShowEditPersonal(false)}
             onSaved={updated => setEmpData(d => ({ ...d, ...updated }))}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Edit Skills Modal */}
+      <AnimatePresence>
+        {showEditSkills && (
+          <EditSkillsModal
+            current={skills}
+            onClose={() => setShowEditSkills(false)}
+            onSaved={newSkills => setEmpData(d => ({ ...d, skills: newSkills }))}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Edit Certifications Modal */}
+      <AnimatePresence>
+        {showEditCertifications && (
+          <EditCertificationsModal
+            current={certifications}
+            onClose={() => setShowEditCertifications(false)}
+            onSaved={newCerts => setEmpData(d => ({ ...d, certifications: newCerts }))}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Edit Education Modal */}
+      <AnimatePresence>
+        {showEditEducation && (
+          <EditEducationModal
+            current={education}
+            onClose={() => setShowEditEducation(false)}
+            onSaved={newEdu => setEmpData(d => ({ ...d, education: newEdu }))}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Edit Experience Modal */}
+      <AnimatePresence>
+        {showEditExperience && (
+          <EditExperienceModal
+            current={experience}
+            onClose={() => setShowEditExperience(false)}
+            onSaved={newExp => setEmpData(d => ({ ...d, experience: newExp }))}
           />
         )}
       </AnimatePresence>

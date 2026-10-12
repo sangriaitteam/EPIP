@@ -1,12 +1,13 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   BarChart3, Users, Camera, Shield, Clock, TrendingUp,
   Target, FileText, FolderOpen, Bell, CheckSquare,
   Building2, CheckCircle, ChevronRight, ArrowRight,
   UserCheck, CalendarDays, ScanFace, Layers,
-  Monitor, Settings, Globe
+  Monitor, Settings, Globe, ChevronDown,
+  Zap, Database, Layout, Box
 } from 'lucide-react'
 import ThemeToggle from '../components/common/ThemeToggle'
 import { useTheme } from '../context/ThemeContext'
@@ -126,11 +127,112 @@ const PROGRESS_ITEMS = [
   { label: 'Task Completion',   value: 82, color: 'from-violet-500 to-purple-400' },
 ]
 
+// ── Products dropdown — simple Zoho-style single column list ─────────────
+const PRODUCTS_MENU = [
+  { label: 'Sales',                   anchor: '#features' },
+  { label: 'Marketing',               anchor: '#features' },
+  { label: 'Finance',                 anchor: '#features' },
+  { label: 'Human Resources',         anchor: '#features' },
+  { label: 'Security and IT Management', anchor: '#features' },
+  { label: 'BI and Analytics',        anchor: '#features' },
+  { label: 'Project Management',      anchor: '#features' },
+  { label: 'Developer Platforms',     anchor: '#features' },
+]
+
+// ── Tech Stack data ───────────────────────────────────────────────────────
+const techStack = [
+  { category: 'Frontend',  color: 'from-blue-500 to-cyan-500',    icon: Layout,   items: ['React 18', 'Vite 5', 'Tailwind CSS', 'Framer Motion', 'Recharts', 'React Router v6'] },
+  { category: 'Backend',   color: 'from-emerald-500 to-teal-500', icon: Globe,    items: ['Node.js', 'Express.js', 'node-postgres', 'JWT Auth', 'Multer', 'Nodemailer'] },
+  { category: 'Database',  color: 'from-orange-500 to-amber-500', icon: Database, items: ['PostgreSQL 17', 'Raw SQL', '33 Migrations', 'Supabase ready', 'pg Pool', 'Indexes'] },
+  { category: 'Desktop',   color: 'from-violet-500 to-purple-500',icon: Monitor,  items: ['Electron 29', 'desktopCapturer', 'powerMonitor', 'System Tray', 'Deep-links', 'NSIS installer'] },
+  { category: 'DevOps',    color: 'from-red-500 to-rose-500',     icon: Settings, items: ['Docker Compose', 'nginx', 'Railway (API)', 'Vercel (UI)', 'Multi-stage build', 'Health checks'] },
+]
+
+// ── Zoho-style Product Dropdown Component — single column list ───────────
+const ProductDropdown = ({ isDark, onClose, navigate }) => {
+  return (
+    <div style={{ padding: '8px 0 0 0' }}>
+      {/* Scrollable list */}
+      <ul style={{ listStyle: 'none', margin: 0, padding: '4px 0' }}>
+        {PRODUCTS_MENU.map((item, i) => (
+          <li key={i}>
+            <a
+              href={item.anchor}
+              onClick={onClose}
+              style={{
+                display: 'block',
+                padding: '10px 20px',
+                fontSize: '14px',
+                color: isDark ? '#cbd5e1' : '#374151',
+                textDecoration: 'none',
+                transition: 'background 0.12s, color 0.12s',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = isDark ? 'rgba(99,102,241,0.1)' : '#f0f7ff'
+                e.currentTarget.style.color = isDark ? '#818cf8' : '#2563eb'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'transparent'
+                e.currentTarget.style.color = isDark ? '#cbd5e1' : '#374151'
+              }}
+            >
+              {item.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+
+      {/* EXPLORE ALL PRODUCTS button */}
+      <div style={{
+        padding: '12px 16px',
+        borderTop: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e5e7eb',
+        marginTop: '4px',
+      }}>
+        <a
+          href="#features"
+          onClick={onClose}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            padding: '11px 16px',
+            borderRadius: '6px',
+            fontSize: '13px',
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            background: '#1d6ae5',
+            color: '#ffffff',
+            textDecoration: 'none',
+            transition: 'background 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#1558c0' }}
+          onMouseLeave={e => { e.currentTarget.style.background = '#1d6ae5' }}
+        >
+          EXPLORE ALL PRODUCTS <ChevronRight size={15} />
+        </a>
+      </div>
+    </div>
+  )
+}
 export default function LandingPage() {
   const navigate  = useNavigate()
   const canvasRef = useRef(null)
   const { theme } = useTheme()
   const isDark    = theme === 'dark'
+  const [productOpen, setProductOpen] = useState(false)
+  const productRef = useRef(null)
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (productRef.current && !productRef.current.contains(e.target)) setProductOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   // ── Particle canvas ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -192,19 +294,58 @@ export default function LandingPage() {
         style={{ opacity: isDark ? 1 : 0.1 }} />
 
       {/* ── NAV ────────────────────────────────────────────────────────────── */}
-      <nav className={`relative z-10 flex items-center justify-between px-4 md:px-10 py-3 sm:py-4 ${glassCls} border-b ${navBorder} sticky top-0`}>
-        <div className="flex items-center gap-2 sm:gap-3">
-          <img src={sangriaLogo} alt="Sangria Edutainment" className="h-8 sm:h-10 w-auto object-contain flex-shrink-0" />
-          <span className={`font-bold text-sm hidden sm:block ${isDark ? 'text-white' : 'text-slate-900'}`}>
-            Sangria <span className={`font-normal text-xs block ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Edutainment</span>
-          </span>
-        </div>
+      <nav className={`relative flex items-center justify-between px-4 md:px-10 py-3 sm:py-4 ${glassCls} border-b ${navBorder} sticky top-0`} style={{ zIndex: 1000 }}>
+        {/* Left: Logo + Products dropdown together */}
+        <div className="flex items-center gap-6">
+          {/* Logo */}
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            <img src={sangriaLogo} alt="Sangria Edutainment" className="h-8 sm:h-10 w-auto object-contain flex-shrink-0" />
+            <span className={`font-bold text-sm hidden sm:block ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              Sangria <span className={`font-normal text-xs block ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Edutainment</span>
+            </span>
+          </div>
 
-        <div className={`hidden md:flex items-center gap-8 text-sm ${textMuted}`}>
-          {['Features', 'Modules', 'Roles', 'Tech Stack'].map(item => (
-            <a key={item} href={`#${item.toLowerCase().replace(' ', '-')}`}
-              className="hover:text-blue-500 transition-colors">{item}</a>
-          ))}
+          {/* Products dropdown — right next to logo with ~10% spacing */}
+          <div className={`hidden md:flex items-center text-sm ${textMuted} ml-[8vw]`}>
+            <div className="relative" ref={productRef}>
+              <button
+                onClick={() => setProductOpen(o => !o)}
+                className={`flex items-center gap-1.5 font-medium transition-colors px-1 py-1 ${
+                  productOpen
+                    ? 'text-blue-500'
+                    : isDark ? 'text-slate-300 hover:text-blue-400' : 'text-slate-600 hover:text-blue-500'
+                }`}
+              >
+                Products
+                <ChevronDown size={14} className={`transition-transform duration-200 ${productOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              <AnimatePresence>
+                {productOpen && (
+                  <>
+                    <div className="fixed inset-0 z-[998]" onClick={() => setProductOpen(false)} />
+                    <motion.div
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 6 }}
+                      transition={{ duration: 0.15, ease: 'easeOut' }}
+                      className="absolute left-0 top-[calc(100%+12px)] z-[999] w-[280px] rounded-2xl overflow-hidden"
+                      style={{
+                        background: isDark ? '#0f172a' : '#ffffff',
+                        border: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #e2e8f0',
+                        boxShadow: isDark
+                          ? '0 20px 60px rgba(0,0,0,0.7), 0 4px 16px rgba(0,0,0,0.5)'
+                          : '0 20px 60px rgba(0,0,0,0.15), 0 4px 16px rgba(0,0,0,0.08)',
+                      }}
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <ProductDropdown isDark={isDark} onClose={() => setProductOpen(false)} />
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
@@ -446,6 +587,46 @@ export default function LandingPage() {
               </div>
             </div>
           </motion.div>
+        </div>
+      </section>
+
+      {/* ── TECH STACK ─────────────────────────────────────────────────────── */}
+      <section id="tech-stack" className="relative z-10 py-24 px-6">
+        <div className="max-w-6xl mx-auto">
+          <motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} className="text-center mb-16">
+            <span className="text-xs font-bold text-violet-400 uppercase tracking-widest mb-3 block">Tech Stack</span>
+            <h2 className={`text-2xl sm:text-4xl font-black mb-4 ${textBase}`}>
+              <span className="bg-gradient-to-r from-violet-400 to-purple-400 bg-clip-text text-transparent">
+                Built With
+              </span>{' '}Modern Tech
+            </h2>
+            <p className={`${textMuted} max-w-xl mx-auto`}>
+              Production-grade stack — from React frontend to Electron desktop agent
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {techStack.map((tech, i) => (
+              <motion.div key={i} initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.08 }} whileHover={{ y: -4 }}
+                className={`${glassCls} rounded-2xl p-5 group`}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${tech.color} flex items-center justify-center shadow-md group-hover:scale-110 transition-transform`}>
+                    <tech.icon size={18} className="text-white" />
+                  </div>
+                  <h3 className={`font-bold text-sm ${textBase}`}>{tech.category}</h3>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {tech.items.map(item => (
+                    <span key={item} className={`text-xs px-2.5 py-1 rounded-lg font-medium border
+                      ${isDark ? 'bg-white/5 border-white/10 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </motion.div>
+            ))}
+          </div>
         </div>
       </section>
 
