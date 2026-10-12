@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Edit2, Trash2, X, Check, Eye, IdCard,
-  Palette, Layout, ToggleLeft, ToggleRight, AlertTriangle, Upload
+  Palette, Layout, ToggleLeft, ToggleRight, AlertTriangle, Upload, Minus
 } from 'lucide-react'
 import { api } from '../../services/api'
 import Card, { CardBody, CardHeader } from '../../components/common/Card'
@@ -26,6 +26,18 @@ const DEFAULT_CONFIG = {
   showPhone:       false,
   cardWidth:       340,
   cardHeight:      210,
+}
+
+// ── Defaults for uploaded-image templates (photo + text positions/sizes) ─────
+const UPLOAD_DEFAULTS = {
+  photoTop:        37,   // %
+  photoLeft:       50,   // %
+  photoSize:       110,  // px
+  detailsTop:      60,   // %
+  detailsLeft:     50,   // % (horizontal center)
+  nameSize:        10,   // px (preview scale)
+  designationSize: 8,    // px (preview scale)
+  empIdSize:       8,    // px (preview scale)
 }
 
 // ── ID Card Preview Component ─────────────────────────────────────────────────
@@ -181,6 +193,32 @@ const ToggleRow = ({ label, value, onChange }) => (
   </div>
 )
 
+// ── Adjust Row: slider + (−) (+) buttons ──────────────────────────────────────
+const AdjustRow = ({ label, value, min, max, step = 1, unit = '', onChange }) => {
+  const clamp = v => Math.min(max, Math.max(min, v))
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs text-gray-500">{label}</span>
+        <div className="flex items-center gap-1.5">
+          <button type="button" onClick={() => onChange(clamp(value - step))}
+            className="w-6 h-6 rounded-lg flex items-center justify-center bg-gray-100 dark:bg-dark-700 text-gray-600 dark:text-gray-300 hover:bg-primary-500 hover:text-white transition-colors">
+            <Minus size={12} />
+          </button>
+          <span className="text-xs font-mono text-primary-500 w-12 text-center">{value}{unit}</span>
+          <button type="button" onClick={() => onChange(clamp(value + step))}
+            className="w-6 h-6 rounded-lg flex items-center justify-center bg-gray-100 dark:bg-dark-700 text-gray-600 dark:text-gray-300 hover:bg-primary-500 hover:text-white transition-colors">
+            <Plus size={12} />
+          </button>
+        </div>
+      </div>
+      <input type="range" min={min} max={max} step={step} value={value}
+        onChange={e => onChange(clamp(parseFloat(e.target.value)))}
+        className="w-full accent-primary-500" />
+    </div>
+  )
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 const IDCardTemplates = () => {
   const [templates, setTemplates] = useState([])
@@ -193,6 +231,8 @@ const IDCardTemplates = () => {
 
   const [form, setForm] = useState({ name: '', description: '', design_config: DEFAULT_CONFIG })
   const setC = (k, v) => setForm(f => ({ ...f, design_config: { ...f.design_config, [k]: v } }))
+  // Value helper: config value or upload default
+  const U = k => form.design_config[k] ?? UPLOAD_DEFAULTS[k]
   const [formMode,     setFormMode]     = useState('upload') // 'upload' | 'design'
   const [uploadFile,   setUploadFile]   = useState(null)
   const [uploadPreview,setUploadPreview]= useState(null)
@@ -255,6 +295,13 @@ const IDCardTemplates = () => {
         finalConfig = { ...finalConfig, template_image_url: uploadPreview, template_mode: 'image' }
       } else {
         finalConfig = { ...finalConfig, template_mode: 'design' }
+      }
+
+      // Make sure position/size values are always saved explicitly
+      if (formMode === 'upload') {
+        Object.keys(UPLOAD_DEFAULTS).forEach(k => {
+          finalConfig[k] = finalConfig[k] ?? UPLOAD_DEFAULTS[k]
+        })
       }
 
       const payload = { ...form, design_config: finalConfig }
@@ -464,50 +511,45 @@ const IDCardTemplates = () => {
                             }} />
                         </label>
 
-                        {/* Photo position controls */}
+                        {/* Photo + text position / size controls */}
                         {uploadPreview && (
-                          <div className="space-y-3 pt-2 border-t border-gray-100 dark:border-dark-600">
-                            <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">
-                              📍 Photo Circle Position
-                            </p>
-                            <p className="text-xs text-gray-400">Adjust where the employee photo appears on the template</p>
-                            <div className="space-y-2">
-                              <div>
-                                <div className="flex justify-between mb-1">
-                                  <span className="text-xs text-gray-500">Top position</span>
-                                  <span className="text-xs font-mono text-primary-500">{form.design_config.photoTop ?? 37}%</span>
-                                </div>
-                                <input type="range" min="10" max="80" value={form.design_config.photoTop ?? 37}
-                                  onChange={e => setC('photoTop', parseInt(e.target.value))}
-                                  className="w-full accent-primary-500" />
-                              </div>
-                              <div>
-                                <div className="flex justify-between mb-1">
-                                  <span className="text-xs text-gray-500">Left position</span>
-                                  <span className="text-xs font-mono text-primary-500">{form.design_config.photoLeft ?? 50}%</span>
-                                </div>
-                                <input type="range" min="10" max="90" value={form.design_config.photoLeft ?? 50}
-                                  onChange={e => setC('photoLeft', parseInt(e.target.value))}
-                                  className="w-full accent-primary-500" />
-                              </div>
-                              <div>
-                                <div className="flex justify-between mb-1">
-                                  <span className="text-xs text-gray-500">Circle size</span>
-                                  <span className="text-xs font-mono text-primary-500">{form.design_config.photoSize ?? 110}px</span>
-                                </div>
-                                <input type="range" min="60" max="200" value={form.design_config.photoSize ?? 110}
-                                  onChange={e => setC('photoSize', parseInt(e.target.value))}
-                                  className="w-full accent-primary-500" />
-                              </div>
-                              <div>
-                                <div className="flex justify-between mb-1">
-                                  <span className="text-xs text-gray-500">Details top position</span>
-                                  <span className="text-xs font-mono text-primary-500">{form.design_config.detailsTop ?? 60}%</span>
-                                </div>
-                                <input type="range" min="30" max="90" value={form.design_config.detailsTop ?? 60}
-                                  onChange={e => setC('detailsTop', parseInt(e.target.value))}
-                                  className="w-full accent-primary-500" />
-                              </div>
+                          <div className="space-y-4 pt-2 border-t border-gray-100 dark:border-dark-600">
+                            {/* Photo */}
+                            <div className="space-y-3">
+                              <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+                                📍 Photo Circle Position
+                              </p>
+                              <p className="text-xs text-gray-400">Adjust where the employee photo appears on the template</p>
+                              <AdjustRow label="Top position" value={U('photoTop')} min={10} max={80} unit="%"
+                                onChange={v => setC('photoTop', v)} />
+                              <AdjustRow label="Left / Right position" value={U('photoLeft')} min={10} max={90} unit="%"
+                                onChange={v => setC('photoLeft', v)} />
+                              <AdjustRow label="Circle size" value={U('photoSize')} min={60} max={200} step={2} unit="px"
+                                onChange={v => setC('photoSize', v)} />
+                            </div>
+
+                            {/* Details position */}
+                            <div className="space-y-3 pt-3 border-t border-gray-100 dark:border-dark-600">
+                              <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+                                🧾 Details Position
+                              </p>
+                              <AdjustRow label="Top position" value={U('detailsTop')} min={30} max={90} unit="%"
+                                onChange={v => setC('detailsTop', v)} />
+                              <AdjustRow label="Left / Right position" value={U('detailsLeft')} min={10} max={90} unit="%"
+                                onChange={v => setC('detailsLeft', v)} />
+                            </div>
+
+                            {/* Font sizes */}
+                            <div className="space-y-3 pt-3 border-t border-gray-100 dark:border-dark-600">
+                              <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+                                🔤 Font Sizes
+                              </p>
+                              <AdjustRow label="Name font size" value={U('nameSize')} min={6} max={28} step={0.5} unit="px"
+                                onChange={v => setC('nameSize', v)} />
+                              <AdjustRow label="Designation font size" value={U('designationSize')} min={5} max={24} step={0.5} unit="px"
+                                onChange={v => setC('designationSize', v)} />
+                              <AdjustRow label="Emp ID font size" value={U('empIdSize')} min={5} max={24} step={0.5} unit="px"
+                                onChange={v => setC('empIdSize', v)} />
                             </div>
                           </div>
                         )}
@@ -557,11 +599,11 @@ const IDCardTemplates = () => {
                         <img src={uploadPreview} alt="Template" style={{ width: '100%', height: 'auto', display: 'block' }} />
                         <div style={{
                           position: 'absolute',
-                          top: `${form.design_config.photoTop ?? 37}%`,
-                          left: `${form.design_config.photoLeft ?? 50}%`,
+                          top: `${U('photoTop')}%`,
+                          left: `${U('photoLeft')}%`,
                           transform: 'translate(-50%, -50%)',
-                          width: `${Math.round((form.design_config.photoSize ?? 110) * 0.82)}px`,
-                          height: `${Math.round((form.design_config.photoSize ?? 110) * 0.82)}px`,
+                          width: `${Math.round(U('photoSize') * 0.82)}px`,
+                          height: `${Math.round(U('photoSize') * 0.82)}px`,
                           borderRadius: '50%',
                           border: '2px solid white',
                           background: 'rgba(99,102,241,0.8)',
@@ -572,13 +614,17 @@ const IDCardTemplates = () => {
                         </div>
                         <div style={{
                           position: 'absolute',
-                          top: `${form.design_config.detailsTop ?? 60}%`,
-                          left: 0, right: 0,
+                          top: `${U('detailsTop')}%`,
+                          left: `${U('detailsLeft')}%`,
+                          transform: 'translateX(-50%)',
+                          width: 'max-content',
+                          maxWidth: '90%',
                           textAlign: 'center',
                           padding: '0 8px',
                         }}>
-                          <p style={{ color: '#111', fontWeight: 700, fontSize: '10px', margin: 0 }}>Employee Name</p>
-                          <p style={{ color: '#333', fontSize: '8px', margin: '2px 0 0' }}>Designation</p>
+                          <p style={{ color: '#111', fontWeight: 700, fontSize: `${U('nameSize')}px`, margin: 0, whiteSpace: 'nowrap' }}>Employee Name</p>
+                          <p style={{ color: '#333', fontSize: `${U('designationSize')}px`, margin: '2px 0 0', whiteSpace: 'nowrap' }}>Designation</p>
+                          <p style={{ color: '#333', fontSize: `${U('empIdSize')}px`, fontWeight: 600, margin: '2px 0 0', whiteSpace: 'nowrap' }}>EMP0001</p>
                         </div>
                       </div>
                     </div>

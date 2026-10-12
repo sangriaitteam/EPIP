@@ -13,10 +13,14 @@ const STEPS = ['Select Template', 'Fill Details', 'Generate & Download']
 
 // ── Uploaded-template overlay card (the actual rendered card for download) ──
 const TemplateOverlayCard = ({ templateUrl, photo, name, designation, empId, cardRef, config = {} }) => {
-  const photoTop    = config.photoTop    ?? 37
-  const photoLeft   = config.photoLeft   ?? 50
-  const photoSize   = config.photoSize   ?? 110
-  const detailsTop  = config.detailsTop  ?? 60
+  const photoTop        = config.photoTop        ?? 37
+  const photoLeft       = config.photoLeft       ?? 50
+  const photoSize       = config.photoSize       ?? 110
+  const detailsTop      = config.detailsTop      ?? 60
+  const detailsLeft     = config.detailsLeft     ?? 50
+  const nameSize        = config.nameSize        ?? 16
+  const designationSize = config.designationSize ?? 12
+  const empIdSize       = config.empIdSize       ?? 12
 
   return (
   <div
@@ -68,54 +72,58 @@ const TemplateOverlayCard = ({ templateUrl, photo, name, designation, empId, car
       )}
     </div>
 
-      {/* Employee details — below photo */}
-      <div style={{
-        position: 'absolute',
-        top: `${detailsTop}%`,
-        left: 0,
-        right: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: '3px',
-        padding: '0 16px',
+    {/* Employee details — positioned by detailsTop + detailsLeft */}
+    <div style={{
+      position: 'absolute',
+      top: `${detailsTop}%`,
+      left: `${detailsLeft}%`,
+      transform: 'translateX(-50%)',
+      width: 'max-content',
+      maxWidth: '90%',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: '3px',
+    }}>
+      {/* Name */}
+      <p style={{
+        color: '#111111',
+        fontWeight: 700,
+        fontSize: `${nameSize}px`,
+        textAlign: 'center',
+        margin: 0,
+        lineHeight: 1.2,
+        whiteSpace: 'nowrap',
       }}>
-        {/* Name */}
-        <p style={{
-          color: '#111111',
-          fontWeight: 700,
-          fontSize: '16px',
-          textAlign: 'center',
-          margin: 0,
-          lineHeight: 1.2,
-        }}>
-          {name || 'Employee Name'}
-        </p>
+        {name || 'Employee Name'}
+      </p>
 
-        {/* Designation */}
-        <p style={{
-          color: '#333333',
-          fontWeight: 600,
-          fontSize: '12px',
-          textAlign: 'center',
-          margin: 0,
-          letterSpacing: '0.5px',
-        }}>
-          {designation || 'Designation'}
-        </p>
+      {/* Designation */}
+      <p style={{
+        color: '#333333',
+        fontWeight: 600,
+        fontSize: `${designationSize}px`,
+        textAlign: 'center',
+        margin: 0,
+        letterSpacing: '0.5px',
+        whiteSpace: 'nowrap',
+      }}>
+        {designation || 'Designation'}
+      </p>
 
-        {/* Emp ID — plain text, no pill background */}
-        <p style={{
-          color: '#111111',
-          fontWeight: 700,
-          fontSize: '12px',
-          textAlign: 'center',
-          margin: '4px 0 0',
-          letterSpacing: '1px',
-        }}>
-          {empId || 'EMP0000'}
-        </p>
-      </div>
+      {/* Emp ID */}
+      <p style={{
+        color: '#111111',
+        fontWeight: 700,
+        fontSize: `${empIdSize}px`,
+        textAlign: 'center',
+        margin: '2px 0 0',
+        letterSpacing: '1px',
+        whiteSpace: 'nowrap',
+      }}>
+        {empId || 'EMP0000'}
+      </p>
+    </div>
   </div>
   )
 }
@@ -191,11 +199,15 @@ const GenerateIDCard = ({ empData, onClose }) => {
   const handleDownload = async () => {
     setDownloading(true)
     try {
-      const tplConfig  = selectedTpl?.design_config || {}
-      const photoTop   = tplConfig.photoTop   ?? 37
-      const photoLeft  = tplConfig.photoLeft  ?? 50
-      const photoSize  = tplConfig.photoSize  ?? 110
-      const detailsTop = tplConfig.detailsTop ?? 60
+      const tplConfig        = selectedTpl?.design_config || {}
+      const photoTop         = tplConfig.photoTop         ?? 37
+      const photoLeft        = tplConfig.photoLeft        ?? 50
+      const photoSize        = tplConfig.photoSize        ?? 110
+      const detailsTop       = tplConfig.detailsTop       ?? 60
+      const detailsLeft      = tplConfig.detailsLeft      ?? 50
+      const nameSize         = tplConfig.nameSize         ?? 16
+      const designationSize  = tplConfig.designationSize  ?? 12
+      const empIdSize        = tplConfig.empIdSize        ?? 12
 
       const CARD_W = 340
       let   CARD_H = 540
@@ -261,24 +273,27 @@ const GenerateIDCard = ({ empData, onClose }) => {
       // 4. Text details (only for uploaded template)
       if (isUploadedTemplate) {
         const detailsY = (detailsTop / 100) * CARD_H
+        const detailsX = (detailsLeft / 100) * CARD_W
         ctx.textAlign     = 'center'
         ctx.shadowColor   = 'transparent'
         ctx.shadowBlur    = 0
 
-        // Name
-        ctx.font      = 'bold 18px Arial'
+        // Name — use admin-configured font size scaled up 1.8x for high-res canvas
+        ctx.font      = `bold ${Math.round(nameSize * 1.8)}px Arial`
         ctx.fillStyle = '#111111'
-        ctx.fillText(generated?.custom_name || form.name || '', CARD_W / 2, detailsY)
+        ctx.fillText(generated?.custom_name || form.name || '', detailsX, detailsY)
 
         // Designation
-        ctx.font      = '600 13px Arial'
+        const nameFontH = Math.round(nameSize * 1.8)
+        ctx.font      = `600 ${Math.round(designationSize * 1.8)}px Arial`
         ctx.fillStyle = '#333333'
-        ctx.fillText(generated?.custom_designation || form.designation || '', CARD_W / 2, detailsY + 22)
+        ctx.fillText(generated?.custom_designation || form.designation || '', detailsX, detailsY + nameFontH + 4)
 
         // Emp ID
-        ctx.font      = 'bold 12px Arial'
+        const desFontH = Math.round(designationSize * 1.8)
+        ctx.font      = `bold ${Math.round(empIdSize * 1.8)}px Arial`
         ctx.fillStyle = '#111111'
-        ctx.fillText(generated?.custom_emp_id || form.empId || '', CARD_W / 2, detailsY + 42)
+        ctx.fillText(generated?.custom_emp_id || form.empId || '', detailsX, detailsY + nameFontH + desFontH + 10)
       }
 
       // 5. Download as PNG
