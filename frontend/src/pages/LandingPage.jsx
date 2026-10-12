@@ -130,14 +130,14 @@ const PROGRESS_ITEMS = [
 
 // ── Products dropdown ─────────────────────────────────────────────────────
 const PRODUCTS_MENU = [
-  { label: 'Lead & Client Management', anchor: '#features' },
-  { label: 'Employee Management',      anchor: '#features' },
-  { label: 'Project Management',       anchor: '#features' },
-  { label: 'Attendance & Time',        anchor: '#features' },
-  { label: 'Reports & Analytics',      anchor: '#features' },
-  { label: 'Task Management',          anchor: '#modules'  },
-  { label: 'Roles & Permissions',      anchor: '#roles'    },
-  { label: 'Tech Stack',               anchor: '#tech-stack' },
+  { label: 'Sales',                      anchor: '#features' },
+  { label: 'Marketing',                  anchor: '#features' },
+  { label: 'Finance',                    anchor: '#features' },
+  { label: 'Human Resources',            anchor: '#features' },
+  { label: 'Security and IT Management', anchor: '#features' },
+  { label: 'BI and Analytics',           anchor: '#features' },
+  { label: 'Project Management',         anchor: '#features' },
+  { label: 'Developer Platforms',        anchor: '#tech-stack' },
 ]
 
 // ── Tech Stack data ───────────────────────────────────────────────────────
