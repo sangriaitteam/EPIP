@@ -282,23 +282,32 @@ export default function LandingPage() {
       {/* ── NAV ──────────────────────────────────────────────────────────── */}
       <nav
         className="relative flex items-center justify-between px-4 md:px-10 py-3 sm:py-4 sticky top-0"
-        style={{ zIndex: 1000, background: '#0a0f1e', borderBottom: '1px solid rgba(255,255,255,0.07)' }}
+        style={{
+          zIndex: 1000,
+          background: isDark ? '#0f172a' : '#ffffff',
+          borderBottom: isDark ? '1px solid rgba(255,255,255,0.07)' : '1px solid #e2e8f0',
+          boxShadow: isDark ? 'none' : '0 1px 4px rgba(0,0,0,0.06)',
+        }}
       >
         {/* Left: Logo + Products */}
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             <img src={sangriaLogo} alt="Sangria" className="h-8 sm:h-10 w-auto object-contain flex-shrink-0" />
-            <span className="font-bold text-sm hidden sm:block text-white">
-              Sangria <span className="font-normal text-xs block text-slate-400">Edutainment</span>
+            <span className={`font-bold text-sm hidden sm:block ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              Sangria <span className={`font-normal text-xs block ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Edutainment</span>
             </span>
           </div>
 
           {/* Products dropdown */}
-          <div className="hidden md:flex items-center text-sm text-slate-300 ml-[8vw]">
+          <div className={`hidden md:flex items-center text-sm ml-[8vw] ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
             <div className="relative" ref={productRef}>
               <button
                 onClick={() => setProductOpen(o => !o)}
-                className={`flex items-center gap-1.5 font-medium transition-colors px-1 py-1 ${productOpen ? 'text-blue-400' : 'text-slate-300 hover:text-white'}`}
+                className={`flex items-center gap-1.5 font-medium transition-colors px-1 py-1 ${
+                  productOpen
+                    ? 'text-blue-500'
+                    : isDark ? 'text-slate-300 hover:text-white' : 'text-slate-600 hover:text-blue-600'
+                }`}
               >
                 Products
                 <ChevronDown size={14} className={`transition-transform duration-200 ${productOpen ? 'rotate-180' : ''}`} />
@@ -331,7 +340,11 @@ export default function LandingPage() {
         <div className="flex items-center gap-2 sm:gap-3">
           <ThemeToggle />
           <button onClick={() => navigate('/login')}
-            className="hidden sm:block text-sm px-4 py-2 rounded-xl font-medium transition-all border border-slate-600 text-slate-300 hover:border-blue-500 hover:text-blue-400">
+            className={`hidden sm:block text-sm px-4 py-2 rounded-xl font-medium transition-all border ${
+              isDark
+                ? 'border-slate-600 text-slate-300 hover:border-blue-500 hover:text-blue-400'
+                : 'border-slate-200 text-slate-600 hover:border-blue-500 hover:text-blue-600 bg-white'
+            }`}>
             Sign In
           </button>
           <button onClick={() => navigate('/login')}
@@ -591,32 +604,6 @@ export default function LandingPage() {
             ))}
           </div>
         </div>
-      </section>
-
-      {/* ── CTA ──────────────────────────────────────────────────────────── */}
-      <section className="relative z-10 py-24 px-6">
-        <motion.div initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.6 }}
-          className={`max-w-4xl mx-auto ${glassCls} rounded-3xl p-8 sm:p-12 text-center border shadow-2xl
-            ${isDark ? 'border-blue-500/20 shadow-blue-500/10' : 'border-blue-200 shadow-blue-100'}`}>
-          <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center mx-auto mb-6 shadow-lg">
-            <Building2 size={32} className="text-white" />
-          </div>
-          <h2 className={`text-2xl sm:text-4xl font-black mb-4 ${textBase}`}>
-            Sangria Edutainment's<br />
-            <span className="bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent">
-              Unified CRM Platform
-            </span>
-          </h2>
-          <p className={`${textMuted} text-sm sm:text-base mb-8 max-w-lg mx-auto`}>
-            Manage your employees, track your clients, monitor productivity, and grow your business — all from one powerful dashboard.
-          </p>
-          <motion.button onClick={() => navigate('/login')}
-            whileHover={{ scale: 1.04, y: -2 }} whileTap={{ scale: 0.98 }}
-            className="inline-flex items-center gap-2 text-base py-4 px-10 rounded-2xl font-semibold text-white bg-gradient-to-r from-blue-500 to-violet-600 shadow-xl shadow-blue-500/30 hover:shadow-blue-500/50 transition-shadow">
-            Sign In to CRM <ChevronRight size={20} />
-          </motion.button>
-        </motion.div>
       </section>
 
       {/* ── FOOTER ───────────────────────────────────────────────────────── */}
