@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Camera, Lock, Clock, Users, Eye, RefreshCw, X, Monitor } from 'lucide-react'
 import Card, { CardHeader, CardBody } from '../../components/common/Card'
@@ -16,66 +16,85 @@ const fmtDate = (ts) => new Date(ts).toLocaleDateString('en-IN', { day: 'numeric
 const ScreenshotViewer = () => {
   const today = new Date().toISOString().split('T')[0]
 
-  const [employees,        setEmployees]        = useState([])
-  const [selectedEmp,      setSelectedEmp]      = useState(null)
-  const [selectedDate,     setSelectedDate]     = useState(today)
-  const [screenshots,      setScreenshots]      = useState([])
-  const [allShots,         setAllShots]         = useState([])
-  const [preview,          setPreview]          = useState(null)
-  const [loading,          setLoading]          = useState(true)
-  const [refreshing,       setRefreshing]       = useState(false)
-  const [interval,         setInterval_]        = useState(10)
+  const [employees,      setEmployees]      = useState([])
+  const [selectedEmp,    setSelectedEmp]    = useState(null)
+  const [selectedDate,   setSelectedDate]   = useState(today)
+  const [screenshots,    setScreenshots]    = useState([])
+  const [counts,         setCounts]         = useState({})
+  const [preview,        setPreview]        = useState(null)
+  const [initialLoading, setInitialLoading] = useState(true)
+  const [shotLoading,    setShotLoading]    = useState(false)
+  const [refreshing,     setRefreshing]     = useState(false)
+  const [interval,       setInterval_]      = useState(10)
+  const abortRef = useRef(null)
 
-  // Load employees + settings
-  useEffect(() => {
-    employeeService.getAll().then(d => {
-      if (d?.length) {
-        setEmployees(d)
-        setSelectedEmp(d[0])
-      }
-    }).catch(() => {})
-
-    api.get('/admin/settings').then(res => {
-      const iv = parseInt(res.data?.screenshot_interval_minutes || res.data?.screenshot_interval || 10)
-      setInterval_(iv)
-    }).catch(() => {})
-  }, [])
-
-  // Load all screenshots for today count
+  // Load all employees + settings + count map — once on mount / date change
   const loadAll = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true)
+    if (!silent) setInitialLoading(true)
     else setRefreshing(true)
     try {
-      const res = await api.get(`/screenshots?date=${selectedDate}&limit=200`)
-      if (res.success) setAllShots(res.data || [])
+      const [empList, settingsRes, allRes] = await Promise.all([
+        employeeService.getAll(),
+        api.get('/admin/settings'),
+        api.get(`/screenshots?date=${selectedDate}&limit=500`),
+      ])
+
+      if (empList?.length) {
+        setEmployees(empList)
+        setSelectedEmp(prev => prev ? (empList.find(e => e.id === prev.id) || empList[0]) : empList[0])
+      }
+
+      const iv = parseInt(settingsRes.data?.screenshot_interval_minutes || settingsRes.data?.screenshot_interval || 10)
+      setInterval_(iv)
+
+      if (allRes.success) {
+        const map = {}
+        for (const s of (allRes.data || [])) {
+          map[s.employee_id] = (map[s.employee_id] || 0) + 1
+        }
+        setCounts(map)
+      }
     } catch {}
-    setLoading(false)
+    setInitialLoading(false)
     setRefreshing(false)
   }, [selectedDate])
 
-  // Load screenshots for selected employee
-  const loadForEmployee = useCallback(async () => {
-    if (!selectedEmp) return
+  // Load screenshots for one employee — fast + cancellable
+  const loadForEmployee = useCallback(async (emp, date) => {
+    if (!emp) return
+    const token = {}
+    abortRef.current = token
+    setShotLoading(true)
+    setScreenshots([])
     try {
-      const res = await api.get(`/screenshots/employee/${selectedEmp.id}?date=${selectedDate}&limit=50`)
-      if (res.success) setScreenshots(res.data || [])
-    } catch { setScreenshots([]) }
-  }, [selectedEmp, selectedDate])
+      const res = await api.get(`/screenshots/employee/${emp.id}?date=${date}&limit=50`)
+      if (abortRef.current === token) {
+        setScreenshots(res.success ? (res.data || []) : [])
+      }
+    } catch {
+      if (abortRef.current === token) setScreenshots([])
+    }
+    if (abortRef.current === token) setShotLoading(false)
+  }, [])
+
+  useEffect(() => { loadAll() }, [selectedDate])
 
   useEffect(() => {
-    loadAll()
-  }, [selectedDate])
+    if (selectedEmp) loadForEmployee(selectedEmp, selectedDate)
+  }, [selectedEmp?.id, selectedDate])
 
-  useEffect(() => {
-    loadForEmployee()
-  }, [selectedEmp, selectedDate])
+  const totalToday = Object.values(counts).reduce((a, b) => a + b, 0)
+  const monitored  = Object.values(counts).filter(c => c > 0).length
 
-  // Count for each employee today
-  const countFor = (empId) => allShots.filter(s => s.employee_id === empId).length
-
-  // Total today
-  const totalToday = allShots.length
-  const monitored  = employees.filter(e => countFor(e.id) > 0).length
+  const resolveUrl = (shot) => {
+    if (shot.image_data) return shot.image_data
+    const url = shot.file_url
+    if (!url) return null
+    if (url.includes('cloudinary.com') || url.includes('railway.app')) return url
+    const backendBase = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL?.replace(/\/api$/, '') || ''
+    const match = url.match(/(\/uploads\/.+)$/)
+    return backendBase && match ? `${backendBase}${match[1]}` : url
+  }
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-4 sm:space-y-6">
@@ -93,7 +112,7 @@ const ScreenshotViewer = () => {
             <Lock size={13} className="text-yellow-600" />
             <span className="text-xs text-yellow-600 font-medium">HR access only</span>
           </div>
-          <button onClick={() => { loadAll(true); loadForEmployee() }} disabled={refreshing}
+          <button onClick={() => loadAll(true)} disabled={refreshing}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-gray-100 dark:bg-dark-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-dark-600 transition-colors">
             <motion.div animate={refreshing ? { rotate: 360 } : {}} transition={{ duration: 0.8, repeat: refreshing ? Infinity : 0, ease: 'linear' }}>
               <RefreshCw size={13} />
@@ -131,16 +150,16 @@ const ScreenshotViewer = () => {
           <CardBody className="p-2 space-y-1 max-h-48 lg:max-h-none overflow-y-auto">
             {employees.length === 0 ? (
               <p className="text-xs text-gray-400 text-center py-4">No employees</p>
-            ) : employees.map((emp, i) => {
+            ) : employees.map((emp) => {
               const name  = emp.name || `${emp.first_name||''} ${emp.last_name||''}`.trim()
-              const count = countFor(emp.id)
+              const count = counts[emp.id] || 0
               const isSelected = selectedEmp?.id === emp.id
               return (
                 <button key={emp.id} onClick={() => setSelectedEmp(emp)}
                   className={`w-full flex items-center gap-3 p-2.5 rounded-xl transition-all text-left ${
                     isSelected ? 'bg-primary-500/10 border border-primary-500/20' : 'hover:bg-gray-50 dark:hover:bg-dark-700'
                   }`}>
-                  <Avatar name={name} size="sm" />
+                  <Avatar name={name} size="sm" animate={false} />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{name}</p>
                     <p className="text-xs text-gray-400 truncate">{emp.designation || emp.department || '—'}</p>
@@ -156,13 +175,11 @@ const ScreenshotViewer = () => {
 
         {/* Screenshots panel */}
         <div className="lg:col-span-3 space-y-4">
-
-          {/* Selected employee info */}
           {selectedEmp && (
             <Card animate={false}>
               <CardBody className="py-3">
                 <div className="flex items-center gap-3">
-                  <Avatar name={selectedEmp.name || `${selectedEmp.first_name||''} ${selectedEmp.last_name||''}`} size="md" />
+                  <Avatar name={selectedEmp.name || `${selectedEmp.first_name||''} ${selectedEmp.last_name||''}`} size="md" animate={false} />
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-900 dark:text-white">
                       {selectedEmp.name || `${selectedEmp.first_name||''} ${selectedEmp.last_name||''}`.trim()}
@@ -175,11 +192,15 @@ const ScreenshotViewer = () => {
             </Card>
           )}
 
-          {/* Screenshot grid */}
-          {loading ? (
+          {initialLoading ? (
             <div className="flex justify-center py-16">
               <motion.div animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
                 className="w-8 h-8 border-2 border-primary-500/30 border-t-primary-500 rounded-full" />
+            </div>
+          ) : shotLoading ? (
+            <div className="flex justify-center py-10">
+              <motion.div animate={{ rotate: 360 }} transition={{ duration: 0.6, repeat: Infinity, ease: 'linear' }}
+                className="w-6 h-6 border-2 border-primary-500/30 border-t-primary-500 rounded-full" />
             </div>
           ) : screenshots.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center rounded-2xl border-2 border-dashed border-gray-200 dark:border-dark-600">
@@ -191,63 +212,36 @@ const ScreenshotViewer = () => {
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <AnimatePresence>
-                {screenshots.map((shot, i) => (
-                  <motion.div key={shot.id}
-                    initial={{ opacity: 0, scale: 0.85 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{    opacity: 0, scale: 0.85 }}
-                    transition={{ delay: i * 0.05, type: 'spring', stiffness: 150 }}
+              {screenshots.map((shot) => {
+                const src = resolveUrl(shot)
+                return (
+                  <div key={shot.id}
                     onClick={() => setPreview(shot)}
                     className="group relative aspect-video bg-gray-100 dark:bg-dark-700 rounded-xl border border-gray-200 dark:border-dark-600 overflow-hidden cursor-pointer hover:border-primary-500 transition-colors hover:shadow-lg"
                   >
-                    {/* Real screenshot image */}
-                    {(shot.image_data || shot.file_url) ? (
-                      <img
-                        src={(() => {
-                          // Use base64 image_data if available (reliable, no file system)
-                          if (shot.image_data) return shot.image_data
-                          const url = shot.file_url
-                          if (url.includes('cloudinary.com') || url.includes('res.cloudinary')) return url
-                          if (url.includes('railway.app')) return url
-                          const backendBase = import.meta.env.VITE_BACKEND_URL
-                            || import.meta.env.VITE_API_URL?.replace(/\/api$/, '')
-                            || ''
-                          const match = url.match(/(\/uploads\/.+)$/)
-                          if (backendBase && match) return `${backendBase}${match[1]}`
-                          return url
-                        })()}
-                        alt={`Screenshot ${fmtTime(shot.captured_at || shot.created_at)}`}
-                        className="w-full h-full object-cover"
-                        onError={e => { e.target.style.display = 'none' }}
-                      />
+                    {src ? (
+                      <img src={src} alt={fmtTime(shot.captured_at || shot.created_at)}
+                        className="w-full h-full object-cover" loading="lazy"
+                        onError={e => { e.target.style.display = 'none' }} />
                     ) : (
                       <div className="absolute inset-0 flex items-center justify-center">
                         <Camera size={20} className="text-gray-400" />
                       </div>
                     )}
-
-                    {/* Hover overlay */}
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
                       <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center">
                         <Eye size={16} className="text-white" />
                       </div>
                     </div>
-
-                    {/* Timestamp + active window */}
                     <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5 bg-gradient-to-t from-black/70 to-transparent">
-                      <p className="text-[10px] text-white/90 font-mono">
-                        {fmtTime(shot.captured_at || shot.created_at)}
-                      </p>
+                      <p className="text-[10px] text-white/90 font-mono">{fmtTime(shot.captured_at || shot.created_at)}</p>
                       {shot.active_window_title && (
-                        <p className="text-[9px] text-white/70 truncate mt-0.5">
-                          {shot.active_window_title}
-                        </p>
+                        <p className="text-[9px] text-white/70 truncate mt-0.5">{shot.active_window_title}</p>
                       )}
                     </div>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
@@ -258,13 +252,10 @@ const ScreenshotViewer = () => {
         {preview && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-              onClick={() => setPreview(null)} />
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setPreview(null)} />
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="relative bg-white dark:bg-dark-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-dark-600 w-full max-w-3xl overflow-hidden"
-            >
+              className="relative bg-white dark:bg-dark-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-dark-600 w-full max-w-3xl overflow-hidden">
               <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 dark:border-dark-600">
                 <div>
                   <p className="font-semibold text-gray-900 dark:text-white text-sm">
@@ -276,38 +267,18 @@ const ScreenshotViewer = () => {
                   {preview.active_window_title && (
                     <div className="flex items-center gap-1 mt-1">
                       <Monitor size={11} className="text-primary-400" />
-                      <p className="text-xs text-primary-400 font-medium truncate max-w-xs">
-                        {preview.active_window_title}
-                      </p>
+                      <p className="text-xs text-primary-400 font-medium truncate max-w-xs">{preview.active_window_title}</p>
                     </div>
                   )}
                 </div>
-                <button onClick={() => setPreview(null)}
-                  className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-dark-700 text-gray-400">
+                <button onClick={() => setPreview(null)} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-dark-700 text-gray-400">
                   <X size={16} />
                 </button>
               </div>
               <div className="bg-black">
-                {(preview.image_data || preview.file_url)
-                  ? <img
-                      src={(() => {
-                        if (preview.image_data) return preview.image_data
-                        const url = preview.file_url
-                        if (url.includes('cloudinary.com') || url.includes('res.cloudinary')) return url
-                        if (url.includes('railway.app')) return url
-                        const backendBase = import.meta.env.VITE_BACKEND_URL
-                          || import.meta.env.VITE_API_URL?.replace(/\/api$/, '')
-                          || ''
-                        const match = url.match(/(\/uploads\/.+)$/)
-                        if (backendBase && match) return `${backendBase}${match[1]}`
-                        return url
-                      })()}
-                      alt="Screenshot"
-                      className="w-full max-h-[70vh] object-contain"
-                    />
-                  : <div className="flex items-center justify-center h-64">
-                      <Camera size={40} className="text-gray-600" />
-                    </div>
+                {resolveUrl(preview)
+                  ? <img src={resolveUrl(preview)} alt="Screenshot" className="w-full max-h-[70vh] object-contain" />
+                  : <div className="flex items-center justify-center h-64"><Camera size={40} className="text-gray-600" /></div>
                 }
               </div>
             </motion.div>

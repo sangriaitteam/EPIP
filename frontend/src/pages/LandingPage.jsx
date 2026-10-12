@@ -614,9 +614,6 @@ export default function LandingPage() {
           <span className={`font-semibold text-sm ${isDark ? 'text-white' : 'text-slate-700'}`}>Sangria Edutainment</span>
         </div>
         <p>© 2026 Sangria Edutainment Pvt Ltd · HR + CRM Platform</p>
-        <p className={`text-xs mt-1 ${isDark ? 'text-slate-600' : 'text-slate-300'}`}>
-          React + Node.js + PostgreSQL + Electron
-        </p>
       </footer>
     </div>
   )
