@@ -60,12 +60,34 @@ const Avatar = ({ name, src, size = 'md', className, online, animate = true }) =
         {src ? (
           <img
             src={(() => {
-              // Normalize stored URL to current browser host
-              // Handles cases where server IP changed or localhost vs LAN IP mismatch
+              // Only rewrite to current host when the URL is a relative /uploads path
+              // or when pointing to localhost/LAN IP (local dev).
+              // Never rewrite production HTTPS URLs (Railway, Vercel, etc.)
               try {
+                // If it's a data URL (base64) — use as-is
+                if (src.startsWith('data:')) return src
+
                 const { protocol, hostname } = window.location
-                const host = hostname.includes(':') ? `[${hostname}]` : hostname
-                return src.replace(/^https?:\/\/[^/]+/, `${protocol}//${host}:5000`)
+                const parsed = new URL(src)
+
+                // If the stored URL already matches the current host — use as-is
+                if (parsed.hostname === hostname) return src
+
+                // Only rewrite localhost / private IP URLs (local dev fallback)
+                const isLocal =
+                  parsed.hostname === 'localhost' ||
+                  parsed.hostname === '127.0.0.1' ||
+                  /^10\./.test(parsed.hostname) ||
+                  /^192\.168\./.test(parsed.hostname) ||
+                  /^172\.(1[6-9]|2\d|3[01])\./.test(parsed.hostname)
+
+                if (isLocal) {
+                  const host = hostname.includes(':') ? `[${hostname}]` : hostname
+                  return src.replace(/^https?:\/\/[^/]+/, `${protocol}//${host}:5000`)
+                }
+
+                // Production URL (HTTPS with real domain) — use as-is
+                return src
               } catch { return src }
             })()}
             alt={name}

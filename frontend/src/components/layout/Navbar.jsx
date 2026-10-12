@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
-import { Bell, Sun, Moon, Search, Menu, ChevronDown, CheckCheck } from 'lucide-react'
+import { Bell, Sun, Moon, Search, Menu, ChevronDown, CheckCheck, Camera } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 import { useAuth } from '../../context/AuthContext'
 import Avatar from '../common/Avatar'
 import { cn, formatDate } from '../../utils/helpers'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../services/api'
+import toast from 'react-hot-toast'
 
 const notifIcons = {
   review:   '📋',
@@ -17,18 +18,61 @@ const notifIcons = {
 
 const Navbar = ({ onMenuToggle }) => {
   const { theme, toggleTheme } = useTheme()
-  const { user, logout }       = useAuth()
+  const { user, logout, updateAvatar } = useAuth()
   const navigate               = useNavigate()
 
   const [notifOpen,    setNotifOpen]    = useState(false)
   const [profileOpen,  setProfileOpen]  = useState(false)
   const [notifications,setNotifications]= useState([])
   const [marking,      setMarking]      = useState(false)
+  const [avatarUploading, setAvatarUploading] = useState(false)
 
   const notifRef   = useRef(null)
   const profileRef = useRef(null)
+  const avatarInputRef = useRef(null)
 
   const unread = notifications.filter(n => !n.is_read).length
+
+  // ── Avatar upload for all roles ──────────────────────────────────────────
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) { toast.error('Please select an image file'); return }
+    if (file.size > 5 * 1024 * 1024) { toast.error('Image must be under 5MB'); return }
+
+    setAvatarUploading(true)
+    try {
+      // Get employee id — employees have user.employee.id, admin/superadmin may not have employee record
+      const empId = user?.employee?.id
+      if (!empId) {
+        toast.error('No employee record linked to this account')
+        setAvatarUploading(false)
+        return
+      }
+
+      const formData = new FormData()
+      formData.append('avatar', file)
+      const token = localStorage.getItem('epip_token')
+      const BASE  = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+      const res   = await fetch(`${BASE}/employees/${empId}/avatar`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      })
+      const data = await res.json()
+      if (data.success && data.data?.avatar_url) {
+        updateAvatar(data.data.avatar_url)
+        toast.success('Profile photo updated ✅')
+        setProfileOpen(false)
+      } else {
+        toast.error(data.message || 'Upload failed')
+      }
+    } catch {
+      toast.error('Cannot connect to server')
+    }
+    setAvatarUploading(false)
+    e.target.value = ''
+  }
 
   // Load real notifications
   const loadNotifications = useCallback(async () => {
@@ -220,18 +264,46 @@ const Navbar = ({ onMenuToggle }) => {
           </button>
 
           {profileOpen && (
-            <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-dark-800 rounded-2xl shadow-xl border border-gray-100 dark:border-dark-600 z-50 overflow-hidden">
+            <div className="absolute right-0 top-full mt-2 w-52 bg-white dark:bg-dark-800 rounded-2xl shadow-xl border border-gray-100 dark:border-dark-600 z-50 overflow-hidden">
+              {/* User info + photo upload */}
               <div className="px-4 py-3 border-b border-gray-100 dark:border-dark-600">
-                <p className="text-sm font-semibold text-gray-900 dark:text-white">{user?.name}</p>
-                <p className="text-xs text-gray-400 capitalize">{user?.role}</p>
+                <div className="flex items-center gap-3">
+                  {/* Clickable avatar to upload photo */}
+                  <div className="relative flex-shrink-0">
+                    <Avatar name={user?.name} src={user?.avatar_url || user?.employee?.avatar_url} size="md" animate={false} />
+                    {user?.employee?.id && (
+                      <button
+                        onClick={() => avatarInputRef.current?.click()}
+                        disabled={avatarUploading}
+                        title="Change profile photo"
+                        className="absolute -bottom-0.5 -right-0.5 w-5 h-5 bg-primary-500 hover:bg-primary-600 rounded-full flex items-center justify-center text-white shadow border-2 border-white dark:border-dark-800 transition-colors disabled:opacity-60"
+                      >
+                        {avatarUploading
+                          ? <span className="w-2.5 h-2.5 border border-white/50 border-t-white rounded-full animate-spin" />
+                          : <Camera size={9} />
+                        }
+                      </button>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{user?.name}</p>
+                    <p className="text-xs text-gray-400 capitalize">{user?.role === 'admin' ? 'Super Admin' : user?.role}</p>
+                  </div>
+                </div>
+                {user?.employee?.id && (
+                  <p className="text-xs text-gray-400 mt-1.5 text-center">Click photo icon to change</p>
+                )}
               </div>
               <div className="py-1">
-                <button
-                  onClick={() => { navigate('/employee/profile'); setProfileOpen(false) }}
-                  className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors"
-                >
-                  My Profile
-                </button>
+                {/* My Profile — only for roles that have a profile page */}
+                {user?.role === 'employee' && (
+                  <button
+                    onClick={() => { navigate('/employee/profile'); setProfileOpen(false) }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors"
+                  >
+                    My Profile
+                  </button>
+                )}
                 <button
                   onClick={() => { logout(); navigate('/login') }}
                   className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-500/5 transition-colors"
@@ -241,6 +313,15 @@ const Navbar = ({ onMenuToggle }) => {
               </div>
             </div>
           )}
+
+          {/* Hidden file input for avatar upload */}
+          <input
+            ref={avatarInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={handleAvatarUpload}
+          />
         </div>
 
       </div>
