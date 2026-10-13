@@ -16,10 +16,12 @@ const TemplateOverlayCard = ({ templateUrl, photo, name, designation, empId, car
   const photoTop        = config.photoTop        ?? 37
   const photoLeft       = config.photoLeft       ?? 50
   const photoSize       = config.photoSize       ?? 110
-  // Separate positions for each text element
-  const nameTop         = config.nameTop         ?? config.detailsTop  ?? 60
-  const nameLeft        = config.nameLeft        ?? config.detailsLeft ?? 50
-  const designationTop  = config.designationTop  ?? (nameTop + 5)
+  // Separate positions — use saved values, fall back to detailsTop/Left, then photo-relative defaults
+  const fallbackTop     = config.detailsTop  ?? (photoTop + 20)
+  const fallbackLeft    = config.detailsLeft ?? 50
+  const nameTop         = config.nameTop         ?? fallbackTop
+  const nameLeft        = config.nameLeft        ?? fallbackLeft
+  const designationTop  = config.designationTop  ?? (nameTop + 6)
   const designationLeft = config.designationLeft ?? nameLeft
   const empIdTop        = config.empIdTop        ?? (designationTop + 5)
   const empIdLeft       = config.empIdLeft       ?? nameLeft
@@ -194,9 +196,11 @@ const GenerateIDCard = ({ empData, onClose }) => {
       const photoTop         = tplConfig.photoTop         ?? 37
       const photoLeft        = tplConfig.photoLeft        ?? 50
       const photoSize        = tplConfig.photoSize        ?? 110
-      const nameTop          = tplConfig.nameTop          ?? tplConfig.detailsTop  ?? 60
-      const nameLeft         = tplConfig.nameLeft         ?? tplConfig.detailsLeft ?? 50
-      const designationTop   = tplConfig.designationTop   ?? (nameTop + 5)
+      const fallbackTop      = tplConfig.detailsTop       ?? (photoTop + 20)
+      const fallbackLeft     = tplConfig.detailsLeft      ?? 50
+      const nameTop          = tplConfig.nameTop          ?? fallbackTop
+      const nameLeft         = tplConfig.nameLeft         ?? fallbackLeft
+      const designationTop   = tplConfig.designationTop   ?? (nameTop + 6)
       const designationLeft  = tplConfig.designationLeft  ?? nameLeft
       const empIdTop         = tplConfig.empIdTop         ?? (designationTop + 5)
       const empIdLeft        = tplConfig.empIdLeft        ?? nameLeft

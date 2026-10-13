@@ -304,10 +304,18 @@ const IDCardTemplates = () => {
 
   const openEdit = (t) => {
     setEditTpl(t)
+    // Merge saved config with UPLOAD_DEFAULTS so new fields always have values
+    const savedConfig = { ...DEFAULT_CONFIG, ...t.design_config }
+    // Ensure all UPLOAD_DEFAULTS keys exist (handles templates saved before new fields)
+    Object.keys(UPLOAD_DEFAULTS).forEach(k => {
+      if (savedConfig[k] === undefined || savedConfig[k] === null) {
+        savedConfig[k] = UPLOAD_DEFAULTS[k]
+      }
+    })
     setForm({
       name: t.name,
       description: t.description || '',
-      design_config: { ...DEFAULT_CONFIG, ...t.design_config },
+      design_config: savedConfig,
     })
     setFormMode(t.design_config?.template_image_url ? 'upload' : 'design')
     setUploadFile(null)
