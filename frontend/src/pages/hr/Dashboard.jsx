@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Users, TrendingUp, Clock, BarChart3, Trophy, Calendar } from 'lucide-react'
 import StatCard from '../../components/common/StatCard'
@@ -17,6 +18,7 @@ const container = { hidden: {}, show: { transition: { staggerChildren: 0.07 } } 
 const item = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 120, damping: 14 } } }
 
 const HRDashboard = () => {
+  const navigate = useNavigate()
   const [stats,       setStats]       = useState(null)
   const [departments, setDepartments] = useState([])
   const [employees,   setEmployees]   = useState([])
@@ -147,7 +149,7 @@ const HRDashboard = () => {
               return (
                 <div key={emp.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-gray-50 dark:bg-dark-700">
                   <div className="relative flex-shrink-0">
-                    <Avatar name={name} size="sm" online={emp.status === 'active'} />
+                    <Avatar name={name} src={emp.avatar_url || null} size="sm" online={emp.status === 'active'} />
                     <span className={`absolute -top-1 -right-1 w-4 h-4 rounded-full text-[9px] flex items-center justify-center font-bold text-white ${
                       i === 0 ? 'bg-yellow-400' : i === 1 ? 'bg-gray-400' : i === 2 ? 'bg-amber-600' : 'bg-primary-500'
                     }`}>{i + 1}</span>
@@ -165,7 +167,12 @@ const HRDashboard = () => {
               )
             })}
             {employees.length > 4 && (
-              <p className="text-xs text-gray-400 text-center">+{employees.length - 4} more employees</p>
+              <button
+                onClick={() => navigate('/hr/employees')}
+                className="w-full text-xs text-primary-500 hover:text-primary-600 font-medium text-center py-1.5 rounded-xl hover:bg-primary-500/10 transition-colors"
+              >
+                +{employees.length - 4} more employees →
+              </button>
             )}
           </CardBody>
         </Card>
