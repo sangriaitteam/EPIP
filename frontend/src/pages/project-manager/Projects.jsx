@@ -331,6 +331,13 @@ const ActiveProjectsTab = ({ projects, loading, onDeleteProject, onRefresh }) =>
 // ── Create New Project ────────────────────────────────────────────────────────
 // ── Project Templates ─────────────────────────────────────────────────────────
 const TEMPLATE_TASKS = {
+  'cbt-5': [
+    { seq: 0, title: 'MCT',    priority: 'high', description: 'MCT — High priority task.' },
+    { seq: 1, title: 'ADCRS',  priority: 'high', description: 'ADCRS — High priority task.' },
+    { seq: 2, title: 'ARUDRA', priority: 'high', description: 'ARUDRA — High priority task.' },
+    { seq: 3, title: 'SDR',    priority: 'high', description: 'SDR — High priority task.' },
+    { seq: 4, title: '3DTCR',  priority: 'high', description: '3DTCR — High priority task.' },
+  ],
   'cbt': [
     { seq: 0,  title: 'Login Screen',              file_name: '00_Scr', duration_mins: 0,   description: 'Project login screen setup and access configuration.' },
     { seq: 1,  title: 'Intro',                     file_name: '01_Scr', duration_mins: 10,  description: 'Project introduction — overview, objectives and scope. (10 min)' },
@@ -362,6 +369,16 @@ const PROJECT_TEMPLATES = [
     color:       'from-blue-500 to-indigo-600',
     description: 'A structured Computer Based Training project for employee skill development and certification.',
     priority:    'medium',
+    status:      'planning',
+  },
+  {
+    id:          'cbt-5',
+    name:        'CBT Project',
+    fullName:    'CBT — 5 Core Tasks',
+    icon:        '🚀',
+    color:       'from-red-500 to-orange-600',
+    description: 'CBT project with 5 core high-priority tasks: MCT, ADCRS, ARUDRA, SDR, 3DTCR.',
+    priority:    'high',
     status:      'planning',
   },
 ]
@@ -453,16 +470,16 @@ const CreateNewProject = ({ onBack, onCreated }) => {
             setTaskProgress({ current: i + 1, total: templateTasks.length })
 
             const taskRes = await api.post('/tasks', {
-              title:        `${t.file_name} — ${t.title}`,
+              title:        `${t.file_name ? t.file_name + ' — ' : ''}${t.title}`,
               description:  t.description,
               assigned_to:  parseInt(assignTo),
-              priority:     'medium',
+              priority:     t.priority || 'medium',
               due_date:     dueDate.toISOString().split('T')[0],
               status:       'todo',
               project_id:   parseInt(project.id),
               project_name: project.name,
               source:       'project_manager',
-              tags:         [t.file_name],
+              tags:         t.file_name ? [t.file_name] : [],
             })
 
             if (!taskRes?.success) {
