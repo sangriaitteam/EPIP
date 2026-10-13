@@ -30,20 +30,20 @@ const DEFAULT_CONFIG = {
 
 // ── Defaults for uploaded-image templates (photo + text positions/sizes) ─────
 const UPLOAD_DEFAULTS = {
-  photoTop:        37,   // %
+  photoTop:        33,   // % — Sangria template circle center
   photoLeft:       50,   // %
-  photoSize:       110,  // px
-  detailsTop:      60,   // % (legacy - kept for backward compat)
+  photoSize:       130,  // px
+  detailsTop:      60,   // % (legacy)
   detailsLeft:     50,   // % (legacy)
-  nameTop:         60,   // %
+  nameTop:         62,   // %
   nameLeft:        50,   // %
-  designationTop:  65,   // %
+  designationTop:  68,   // %
   designationLeft: 50,   // %
-  empIdTop:        70,   // %
+  empIdTop:        73,   // %
   empIdLeft:       50,   // %
-  nameSize:        10,   // px
-  designationSize: 8,    // px
-  empIdSize:       8,    // px
+  nameSize:        12,   // px
+  designationSize: 9,    // px
+  empIdSize:       9,    // px
 }
 
 // ── ID Card Preview Component ─────────────────────────────────────────────────
@@ -566,6 +566,16 @@ const IDCardTemplates = () => {
                         {/* Photo + text position / size controls */}
                         {uploadPreview && (
                           <div className="space-y-4 pt-2 border-t border-gray-100 dark:border-dark-600">
+                            {/* Reset button */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                Object.keys(UPLOAD_DEFAULTS).forEach(k => setC(k, UPLOAD_DEFAULTS[k]))
+                              }}
+                              className="w-full py-2 rounded-xl text-xs font-semibold border border-dashed border-orange-400 text-orange-500 hover:bg-orange-500/10 transition-colors"
+                            >
+                              ↺ Reset All Positions to Default
+                            </button>
                             {/* Photo */}
                             <div className="space-y-3">
                               <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">
