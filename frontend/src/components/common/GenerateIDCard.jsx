@@ -208,8 +208,6 @@ const GenerateIDCard = ({ empData, onClose }) => {
       const designationSize  = tplConfig.designationSize  ?? 12
       const empIdSize        = tplConfig.empIdSize        ?? 12
 
-      const CARD_W = 340
-      let   CARD_H = 540
       const SCALE  = 3
 
       // Helper to load image
@@ -221,11 +219,19 @@ const GenerateIDCard = ({ empData, onClose }) => {
         img.src = src
       })
 
-      // Load template first to get aspect ratio
+      // Always use 340px logical width — all positions/sizes calibrated to this
+      // SCALE=3 gives 1020px output — high resolution for print
+      const CARD_W = 340
+      let   CARD_H = 540
+
       let tplImg = null
       if (isUploadedTemplate && templateImageUrl) {
-        tplImg = await loadImg(templateImageUrl)
-        CARD_H = Math.round(CARD_W * (tplImg.naturalHeight / tplImg.naturalWidth))
+        try {
+          tplImg = await loadImg(templateImageUrl)
+          CARD_H = Math.round(CARD_W * (tplImg.naturalHeight / tplImg.naturalWidth))
+        } catch (e) {
+          console.error('[IDCard] Template load failed:', e)
+        }
       }
 
       const canvas  = document.createElement('canvas')
@@ -234,12 +240,25 @@ const GenerateIDCard = ({ empData, onClose }) => {
       const ctx     = canvas.getContext('2d')
       ctx.scale(SCALE, SCALE)
 
-      // 1. Draw template background
-      if (tplImg) ctx.drawImage(tplImg, 0, 0, CARD_W, CARD_H)
+      // 1. Draw template background — drawImage scales it to fill 340×CARD_H
+      if (tplImg) {
+        // Verify natural dimensions loaded correctly
+        const actualH = Math.round(CARD_W * (tplImg.naturalHeight / tplImg.naturalWidth))
+        if (actualH !== CARD_H) {
+          // Canvas height was wrong — resize it
+          canvas.height = actualH * SCALE
+          // Reset scale after resize (resize clears ctx state)
+          ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0)
+        }
+        ctx.drawImage(tplImg, 0, 0, CARD_W, actualH || CARD_H)
+      }
+
+      // Use actual template height for all position calculations
+      const ACTUAL_H = tplImg ? Math.round(CARD_W * (tplImg.naturalHeight / tplImg.naturalWidth)) : CARD_H
 
       // 2. Draw employee photo in circle — clip to exact circle, no extra border
       const photoX   = (photoLeft / 100) * CARD_W
-      const photoY   = (photoTop  / 100) * CARD_H
+      const photoY   = (photoTop  / 100) * ACTUAL_H
       const radius   = photoSize / 2
       const photoSrc = form.photoPreview || generated?.photo_url
 
@@ -250,9 +269,9 @@ const GenerateIDCard = ({ empData, onClose }) => {
           // sourceY starts at 0 (top), sourceH = width of circle from top
           const srcW = empImg.naturalWidth
           const srcH = empImg.naturalHeight
-          const cropSize = Math.min(srcW, srcH * 0.7) // top 70% of height to focus on face
-          const srcX = (srcW - cropSize) / 2  // center horizontally
-          const srcY = 0                        // start from top
+          const cropSize = Math.min(srcW, srcH * 0.85) // top 85% — shows face + upper chest
+          const srcX = (srcW - cropSize) / 2
+          const srcY = 0
 
           ctx.save()
           ctx.beginPath()
@@ -283,21 +302,21 @@ const GenerateIDCard = ({ empData, onClose }) => {
 
         // Name — independent position
         const nX = (nameLeft        / 100) * CARD_W
-        const nY = (nameTop         / 100) * CARD_H + nSize
+        const nY = (nameTop         / 100) * ACTUAL_H + nSize
         ctx.font      = `bold ${nSize}px Arial`
         ctx.fillStyle = '#111111'
         ctx.fillText(generated?.custom_name || form.name || '', nX, nY)
 
         // Designation — independent position
         const dX = (designationLeft / 100) * CARD_W
-        const dY = (designationTop  / 100) * CARD_H + dSize
+        const dY = (designationTop  / 100) * ACTUAL_H + dSize
         ctx.font      = `600 ${dSize}px Arial`
         ctx.fillStyle = '#333333'
         ctx.fillText(generated?.custom_designation || form.designation || '', dX, dY)
 
         // Emp ID — independent position
         const eX = (empIdLeft       / 100) * CARD_W
-        const eY = (empIdTop        / 100) * CARD_H + eSize
+        const eY = (empIdTop        / 100) * ACTUAL_H + eSize
         ctx.font      = `bold ${eSize}px Arial`
         ctx.fillStyle = '#111111'
         ctx.fillText(generated?.custom_emp_id || form.empId || '', eX, eY)

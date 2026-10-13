@@ -41,6 +41,7 @@ import AdminSettings from '../pages/admin/Settings'
 import AdminHolidayCalendar from '../pages/admin/HolidayCalendar'
 import AdminDashboard from '../pages/admin/AdminDashboard'
 import IDCardTemplates from '../pages/admin/IDCardTemplates'
+import GenerateIDCardPage from '../pages/admin/GenerateIDCardPage'
 
 import { useAuth } from '../context/AuthContext'
 
@@ -97,12 +98,13 @@ const AppRoutes = () => (
     {/* Super Admin — role: 'superadmin' */}
     <Route element={<ProtectedRoute allowedRoles={['admin', 'superadmin']} />}>
       <Route element={<DashboardLayout />}>
-        <Route path="/admin/dashboard"   element={<AdminDashboard />} />
-        <Route path="/admin/departments" element={<AdminDepartments />} />
-        <Route path="/admin/roles"       element={<AdminRolesPermissions />} />
-        <Route path="/admin/settings"    element={<AdminSettings />} />
-        <Route path="/admin/holidays"    element={<AdminHolidayCalendar />} />
-        <Route path="/admin/id-templates" element={<IDCardTemplates />} />
+        <Route path="/admin/dashboard"       element={<AdminDashboard />} />
+        <Route path="/admin/departments"     element={<AdminDepartments />} />
+        <Route path="/admin/roles"           element={<AdminRolesPermissions />} />
+        <Route path="/admin/settings"        element={<AdminSettings />} />
+        <Route path="/admin/holidays"        element={<AdminHolidayCalendar />} />
+        <Route path="/admin/id-templates"    element={<IDCardTemplates />} />
+        <Route path="/admin/generate-id-card" element={<GenerateIDCardPage />} />
       </Route>
     </Route>
 
