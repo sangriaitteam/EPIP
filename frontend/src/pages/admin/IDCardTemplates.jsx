@@ -10,6 +10,8 @@ import Button from '../../components/common/Button'
 import toast from 'react-hot-toast'
 import sangriaLogo from '../../assets/sangria.png'
 import html2canvas from 'html2canvas'
+import GenerateIDCard from '../../components/common/GenerateIDCard'
+import { employeeService } from '../../services/employeeService'
 
 // ── Default design config ─────────────────────────────────────────────────────
 const DEFAULT_CONFIG = {
@@ -239,6 +241,12 @@ const IDCardTemplates = () => {
   const [deleting,  setDeleting]  = useState(false)
   const [saving,    setSaving]    = useState(false)
 
+  // Admin generate ID card
+  const [showAdminGenerate, setShowAdminGenerate] = useState(false)
+  const [selectedEmployee,  setSelectedEmployee]  = useState(null)
+  const [employees,         setEmployees]         = useState([])
+  const [empSearch,         setEmpSearch]         = useState('')
+
   const [form, setForm] = useState({ name: '', description: '', design_config: DEFAULT_CONFIG })
   const setC = (k, v) => setForm(f => ({ ...f, design_config: { ...f.design_config, [k]: v } }))
   // Value helper: config value or upload default
@@ -282,7 +290,10 @@ const IDCardTemplates = () => {
   const handleDesDragStart     = makeDragHandler(setIsDraggingDes,    'designationLeft','designationTop',10, 90, 30, 95)
   const handleEmpIdDragStart   = makeDragHandler(setIsDraggingEmpId,  'empIdLeft',      'empIdTop',      10, 90, 30, 95)
 
-  useEffect(() => { loadTemplates() }, [])
+  useEffect(() => {
+    loadTemplates()
+    employeeService.getAll().then(d => setEmployees(d || [])).catch(() => {})
+  }, [])
 
   const loadTemplates = async () => {
     setLoading(true)
@@ -401,11 +412,89 @@ const IDCardTemplates = () => {
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">ID Card Templates</h1>
           <p className="text-xs text-gray-500 mt-0.5">{templates.length} template{templates.length !== 1 ? 's' : ''}</p>
         </div>
-        <button onClick={openCreate}
-          className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 transition-all shadow-md shadow-primary-500/25">
-          <Plus size={15} /> New Template
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowAdminGenerate(true)}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-emerald-500 hover:bg-emerald-600 transition-all shadow-md shadow-emerald-500/25">
+            <IdCard size={15} /> Generate ID Card
+          </button>
+          <button onClick={openCreate}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 transition-all shadow-md shadow-primary-500/25">
+            <Plus size={15} /> New Template
+          </button>
+        </div>
       </div>
+
+      {/* ── Admin Generate ID Card — Employee Picker ── */}
+      <AnimatePresence>
+        {showAdminGenerate && !selectedEmployee && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowAdminGenerate(false)} />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative bg-white dark:bg-dark-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+              onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-dark-600">
+                <h3 className="font-semibold text-gray-900 dark:text-white text-sm flex items-center gap-2">
+                  <IdCard size={16} className="text-emerald-500" /> Select Employee
+                </h3>
+                <button onClick={() => setShowAdminGenerate(false)} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-dark-700 text-gray-400">
+                  <X size={15} />
+                </button>
+              </div>
+              <div className="p-4">
+                <input
+                  value={empSearch}
+                  onChange={e => setEmpSearch(e.target.value)}
+                  placeholder="Search employee name..."
+                  className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 mb-3"
+                />
+                <div className="max-h-72 overflow-y-auto space-y-1">
+                  {employees
+                    .filter(e => {
+                      const name = `${e.first_name || ''} ${e.last_name || ''}`.toLowerCase()
+                      return !empSearch || name.includes(empSearch.toLowerCase()) || (e.employee_id || '').toLowerCase().includes(empSearch.toLowerCase())
+                    })
+                    .map(emp => (
+                      <button key={emp.id} onClick={() => setSelectedEmployee(emp)}
+                        className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors text-left">
+                        <div className="w-9 h-9 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+                          <span className="text-emerald-600 text-xs font-bold">
+                            {(emp.first_name?.[0] || '') + (emp.last_name?.[0] || '')}
+                          </span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            {emp.first_name} {emp.last_name}
+                          </p>
+                          <p className="text-xs text-gray-400 truncate">{emp.designation || emp.department_name || '—'} · {emp.employee_id}</p>
+                        </div>
+                      </button>
+                    ))
+                  }
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Admin Generate ID Card Modal for selected employee ── */}
+      <AnimatePresence>
+        {showAdminGenerate && selectedEmployee && (
+          <GenerateIDCard
+            empData={{
+              ...selectedEmployee,
+              name: `${selectedEmployee.first_name || ''} ${selectedEmployee.last_name || ''}`.trim(),
+              employee_id: selectedEmployee.employee_id,
+              designation: selectedEmployee.designation,
+              department_name: selectedEmployee.department_name,
+              avatar_url: selectedEmployee.avatar_url,
+            }}
+            onClose={() => { setShowAdminGenerate(false); setSelectedEmployee(null); setEmpSearch('') }}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Templates grid */}
       {loading ? (

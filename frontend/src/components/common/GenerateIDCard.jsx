@@ -71,7 +71,7 @@ const TemplateOverlayCard = ({ templateUrl, photo, name, designation, empId, car
     }}>
       {photo ? (
         <img src={photo} alt="Employee" crossOrigin="anonymous"
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }} />
       ) : (
         <span style={{ color: 'white', fontSize: '32px', fontWeight: 700 }}>
           {name ? name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) : 'EE'}
@@ -246,11 +246,19 @@ const GenerateIDCard = ({ empData, onClose }) => {
       if (photoSrc) {
         try {
           const empImg = await loadImg(photoSrc)
+          // Smart crop: use top portion of image to show face
+          // sourceY starts at 0 (top), sourceH = width of circle from top
+          const srcW = empImg.naturalWidth
+          const srcH = empImg.naturalHeight
+          const cropSize = Math.min(srcW, srcH * 0.7) // top 70% of height to focus on face
+          const srcX = (srcW - cropSize) / 2  // center horizontally
+          const srcY = 0                        // start from top
+
           ctx.save()
           ctx.beginPath()
           ctx.arc(photoX, photoY, radius, 0, Math.PI * 2)
           ctx.clip()
-          ctx.drawImage(empImg, photoX - radius, photoY - radius, photoSize, photoSize)
+          ctx.drawImage(empImg, srcX, srcY, cropSize, cropSize, photoX - radius, photoY - radius, photoSize, photoSize)
           ctx.restore()
         } catch {
           ctx.save()

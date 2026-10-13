@@ -16,9 +16,9 @@ router.put('/templates/:id',  authorize('admin','superadmin'),      ctrl.updateT
 router.delete('/templates/:id', authorize('admin','superadmin'),    ctrl.deleteTemplate)
 
 // ── Employee card routes ──────────────────────────────────────────────────────
-router.get('/my',       authorize('employee','hr'), ctrl.getMyCard)
+router.get('/my',       authorize('employee','hr','admin','superadmin'), ctrl.getMyCard)
 router.post('/generate',
-  authorize('employee','hr'),
+  authorize('employee','hr','admin','superadmin'),
   uploadAvatar,
   ctrl.generateCard
 )

@@ -101,10 +101,21 @@ const getMyCard = async (req, res) => {
   }
 }
 
-// POST /api/id-cards/generate — employee generates ID card
+// POST /api/id-cards/generate — employee or admin generates ID card
 const generateCard = async (req, res) => {
   try {
-    const emp = await _getEmpByUserId(req.user.id)
+    // Admin/superadmin can pass employee_id to generate for any employee
+    let emp
+    if ((req.user.role === 'admin' || req.user.role === 'superadmin') && req.body.employee_id) {
+      const { rows } = await db.query(
+        `SELECT e.*, d.name AS department_name FROM employees e
+         LEFT JOIN departments d ON d.id = e.department_id
+         WHERE e.id = $1`, [req.body.employee_id]
+      )
+      emp = rows[0]
+    } else {
+      emp = await _getEmpByUserId(req.user.id)
+    }
     if (!emp) return res.status(404).json({ success: false, message: 'Employee not found' })
 
     const { template_id, custom_name, custom_designation, custom_emp_id } = req.body
